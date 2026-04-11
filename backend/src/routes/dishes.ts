@@ -1,49 +1,37 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateDishBody {
   name: string;
   description?: string;
-  categoryId?: string;
+  category_id?: string;
   price: string;
-  imageUrl?: string;
-  prepTimeMinutes?: number;
+  image_url?: string;
+  prep_time_minutes?: number;
+  active?: boolean;
 }
 
 interface UpdateDishBody {
   name?: string;
   description?: string;
-  categoryId?: string;
+  category_id?: string;
   price?: string;
-  imageUrl?: string;
-  prepTimeMinutes?: number;
+  image_url?: string;
+  prep_time_minutes?: number;
   active?: boolean;
 }
 
-interface DishQuery {
-  category_id?: string;
-  active?: string;
-}
-
 export function registerDishRoutes(app: App) {
-  const requireAuth = app.requireAuth();
-
   // GET /api/dishes
-  app.fastify.get<{ Querystring: DishQuery }>(
+  app.fastify.get(
     "/api/dishes",
     {
       schema: {
-        description: "List dishes with category info joined",
+        description: "List all dishes with categories",
         tags: ["dishes"],
-        querystring: {
-          type: "object",
-          properties: {
-            category_id: { type: "string", format: "uuid" },
-            active: { type: "string" },
-          },
-        },
         response: {
           200: {
             type: "array",
@@ -53,12 +41,20 @@ export function registerDishRoutes(app: App) {
                 id: { type: "string", format: "uuid" },
                 name: { type: "string" },
                 description: { type: "string" },
-                categoryId: { type: "string", format: "uuid" },
                 price: { type: "string" },
-                imageUrl: { type: "string" },
-                prepTimeMinutes: { type: "number" },
+                image_url: { type: "string" },
+                prep_time_minutes: { type: "number" },
                 active: { type: "boolean" },
-                createdAt: { type: "string", format: "date-time" },
+                created_at: { type: "string", format: "date-time" },
+                category: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    name: { type: "string" },
+                    color: { type: "string" },
+                    icon: { type: "string" },
+                  },
+                },
               },
             },
           },
@@ -66,31 +62,43 @@ export function registerDishRoutes(app: App) {
         },
       },
     },
-    async (request: FastifyRequest<{ Querystring: DishQuery }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ query: request.query }, "Listing dishes");
+      try {
+        app.logger.info({}, "Listing dishes");
 
-      const conditions: any[] = [];
-      if (request.query.category_id) {
-        conditions.push(eq(schema.dishes.categoryId, request.query.category_id));
+        const dishes = await app.db
+          .select()
+          .from(schema.dishes)
+          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id));
+
+        const result = dishes.map((row) => ({
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
+            ? {
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
+              }
+            : null,
+        }));
+
+        app.logger.info({ count: result.length }, "Dishes listed");
+        return result;
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to list dishes");
+        return reply.status(500).send({ error: "Internal server error" });
       }
-
-      if (request.query.active) {
-        const isActive = request.query.active === "true";
-        conditions.push(eq(schema.dishes.active, isActive));
-      }
-
-      let dishes;
-      if (conditions.length > 0) {
-        dishes = await app.db.select().from(schema.dishes).where(and(...conditions));
-      } else {
-        dishes = await app.db.select().from(schema.dishes);
-      }
-
-      app.logger.info({ count: dishes.length }, "Dishes listed");
-      return dishes;
     }
   );
 
@@ -107,10 +115,11 @@ export function registerDishRoutes(app: App) {
           properties: {
             name: { type: "string" },
             description: { type: "string" },
-            categoryId: { type: "string", format: "uuid" },
+            category_id: { type: "string", format: "uuid" },
             price: { type: "string" },
-            imageUrl: { type: "string" },
-            prepTimeMinutes: { type: "number" },
+            image_url: { type: "string" },
+            prep_time_minutes: { type: "number" },
+            active: { type: "boolean" },
           },
         },
         response: {
@@ -119,40 +128,70 @@ export function registerDishRoutes(app: App) {
             properties: {
               id: { type: "string", format: "uuid" },
               name: { type: "string" },
-              description: { type: "string" },
-              categoryId: { type: "string", format: "uuid" },
               price: { type: "string" },
-              imageUrl: { type: "string" },
-              prepTimeMinutes: { type: "number" },
-              active: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
             },
           },
+          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Body: CreateDishBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ name: request.body.name, price: request.body.price }, "Creating dish");
+      if (!request.body.name || !request.body.price) {
+        return reply.status(400).send({ error: "name and price are required" });
+      }
 
-      const [created] = await app.db
-        .insert(schema.dishes)
-        .values({
-          name: request.body.name,
-          description: request.body.description,
-          categoryId: request.body.categoryId,
-          price: request.body.price,
-          imageUrl: request.body.imageUrl,
-          prepTimeMinutes: request.body.prepTimeMinutes || 15,
-          active: true,
-        })
-        .returning();
+      try {
+        app.logger.info({ name: request.body.name, price: request.body.price }, "Creating dish");
 
-      app.logger.info({ dishId: created.id }, "Dish created");
-      return reply.status(201).send(created);
+        const [dish] = await app.db
+          .insert(schema.dishes)
+          .values({
+            name: request.body.name,
+            description: request.body.description,
+            categoryId: request.body.category_id,
+            price: request.body.price,
+            imageUrl: request.body.image_url,
+            prepTimeMinutes: request.body.prep_time_minutes || 15,
+            active: request.body.active !== false,
+          })
+          .returning();
+
+        app.logger.info({ dishId: dish.id }, "Dish created");
+
+        // Fetch with category
+        const rows = await app.db
+          .select()
+          .from(schema.dishes)
+          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
+          .where(eq(schema.dishes.id, dish.id));
+
+        const row = rows[0];
+        return reply.status(201).send({
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
+            ? {
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
+              }
+            : null,
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to create dish");
+        return reply.status(500).send({ error: "Internal server error" });
+      }
     }
   );
 
@@ -161,79 +200,95 @@ export function registerDishRoutes(app: App) {
     "/api/dishes/:id",
     {
       schema: {
-        description: "Update dish",
+        description: "Update a dish",
         tags: ["dishes"],
         params: {
           type: "object",
           required: ["id"],
-          properties: {
-            id: { type: "string", format: "uuid" },
-          },
+          properties: { id: { type: "string", format: "uuid" } },
         },
         body: {
           type: "object",
           properties: {
             name: { type: "string" },
             description: { type: "string" },
-            categoryId: { type: "string", format: "uuid" },
+            category_id: { type: "string", format: "uuid" },
             price: { type: "string" },
-            imageUrl: { type: "string" },
-            prepTimeMinutes: { type: "number" },
+            image_url: { type: "string" },
+            prep_time_minutes: { type: "number" },
             active: { type: "boolean" },
           },
         },
         response: {
-          200: {
-            type: "object",
-            properties: {
-              id: { type: "string", format: "uuid" },
-              name: { type: "string" },
-              description: { type: "string" },
-              categoryId: { type: "string", format: "uuid" },
-              price: { type: "string" },
-              imageUrl: { type: "string" },
-              prepTimeMinutes: { type: "number" },
-              active: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
-            },
-          },
+          200: { type: "object" },
+          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateDishBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ dishId: request.params.id, body: request.body }, "Updating dish");
+      try {
+        app.logger.info({ dishId: request.params.id }, "Updating dish");
 
-      const existing = await app.db.query.dishes.findFirst({
-        where: eq(schema.dishes.id, request.params.id),
-      });
+        const existing = await app.db
+          .select()
+          .from(schema.dishes)
+          .where(eq(schema.dishes.id, request.params.id))
+          .limit(1);
 
-      if (!existing) {
-        app.logger.warn({ dishId: request.params.id }, "Dish not found");
-        return reply.status(404).send({ error: "Dish not found" });
+        if (!existing || existing.length === 0) {
+          return reply.status(404).send({ error: "Dish not found" });
+        }
+
+        const updates: any = {};
+        if (request.body.name !== undefined) updates.name = request.body.name;
+        if (request.body.description !== undefined) updates.description = request.body.description;
+        if (request.body.category_id !== undefined) updates.categoryId = request.body.category_id;
+        if (request.body.price !== undefined) updates.price = request.body.price;
+        if (request.body.image_url !== undefined) updates.imageUrl = request.body.image_url;
+        if (request.body.prep_time_minutes !== undefined) updates.prepTimeMinutes = request.body.prep_time_minutes;
+        if (request.body.active !== undefined) updates.active = request.body.active;
+
+        const [updated] = await app.db
+          .update(schema.dishes)
+          .set(updates)
+          .where(eq(schema.dishes.id, request.params.id))
+          .returning();
+
+        // Fetch with category
+        const rows = await app.db
+          .select()
+          .from(schema.dishes)
+          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
+          .where(eq(schema.dishes.id, updated.id));
+
+        const row = rows[0];
+        return {
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
+            ? {
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
+              }
+            : null,
+        };
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to update dish");
+        return reply.status(500).send({ error: "Internal server error" });
       }
-
-      const updates: any = {};
-      if (request.body.name !== undefined) updates.name = request.body.name;
-      if (request.body.description !== undefined) updates.description = request.body.description;
-      if (request.body.categoryId !== undefined) updates.categoryId = request.body.categoryId;
-      if (request.body.price !== undefined) updates.price = request.body.price;
-      if (request.body.imageUrl !== undefined) updates.imageUrl = request.body.imageUrl;
-      if (request.body.prepTimeMinutes !== undefined) updates.prepTimeMinutes = request.body.prepTimeMinutes;
-      if (request.body.active !== undefined) updates.active = request.body.active;
-
-      const [updated] = await app.db
-        .update(schema.dishes)
-        .set(updates)
-        .where(eq(schema.dishes.id, request.params.id))
-        .returning();
-
-      app.logger.info({ dishId: updated.id }, "Dish updated");
-      return updated;
     }
   );
 
@@ -242,41 +297,45 @@ export function registerDishRoutes(app: App) {
     "/api/dishes/:id",
     {
       schema: {
-        description: "Deactivate dish (set active=false)",
+        description: "Delete a dish",
         tags: ["dishes"],
         params: {
           type: "object",
           required: ["id"],
-          properties: {
-            id: { type: "string", format: "uuid" },
-          },
+          properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object", properties: { message: { type: "string" } } },
+          200: { type: "object", properties: { success: { type: "boolean" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ dishId: request.params.id }, "Deactivating dish");
+      try {
+        app.logger.info({ dishId: request.params.id }, "Deleting dish");
 
-      const existing = await app.db.query.dishes.findFirst({
-        where: eq(schema.dishes.id, request.params.id),
-      });
+        const existing = await app.db
+          .select()
+          .from(schema.dishes)
+          .where(eq(schema.dishes.id, request.params.id))
+          .limit(1);
 
-      if (!existing) {
-        app.logger.warn({ dishId: request.params.id }, "Dish not found");
-        return reply.status(404).send({ error: "Dish not found" });
+        if (!existing || existing.length === 0) {
+          return reply.status(404).send({ error: "Dish not found" });
+        }
+
+        await app.db.delete(schema.dishes).where(eq(schema.dishes.id, request.params.id));
+
+        app.logger.info({ dishId: request.params.id }, "Dish deleted");
+        return { success: true };
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to delete dish");
+        return reply.status(500).send({ error: "Internal server error" });
       }
-
-      await app.db.update(schema.dishes).set({ active: false }).where(eq(schema.dishes.id, request.params.id));
-
-      app.logger.info({ dishId: request.params.id }, "Dish deactivated");
-      return { message: "Dish deactivated" };
     }
   );
 }

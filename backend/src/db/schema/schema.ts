@@ -69,7 +69,7 @@ export const tables = pgTable(
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   tableId: uuid("table_id").references(() => tables.id),
-  waiterId: text("waiter_id").references(() => user.id),
+  waiterId: text("waiter_id"),
   status: orderStatusEnum("status").default("aberta").notNull(),
   customerCount: integer("customer_count").default(1),
   notes: text("notes"),

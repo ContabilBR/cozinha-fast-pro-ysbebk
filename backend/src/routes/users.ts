@@ -1,26 +1,24 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
-import * as schema from "../db/schema/schema.js";
 import { user as userTable } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface CreateUserBody {
   email: string;
   password: string;
   name: string;
-  role: "garcom" | "administrador" | "gerente" | "cozinheiro";
+  role: string;
 }
 
 interface UpdateUserBody {
   name?: string;
-  role?: "garcom" | "administrador" | "gerente" | "cozinheiro";
+  role?: string;
   active?: boolean;
 }
 
 export function registerUserRoutes(app: App) {
-  const requireAuth = app.requireAuth();
-
-  // GET /api/users - list all users (admin only)
+  // GET /api/users
   app.fastify.get(
     "/api/users",
     {
@@ -37,8 +35,7 @@ export function registerUserRoutes(app: App) {
                 name: { type: "string" },
                 email: { type: "string" },
                 role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
-                active: { type: "boolean" },
-                createdAt: { type: "string", format: "date-time" },
+                created_at: { type: "string", format: "date-time" },
               },
             },
           },
@@ -47,18 +44,31 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ userId: session.user.id }, "Listing all users");
+      try {
+        app.logger.info({}, "Listing all users");
 
-      const users = await app.db.select().from(userTable);
-      app.logger.info({ count: users.length }, "Users listed successfully");
-      return users;
+        const users = await app.db.select().from(userTable);
+        const result = users.map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          created_at: u.createdAt,
+        }));
+
+        app.logger.info({ count: result.length }, "Users listed successfully");
+        return result;
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to list users");
+        return reply.status(500).send({ error: "Internal server error" });
+      }
     }
   );
 
-  // POST /api/users - create user (admin only)
+  // POST /api/users
   app.fastify.post<{ Body: CreateUserBody }>(
     "/api/users",
     {
@@ -76,29 +86,51 @@ export function registerUserRoutes(app: App) {
           },
         },
         response: {
-          201: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              name: { type: "string" },
-              email: { type: "string" },
-              role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
-              active: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
-            },
-          },
+          201: { type: "object" },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Body: CreateUserBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ body: { email: request.body.email, role: request.body.role } }, "Creating new user");
+      if (!request.body.email || !request.body.password || !request.body.name || !request.body.role) {
+        return reply.status(400).send({ error: "email, password, name, and role are required" });
+      }
 
       try {
+        app.logger.info({ email: request.body.email, role: request.body.role }, "Creating new user");
+
+        // Check if user already exists
+        const existingUsers = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.email, request.body.email))
+          .limit(1);
+
+        if (existingUsers && existingUsers.length > 0) {
+          app.logger.info({ email: request.body.email }, "User already exists, updating role");
+          const existingUser = existingUsers[0];
+
+          // Update role if different
+          if (existingUser.role !== request.body.role) {
+            await app.db
+              .update(userTable)
+              .set({ role: request.body.role as any })
+              .where(eq(userTable.id, existingUser.id));
+          }
+
+          return reply.status(201).send({
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            role: request.body.role,
+            created_at: existingUser.createdAt,
+          });
+        }
+
         const result = await app.auth.api.signUpEmail({
           body: {
             email: request.body.email,
@@ -107,19 +139,39 @@ export function registerUserRoutes(app: App) {
           },
         });
 
+        app.logger.debug({ result }, "Sign up result");
+
         if (!result.user) {
-          throw new Error("User creation failed");
+          app.logger.warn({ result }, "Sign up did not return user");
+          return reply.status(400).send({ error: "Failed to create user" });
         }
 
         // Update user role
-        await app.db.update(userTable).set({ role: request.body.role }).where(eq(userTable.id, result.user.id));
+        await app.db
+          .update(userTable)
+          .set({ role: request.body.role as any })
+          .where(eq(userTable.id, result.user.id));
 
-        const createdUser = await app.db.query.user.findFirst({
-          where: eq(userTable.id, result.user.id),
-        });
+        const createdUsers = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, result.user.id))
+          .limit(1);
 
+        if (!createdUsers || createdUsers.length === 0) {
+          return reply.status(400).send({ error: "Failed to retrieve created user" });
+        }
+
+        const createdUser = createdUsers[0];
         app.logger.info({ userId: result.user.id, role: request.body.role }, "User created successfully");
-        return reply.status(201).send(createdUser);
+
+        return reply.status(201).send({
+          id: createdUser.id,
+          name: createdUser.name,
+          email: createdUser.email,
+          role: createdUser.role,
+          created_at: createdUser.createdAt,
+        });
       } catch (error) {
         app.logger.error({ err: error, email: request.body.email }, "Failed to create user");
         return reply.status(400).send({ error: "Failed to create user" });
@@ -127,7 +179,7 @@ export function registerUserRoutes(app: App) {
     }
   );
 
-  // GET /api/users/:id - get user by id
+  // GET /api/users/:id
   app.fastify.get<{ Params: { id: string } }>(
     "/api/users/:id",
     {
@@ -137,48 +189,50 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
+          properties: { id: { type: "string" } },
         },
         response: {
-          200: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              name: { type: "string" },
-              email: { type: "string" },
-              role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
-              active: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
-            },
-          },
+          200: { type: "object" },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ userId: request.params.id }, "Getting user");
+      try {
+        app.logger.info({ userId: request.params.id }, "Getting user");
 
-      const user = await app.db.query.user.findFirst({
-        where: eq(userTable.id, request.params.id),
-      });
+        const users = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, request.params.id))
+          .limit(1);
 
-      if (!user) {
-        app.logger.warn({ userId: request.params.id }, "User not found");
-        return reply.status(404).send({ error: "User not found" });
+        if (!users || users.length === 0) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+
+        const user = users[0];
+        app.logger.info({ userId: user.id }, "User retrieved successfully");
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          created_at: user.createdAt,
+        };
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to get user");
+        return reply.status(500).send({ error: "Internal server error" });
       }
-
-      app.logger.info({ userId: user.id }, "User retrieved successfully");
-      return user;
     }
   );
 
-  // PUT /api/users/:id - update user
+  // PUT /api/users/:id
   app.fastify.put<{ Params: { id: string }; Body: UpdateUserBody }>(
     "/api/users/:id",
     {
@@ -188,9 +242,7 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
+          properties: { id: { type: "string" } },
         },
         body: {
           type: "object",
@@ -201,89 +253,53 @@ export function registerUserRoutes(app: App) {
           },
         },
         response: {
-          200: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              name: { type: "string" },
-              email: { type: "string" },
-              role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
-              active: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
-            },
-          },
+          200: { type: "object" },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateUserBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
-      app.logger.info({ userId: request.params.id, body: request.body }, "Updating user");
+      try {
+        app.logger.info({ userId: request.params.id }, "Updating user");
 
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(userTable.id, request.params.id),
-      });
+        const existing = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, request.params.id))
+          .limit(1);
 
-      if (!existingUser) {
-        app.logger.warn({ userId: request.params.id }, "User not found");
-        return reply.status(404).send({ error: "User not found" });
+        if (!existing || existing.length === 0) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+
+        const updates: any = {};
+        if (request.body.name !== undefined) updates.name = request.body.name;
+        if (request.body.role !== undefined) updates.role = request.body.role;
+        if (request.body.active !== undefined) updates.active = request.body.active;
+
+        const [updated] = await app.db
+          .update(userTable)
+          .set(updates)
+          .where(eq(userTable.id, request.params.id))
+          .returning();
+
+        app.logger.info({ userId: updated.id }, "User updated successfully");
+
+        return {
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+          role: updated.role,
+          created_at: updated.createdAt,
+        };
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to update user");
+        return reply.status(500).send({ error: "Internal server error" });
       }
-
-      const updates: any = {};
-      if (request.body.name !== undefined) updates.name = request.body.name;
-      if (request.body.role !== undefined) updates.role = request.body.role;
-      if (request.body.active !== undefined) updates.active = request.body.active;
-
-      const [updated] = await app.db.update(userTable).set(updates).where(eq(userTable.id, request.params.id)).returning();
-
-      app.logger.info({ userId: updated.id }, "User updated successfully");
-      return updated;
-    }
-  );
-
-  // DELETE /api/users/:id - deactivate user
-  app.fastify.delete<{ Params: { id: string } }>(
-    "/api/users/:id",
-    {
-      schema: {
-        description: "Deactivate user (set active=false)",
-        tags: ["users"],
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
-        },
-        response: {
-          200: { type: "object", properties: { message: { type: "string" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
-          404: { type: "object", properties: { error: { type: "string" } } },
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
-
-      app.logger.info({ userId: request.params.id }, "Deactivating user");
-
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(userTable.id, request.params.id),
-      });
-
-      if (!existingUser) {
-        app.logger.warn({ userId: request.params.id }, "User not found");
-        return reply.status(404).send({ error: "User not found" });
-      }
-
-      await app.db.update(userTable).set({ active: false }).where(eq(userTable.id, request.params.id));
-
-      app.logger.info({ userId: request.params.id }, "User deactivated successfully");
-      return { message: "User deactivated" };
     }
   );
 }

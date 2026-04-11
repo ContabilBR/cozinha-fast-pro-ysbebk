@@ -1,22 +1,10 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, and, inArray, sql, gte, lt } from "drizzle-orm";
+import { eq, inArray, gte, lt, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-
-interface DashboardData {
-  tablesStatus: {
-    livre: number;
-    ocupada: number;
-    reservada: number;
-    fechando: number;
-  };
-  openOrdersCount: number;
-  kitchenQueueCount: number;
-  todayRevenue: string;
-}
+import { requireAuth } from "../utils/auth.js";
 
 export function registerDashboardRoutes(app: App) {
-  const requireAuth = app.requireAuth();
 
   // GET /api/dashboard
   app.fastify.get(
@@ -48,8 +36,8 @@ export function registerDashboardRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
-      if (!session) return;
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
 
       app.logger.info({}, "Fetching dashboard data");
 
