@@ -8,7 +8,17 @@ import {
   useColorScheme,
   ViewStyle,
 } from "react-native";
-import { appleBlue, zincColors } from "@/constants/Colors";
+import { COLORS } from "@/constants/Colors";
+
+const appleBlue = "#007AFF";
+const zincColors: Record<number, string> = {
+  50: "#FAFAFA",
+  300: "#D4D4D8",
+  400: "#A1A1AA",
+  500: "#71717A",
+  700: "#3F3F46",
+  900: "#18181B",
+};
 
 type ButtonVariant = "filled" | "outline" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";

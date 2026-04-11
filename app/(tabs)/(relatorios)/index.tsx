@@ -236,7 +236,7 @@ export default function RelatoriosScreen() {
               dishes.map((dish) => {
                 const barWidth = (dish.quantity_sold / maxDishQty) * 100;
                 const revenue = formatCurrency(dish.revenue);
-                const barWidthStr = `${barWidth}%`;
+                const barWidthNum = Math.max(1, Math.round(barWidth));
                 return (
                   <View key={dish.dish_id} style={{ gap: 6 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -260,7 +260,7 @@ export default function RelatoriosScreen() {
                       <View
                         style={{
                           height: 8,
-                          width: barWidthStr,
+                          width: `${barWidthNum}%` as `${number}%`,
                           backgroundColor: COLORS.primary,
                           borderRadius: 4,
                         }}

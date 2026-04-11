@@ -122,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      await authClient.signUp.email({ email, password, name });
+      await authClient.signUp.email({ email, password, name: name ?? "" });
       await fetchUser();
     } catch (error) {
       console.error("Email sign up failed:", error);

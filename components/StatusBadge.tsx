@@ -54,7 +54,7 @@ function getOrderStatusLabel(status: OrderStatus): string {
 
 export function StatusBadge({ status, type, size = 'md' }: StatusBadgeProps) {
   let color = COLORS.textSecondary;
-  let label = status;
+  let label: string = status;
 
   if (type === 'item') {
     color = getItemStatusColor(status as ItemStatus);
