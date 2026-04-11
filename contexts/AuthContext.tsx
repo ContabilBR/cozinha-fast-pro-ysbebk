@@ -150,30 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = () => signInWithSocial("google");
 
   const signInWithApple = async () => {
-    if (Platform.OS === "ios") {
-      // Native Apple Sign In on iOS — shows the system Face ID / password modal
-      const AppleAuthentication = require("expo-apple-authentication");
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) {
-        throw new Error("No identity token received from Apple");
-      }
-      const { error } = await authClient.signIn.social({
-        provider: "apple",
-        idToken: credential.identityToken,
-      });
-      if (error) {
-        throw new Error(error.message || "Apple sign in failed");
-      }
-      await fetchUser();
-    } else {
-      // Web / Android: OAuth redirect flow
-      await signInWithSocial("apple");
-    }
+    await signInWithSocial("apple");
   };
 
   const signOut = async () => {
