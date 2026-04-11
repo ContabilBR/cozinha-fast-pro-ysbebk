@@ -38,6 +38,7 @@ function UserCard({ user, onPress, index }: { user: User; onPress: () => void; i
   const roleColor = ROLE_COLORS[user.role] || COLORS.textSecondary;
   const initials = getInitials(user.name || user.email);
   const roleLabel = getRoleLabel(user.role);
+  const activeLabel = user.active ? "Ativo" : "Inativo";
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -113,7 +114,7 @@ function UserCard({ user, onPress, index }: { user: User; onPress: () => void; i
               }}
             />
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-              {user.active ? "Ativo" : "Inativo"}
+              {activeLabel}
             </Text>
           </View>
         </View>
@@ -135,8 +136,9 @@ export default function UsuariosScreen() {
   const fetchUsers = useCallback(async () => {
     console.log("[Usuarios] Fetching users");
     try {
-      const data = await apiGet<User[]>("/api/users");
-      setUsers(data);
+      const res = await apiGet<any>("/api/users");
+      const list: User[] = Array.isArray(res) ? res : (res.users || []);
+      setUsers(list);
       setError("");
     } catch (e: any) {
       console.error("[Usuarios] Error:", e);

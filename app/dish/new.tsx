@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,18 +6,21 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
-  Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { useRouter, useNavigation } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Category } from "@/types";
 import { apiGet, apiPost } from "@/utils/api";
-import { UtensilsCrossed } from "lucide-react-native";
+import { UtensilsCrossed, X } from "lucide-react-native";
+import type { ImageSourcePropType } from "react-native";
 
-function resolveImageSource(source: string | undefined) {
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  return { uri: source };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
 }
 
 function FormField({
@@ -68,6 +71,11 @@ function FormField({
 export default function NewDishScreen() {
   const COLORS = useColors();
   const router = useRouter();
+  const navigation = useNavigation();
+  const { user } = useAuth();
+
+  const role = (user as any)?.role;
+  const canEdit = role === "administrador" || role === "gerente";
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");
@@ -80,17 +88,51 @@ export default function NewDishScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Add close button to header
   useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <AnimatedPressable
+          onPress={() => {
+            console.log("[NewDish] Close/cancel button pressed");
+            router.back();
+          }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: COLORS.surfaceSecondary,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 4,
+          }}
+        >
+          <X size={16} color={COLORS.textSecondary} />
+        </AnimatedPressable>
+      ),
+    });
+  }, [navigation, COLORS]);
+
+  useEffect(() => {
+    // Redirect non-editors away
+    if (!canEdit) {
+      console.log("[NewDish] Non-editor role, redirecting back");
+      router.back();
+      return;
+    }
     console.log("[NewDish] Fetching categories");
-    apiGet<Category[]>("/api/categories")
-      .then(setCategories)
+    apiGet<any>("/api/categories")
+      .then((res) => {
+        const list: Category[] = Array.isArray(res) ? res : (res.categories || []);
+        setCategories(list);
+      })
       .catch((e) => console.error("[NewDish] Error fetching categories:", e));
-  }, []);
+  }, [canEdit]);
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!price.trim() || isNaN(Number(price))) { setError("Preço inválido."); return; }
-    console.log("[NewDish] Creating dish:", name);
+    console.log("[NewDish] Create dish button pressed:", name);
     setError("");
     setSubmitting(true);
     try {
@@ -113,6 +155,8 @@ export default function NewDishScreen() {
     }
   };
 
+  const imageSource = resolveImageSource(imageUrl);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.background }}
@@ -131,7 +175,7 @@ export default function NewDishScreen() {
         }}
       >
         {imageUrl ? (
-          <Image source={resolveImageSource(imageUrl)} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" transition={200} />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
             <UtensilsCrossed size={32} color={COLORS.textTertiary} />

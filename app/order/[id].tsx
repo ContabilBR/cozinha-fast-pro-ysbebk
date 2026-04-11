@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,8 +16,9 @@ import { SkeletonLine } from "@/components/SkeletonLoader";
 import { Order, OrderItem, Dish, ItemStatus } from "@/types";
 import { apiGet, apiPost, apiPut } from "@/utils/api";
 import { formatCurrency, formatRelativeTime, getItemStatusLabel } from "@/utils/helpers";
-import { Plus, Users, Clock, FileText, Trash2 } from "lucide-react-native";
+import { Plus, Users, Clock, FileText, Trash2, X, UtensilsCrossed } from "lucide-react-native";
 import { COLORS as C } from "@/constants/Colors";
+import type { ImageSourcePropType } from "react-native";
 
 const ITEM_STATUS_COLORS: Record<ItemStatus, string> = {
   pendente: C.statusPendente,
@@ -27,10 +29,17 @@ const ITEM_STATUS_COLORS: Record<ItemStatus, string> = {
   cancelado: C.statusCancelado,
 };
 
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
+
 export default function OrderDetailScreen() {
   const COLORS = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +54,11 @@ export default function OrderDetailScreen() {
     if (!id) return;
     console.log("[OrderDetail] Fetching order:", id);
     try {
-      const data = await apiGet<Order>(`/api/orders/${id}`);
-      setOrder(data);
+      const res = await apiGet<any>(`/api/orders/${id}`);
+      const orderData: Order = res?.order || res;
+      setOrder(orderData);
+      // Update header title dynamically
+      navigation.setOptions({ title: `Comanda #${orderData.table?.number ?? id.slice(0, 6)}` });
       setError("");
     } catch (e: any) {
       console.error("[OrderDetail] Error:", e);
@@ -68,11 +80,11 @@ export default function OrderDetailScreen() {
   const handleCloseOrder = async () => {
     if (!order) return;
     const newStatus = order.status === "aberta" ? "fechando" : "fechada";
-    const label = order.status === "aberta" ? "Fechar Comanda" : "Confirmar Fechamento";
     console.log("[OrderDetail] Close order button pressed, new status:", newStatus);
     setActionLoading(true);
     try {
       await apiPut(`/api/orders/${order.id}`, { status: newStatus });
+      console.log("[OrderDetail] Order status updated to:", newStatus);
       await fetchOrder();
     } catch (e) {
       console.error("[OrderDetail] Close order error:", e);
@@ -91,6 +103,7 @@ export default function OrderDetailScreen() {
         quantity: 1,
         unit_price: dish.price,
       });
+      console.log("[OrderDetail] Item added successfully");
       await fetchOrder();
     } catch (e) {
       console.error("[OrderDetail] Add item error:", e);
@@ -126,8 +139,9 @@ export default function OrderDetailScreen() {
     setShowDishPicker(true);
     setDishesLoading(true);
     try {
-      const data = await apiGet<Dish[]>("/api/dishes?active=true");
-      setDishes(Array.isArray(data) ? data.filter((d) => d.active) : []);
+      const res = await apiGet<any>("/api/dishes?active=true");
+      const list: Dish[] = Array.isArray(res) ? res : (res.dishes || []);
+      setDishes(list.filter((d) => d.active));
     } catch (e) {
       console.error("[OrderDetail] Fetch dishes error:", e);
     } finally {
@@ -151,6 +165,9 @@ export default function OrderDetailScreen() {
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12, backgroundColor: COLORS.background }}>
         <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
           Erro ao carregar comanda
+        </Text>
+        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+          {error}
         </Text>
         <AnimatedPressable
           onPress={fetchOrder}
@@ -437,7 +454,7 @@ export default function OrderDetailScreen() {
               backgroundColor: COLORS.surface,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              maxHeight: "70%",
+              maxHeight: "75%",
             }}
           >
             <View
@@ -467,31 +484,67 @@ export default function OrderDetailScreen() {
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.textSecondary }}>
-                  ×
-                </Text>
+                <X size={16} color={COLORS.textSecondary} />
               </AnimatedPressable>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
               {dishesLoading ? (
-                <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
+                <View style={{ gap: 10, paddingTop: 8 }}>
+                  {[0, 1, 2].map((i) => (
+                    <View key={i} style={{ height: 72, backgroundColor: COLORS.surfaceSecondary, borderRadius: 12 }} />
+                  ))}
+                </View>
+              ) : dishes.length === 0 ? (
+                <View style={{ alignItems: "center", padding: 32, gap: 12 }}>
+                  <UtensilsCrossed size={32} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
+                    Nenhum prato disponível
+                  </Text>
+                </View>
               ) : (
                 dishes.map((dish) => {
                   const price = formatCurrency(dish.price);
+                  const imageSource = resolveImageSource(dish.image_url);
                   return (
                     <AnimatedPressable
                       key={dish.id}
-                      onPress={() => handleAddItem(dish)}
+                      onPress={() => {
+                        console.log("[OrderDetail] Dish selected from picker:", dish.name);
+                        handleAddItem(dish);
+                      }}
                       style={{
                         backgroundColor: COLORS.surfaceSecondary,
                         borderRadius: 12,
-                        padding: 14,
+                        padding: 12,
                         flexDirection: "row",
-                        justifyContent: "space-between",
                         alignItems: "center",
+                        gap: 12,
                       }}
                     >
+                      {/* Dish image */}
+                      <View
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 10,
+                          backgroundColor: COLORS.border,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {dish.image_url ? (
+                          <Image
+                            source={imageSource}
+                            style={{ width: "100%", height: "100%" }}
+                            contentFit="cover"
+                            transition={200}
+                          />
+                        ) : (
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <UtensilsCrossed size={20} color={COLORS.textTertiary} />
+                          </View>
+                        )}
+                      </View>
                       <View style={{ flex: 1, gap: 3 }}>
                         <Text
                           numberOfLines={1}
@@ -504,6 +557,12 @@ export default function OrderDetailScreen() {
                             {dish.category.name}
                           </Text>
                         )}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Clock size={11} color={COLORS.textSecondary} />
+                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
+                            {dish.prep_time_minutes}min
+                          </Text>
+                        </View>
                       </View>
                       <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
                         {price}

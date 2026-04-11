@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   Switch,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { UserRole } from "@/types";
 import { apiPost } from "@/utils/api";
 import { getRoleLabel } from "@/utils/helpers";
+import { X } from "lucide-react-native";
 
 const ROLES: UserRole[] = ["garcom", "administrador", "gerente", "cozinheiro"];
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -72,6 +73,7 @@ function FormField({
 export default function NewUserScreen() {
   const COLORS = useColors();
   const router = useRouter();
+  const navigation = useNavigation();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -81,11 +83,36 @@ export default function NewUserScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Add close button to header
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <AnimatedPressable
+          onPress={() => {
+            console.log("[NewUser] Close/cancel button pressed");
+            router.back();
+          }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: COLORS.surfaceSecondary,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 4,
+          }}
+        >
+          <X size={16} color={COLORS.textSecondary} />
+        </AnimatedPressable>
+      ),
+    });
+  }, [navigation, COLORS]);
+
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!email.trim()) { setError("E-mail é obrigatório."); return; }
     if (!password.trim() || password.length < 6) { setError("Senha deve ter pelo menos 6 caracteres."); return; }
-    console.log("[NewUser] Creating user:", email, "role:", role);
+    console.log("[NewUser] Create user button pressed:", email, "role:", role);
     setError("");
     setSubmitting(true);
     try {
@@ -106,8 +133,6 @@ export default function NewUserScreen() {
     }
   };
 
-  const roleColor = ROLE_COLORS[role] || COLORS.primary;
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: COLORS.background }}
@@ -127,6 +152,7 @@ export default function NewUserScreen() {
           {ROLES.map((r) => {
             const rc = ROLE_COLORS[r];
             const isSelected = role === r;
+            const roleLabel = getRoleLabel(r);
             return (
               <AnimatedPressable
                 key={r}
@@ -150,7 +176,7 @@ export default function NewUserScreen() {
                     color: isSelected ? "#fff" : COLORS.textSecondary,
                   }}
                 >
-                  {getRoleLabel(r)}
+                  {roleLabel}
                 </Text>
               </AnimatedPressable>
             );

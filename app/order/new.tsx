@@ -6,24 +6,18 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useNavigation } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Table } from "@/types";
 import { apiGet, apiPost } from "@/utils/api";
-import { Minus, Plus, Users } from "lucide-react-native";
-
-const TABLE_STATUS_COLORS: Record<string, string> = {
-  livre: "#22C55E",
-  ocupada: "#E8521A",
-  reservada: "#F59E0B",
-  fechando: "#8B5CF6",
-};
+import { Minus, Plus, Users, X } from "lucide-react-native";
 
 export default function NewOrderScreen() {
   const COLORS = useColors();
   const router = useRouter();
+  const navigation = useNavigation();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ table_id?: string; table_number?: string }>();
 
@@ -35,11 +29,37 @@ export default function NewOrderScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Add close button to header
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <AnimatedPressable
+          onPress={() => {
+            console.log("[NewOrder] Close/cancel button pressed");
+            router.back();
+          }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: COLORS.surfaceSecondary,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 4,
+          }}
+        >
+          <X size={16} color={COLORS.textSecondary} />
+        </AnimatedPressable>
+      ),
+    });
+  }, [navigation, COLORS]);
+
   const fetchTables = useCallback(async () => {
     console.log("[NewOrder] Fetching available tables");
     try {
-      const data = await apiGet<Table[]>("/api/tables");
-      const livres = data.filter((t) => t.status === "livre");
+      const res = await apiGet<any>("/api/tables");
+      const all: Table[] = Array.isArray(res) ? res : (res.tables || []);
+      const livres = all.filter((t) => t.status === "livre");
       setTables(livres);
     } catch (e) {
       console.error("[NewOrder] Error fetching tables:", e);
@@ -63,14 +83,15 @@ export default function NewOrderScreen() {
     setError("");
     setSubmitting(true);
     try {
-      const order = await apiPost("/api/orders", {
+      const res = await apiPost<any>("/api/orders", {
         table_id: selectedTableId,
         waiter_id: (user as any)?.id,
         customer_count: customerCount,
         notes: notes.trim() || undefined,
       });
-      console.log("[NewOrder] Order created:", (order as any)?.id);
-      router.replace(`/order/${(order as any).id}`);
+      const orderId = res?.order?.id || res?.id;
+      console.log("[NewOrder] Order created:", orderId);
+      router.replace(`/order/${orderId}`);
     } catch (e: any) {
       console.error("[NewOrder] Error creating order:", e);
       setError("Não foi possível abrir a comanda. Tente novamente.");

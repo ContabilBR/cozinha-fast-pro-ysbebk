@@ -15,7 +15,7 @@ import { CardSkeleton } from "@/components/SkeletonLoader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableStatus } from "@/types";
 import { apiGet } from "@/utils/api";
-import { getTableStatusLabel, formatCurrency, formatRelativeTime } from "@/utils/helpers";
+import { getTableStatusLabel } from "@/utils/helpers";
 import { RefreshCw, Users, MapPin, Plus } from "lucide-react-native";
 
 const STATUS_COLORS: Record<TableStatus, string> = {
@@ -123,8 +123,9 @@ export default function MesasScreen() {
   const fetchTables = useCallback(async () => {
     console.log("[Mesas] Fetching tables");
     try {
-      const data = await apiGet<Table[]>("/api/tables");
-      setTables(data);
+      const res = await apiGet<any>("/api/tables");
+      const list: Table[] = Array.isArray(res) ? res : (res.tables || []);
+      setTables(list);
       setError("");
     } catch (e: any) {
       console.error("[Mesas] Error fetching tables:", e);
@@ -145,7 +146,7 @@ export default function MesasScreen() {
   }, [fetchTables]);
 
   const handleRefresh = () => {
-    console.log("[Mesas] Manual refresh");
+    console.log("[Mesas] Manual refresh button pressed");
     setRefreshing(true);
     fetchTables();
   };
@@ -191,6 +192,7 @@ export default function MesasScreen() {
         </View>
         <AnimatedPressable
           onPress={handleRefresh}
+          accessibilityLabel="Atualizar mesas"
           style={{
             width: 40,
             height: 40,

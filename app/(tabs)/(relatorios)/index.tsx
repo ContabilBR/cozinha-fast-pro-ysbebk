@@ -35,6 +35,24 @@ interface WaiterReport {
   avg_ticket: number;
 }
 
+function getPeriodDates(period: Period): { from: string; to: string } {
+  const now = new Date();
+  const to = now.toISOString().split("T")[0];
+  let from: string;
+  if (period === "hoje") {
+    from = to;
+  } else if (period === "semana") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    from = d.toISOString().split("T")[0];
+  } else {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    from = d.toISOString().split("T")[0];
+  }
+  return { from, to };
+}
+
 export default function RelatoriosScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
@@ -48,15 +66,19 @@ export default function RelatoriosScreen() {
 
   const fetchData = useCallback(async () => {
     console.log("[Relatorios] Fetching reports for period:", period);
+    const { from, to } = getPeriodDates(period);
     try {
-      const [summaryData, dishData, waiterData] = await Promise.all([
-        apiGet<Summary>(`/api/reports/summary?period=${period}`).catch(() => ({})),
-        apiGet<DishReport[]>(`/api/reports/dishes?period=${period}`).catch(() => []),
-        apiGet<WaiterReport[]>(`/api/reports/waiters?period=${period}`).catch(() => []),
+      const [summaryRes, dishRes, waiterRes] = await Promise.all([
+        apiGet<any>(`/api/reports/summary?date_from=${from}&date_to=${to}`).catch(() => ({})),
+        apiGet<any>(`/api/reports/dishes?date_from=${from}&date_to=${to}`).catch(() => []),
+        apiGet<any>(`/api/reports/waiters?date_from=${from}&date_to=${to}`).catch(() => []),
       ]);
+      const summaryData: Summary = summaryRes?.summary || summaryRes || {};
+      const dishList: DishReport[] = Array.isArray(dishRes) ? dishRes : (dishRes.dishes || []);
+      const waiterList: WaiterReport[] = Array.isArray(waiterRes) ? waiterRes : (waiterRes.waiters || []);
       setSummary(summaryData);
-      setDishes(Array.isArray(dishData) ? dishData.slice(0, 5) : []);
-      setWaiters(Array.isArray(waiterData) ? waiterData : []);
+      setDishes(dishList.slice(0, 5));
+      setWaiters(waiterList);
     } catch (e) {
       console.error("[Relatorios] Error:", e);
     } finally {
@@ -83,7 +105,6 @@ export default function RelatoriosScreen() {
   ];
 
   const maxDishQty = Math.max(...dishes.map((d) => d.quantity_sold), 1);
-
   const totalRevenue = formatCurrency(summary.total_revenue ?? 0);
   const orderCount = String(summary.order_count ?? 0);
   const avgTicket = formatCurrency(summary.avg_ticket ?? 0);
@@ -212,9 +233,10 @@ export default function RelatoriosScreen() {
                 Sem dados para o período
               </Text>
             ) : (
-              dishes.map((dish, i) => {
+              dishes.map((dish) => {
                 const barWidth = (dish.quantity_sold / maxDishQty) * 100;
                 const revenue = formatCurrency(dish.revenue);
+                const barWidthStr = `${barWidth}%`;
                 return (
                   <View key={dish.dish_id} style={{ gap: 6 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -225,14 +247,20 @@ export default function RelatoriosScreen() {
                         {dish.dish_name}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginLeft: 8 }}>
-                        {dish.quantity_sold}x · {revenue}
+                        {dish.quantity_sold}x
+                      </Text>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginLeft: 4 }}>
+                        ·
+                      </Text>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginLeft: 4 }}>
+                        {revenue}
                       </Text>
                     </View>
                     <View style={{ height: 8, backgroundColor: COLORS.surfaceSecondary, borderRadius: 4 }}>
                       <View
                         style={{
                           height: 8,
-                          width: `${barWidth}%`,
+                          width: barWidthStr,
                           backgroundColor: COLORS.primary,
                           borderRadius: 4,
                         }}
@@ -306,7 +334,10 @@ export default function RelatoriosScreen() {
                         {waiter.waiter_name}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                        {waiter.order_count} comandas · ticket médio {avgT}
+                        {waiter.order_count} comandas
+                      </Text>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                        ticket médio {avgT}
                       </Text>
                     </View>
                     <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>

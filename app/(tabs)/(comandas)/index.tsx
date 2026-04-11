@@ -9,7 +9,6 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -36,6 +35,7 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
   const total = formatCurrency(order.total_amount);
   const itemCount = order.items?.length ?? 0;
   const readyCount = order.items?.filter((i) => i.status === "pronto").length ?? 0;
+  const readyLabel = readyCount > 0 ? `${readyCount} prontos para entregar` : "Nenhum item pronto";
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -103,7 +103,7 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
 
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-            {readyCount > 0 ? `${readyCount} prontos para entregar` : "Nenhum item pronto"}
+            {readyLabel}
           </Text>
           <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
             {total}
@@ -118,7 +118,6 @@ export default function ComandasScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,8 +127,9 @@ export default function ComandasScreen() {
   const fetchOrders = useCallback(async () => {
     console.log("[Comandas] Fetching open orders");
     try {
-      const data = await apiGet<Order[]>("/api/orders?status=aberta");
-      setOrders(data);
+      const res = await apiGet<any>("/api/orders?status=aberta");
+      const list: Order[] = Array.isArray(res) ? res : (res.orders || []);
+      setOrders(list);
       setError("");
     } catch (e: any) {
       console.error("[Comandas] Error:", e);

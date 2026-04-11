@@ -24,6 +24,13 @@ const DEMO_CREDENTIALS = [
   { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "Cozinha@123" },
 ];
 
+const ROLE_ROUTES: Record<string, string> = {
+  garcom: "/(tabs)/(mesas)",
+  administrador: "/(tabs)/(mesas)",
+  gerente: "/(tabs)/(dashboard)",
+  cozinheiro: "/(tabs)/(cozinha)",
+};
+
 export default function AuthScreen() {
   const COLORS = useColors();
   const { user, loading, signInWithEmail } = useAuth();
@@ -48,15 +55,10 @@ export default function AuthScreen() {
 
   useEffect(() => {
     if (!loading && user) {
-      const role = (user as any).role;
-      console.log("[AuthScreen] User authenticated, role:", role);
-      if (role === "gerente") {
-        router.replace("/(tabs)/(dashboard)");
-      } else if (role === "cozinheiro") {
-        router.replace("/(tabs)/(cozinha)");
-      } else {
-        router.replace("/(tabs)/(mesas)");
-      }
+      const role = (user as any).role as string;
+      const route = ROLE_ROUTES[role] || "/(tabs)/(mesas)";
+      console.log("[AuthScreen] User authenticated, role:", role, "-> redirecting to:", route);
+      router.replace(route as any);
     }
   }, [user, loading]);
 
@@ -65,7 +67,7 @@ export default function AuthScreen() {
       setError("Preencha e-mail e senha.");
       return;
     }
-    console.log("[AuthScreen] Login attempt:", email);
+    console.log("[AuthScreen] Login button pressed for:", email);
     setError("");
     setSubmitting(true);
     try {
@@ -80,7 +82,7 @@ export default function AuthScreen() {
   };
 
   const fillDemo = (cred: (typeof DEMO_CREDENTIALS)[0]) => {
-    console.log("[AuthScreen] Filling demo credentials for:", cred.role);
+    console.log("[AuthScreen] Demo credentials selected for:", cred.role);
     setEmail(cred.email);
     setPassword(cred.password);
     setError("");

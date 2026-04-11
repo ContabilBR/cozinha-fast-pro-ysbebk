@@ -23,6 +23,14 @@ export default function TabLayoutIOS() {
           <Icon sf="doc.text" />
           <Label>Comandas</Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(cardapio)">
+          <Icon sf="fork.knife" />
+          <Label>Cardápio</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(perfil)">
+          <Icon sf="person.circle" />
+          <Label>Perfil</Label>
+        </NativeTabs.Trigger>
       </NativeTabs>
     );
   }
@@ -41,6 +49,10 @@ export default function TabLayoutIOS() {
         <NativeTabs.Trigger name="(usuarios)">
           <Icon sf="person.2" />
           <Label>Usuários</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(perfil)">
+          <Icon sf="person.circle" />
+          <Label>Perfil</Label>
         </NativeTabs.Trigger>
       </NativeTabs>
     );
@@ -61,6 +73,14 @@ export default function TabLayoutIOS() {
           <Icon sf="clock.arrow.circlepath" />
           <Label>Histórico</Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(cardapio)">
+          <Icon sf="fork.knife" />
+          <Label>Cardápio</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(perfil)">
+          <Icon sf="person.circle" />
+          <Label>Perfil</Label>
+        </NativeTabs.Trigger>
       </NativeTabs>
     );
   }
@@ -76,6 +96,14 @@ export default function TabLayoutIOS() {
           <Icon sf="clock.arrow.circlepath" />
           <Label>Histórico</Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(cardapio)">
+          <Icon sf="fork.knife" />
+          <Label>Cardápio</Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(perfil)">
+          <Icon sf="person.circle" />
+          <Label>Perfil</Label>
+        </NativeTabs.Trigger>
       </NativeTabs>
     );
   }
@@ -85,6 +113,10 @@ export default function TabLayoutIOS() {
       <NativeTabs.Trigger name="(mesas)">
         <Icon sf="square.grid.2x2" />
         <Label>Mesas</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(perfil)">
+        <Icon sf="person.circle" />
+        <Label>Perfil</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -5,9 +5,9 @@ import {
   FlatList,
   RefreshControl,
   Animated,
-  Image,
   ActivityIndicator,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -17,6 +17,7 @@ import { apiGet, apiPut } from "@/utils/api";
 import { formatRelativeTime, getItemStatusLabel } from "@/utils/helpers";
 import { Flame, Clock, ChefHat, RefreshCw } from "lucide-react-native";
 import { COLORS as C } from "@/constants/Colors";
+import type { ImageSourcePropType } from "react-native";
 
 const STATUS_COLORS: Record<ItemStatus, string> = {
   pendente: C.statusPendente,
@@ -36,9 +37,10 @@ const NEXT_STATUS: Partial<Record<ItemStatus, { status: ItemStatus; label: strin
 
 const SECTION_ORDER: ItemStatus[] = ["pendente", "recebido", "em_preparo", "pronto"];
 
-function resolveImageSource(source: string | undefined) {
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  return { uri: source };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
 }
 
 function KitchenCard({
@@ -68,10 +70,12 @@ function KitchenCard({
   const diffMin = Math.floor(diffMs / 60000);
   const isUrgent = diffMin > 15;
   const nextAction = NEXT_STATUS[item.status];
+  const statusLabel = getItemStatusLabel(item.status);
+  const imageSource = resolveImageSource(item.dish_image_url);
 
   const handleAction = async () => {
     if (!nextAction) return;
-    console.log("[Cozinha] Status change:", item.item_id, "->", nextAction.status);
+    console.log("[Cozinha] Status change button pressed:", item.item_id, "->", nextAction.status);
     setUpdating(true);
     try {
       await onStatusChange(item.item_id, nextAction.status);
@@ -116,9 +120,10 @@ function KitchenCard({
           >
             {item.dish_image_url ? (
               <Image
-                source={resolveImageSource(item.dish_image_url)}
+                source={imageSource}
                 style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
+                contentFit="cover"
+                transition={200}
               />
             ) : (
               <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -145,7 +150,7 @@ function KitchenCard({
                 }}
               >
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
-                  {getItemStatusLabel(item.status)}
+                  {statusLabel}
                 </Text>
               </View>
             </View>
@@ -226,12 +231,15 @@ export default function CozinhaScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const fetchQueue = useCallback(async () => {
     console.log("[Cozinha] Fetching kitchen queue");
     try {
-      const data = await apiGet<KitchenQueueItem[]>("/api/kitchen/queue");
-      setItems(Array.isArray(data) ? data : []);
+      const res = await apiGet<any>("/api/kitchen/queue");
+      const list: KitchenQueueItem[] = Array.isArray(res) ? res : (res.items || []);
+      setItems(list);
+      setLastRefresh(new Date());
       setError("");
     } catch (e: any) {
       console.error("[Cozinha] Error:", e);
@@ -252,7 +260,7 @@ export default function CozinhaScreen() {
   }, [fetchQueue]);
 
   const handleRefresh = () => {
-    console.log("[Cozinha] Manual refresh");
+    console.log("[Cozinha] Manual refresh button pressed");
     setRefreshing(true);
     fetchQueue();
   };
@@ -261,9 +269,8 @@ export default function CozinhaScreen() {
     console.log("[Cozinha] Updating item status:", itemId, "->", newStatus);
     try {
       await apiPut(`/api/kitchen/items/${itemId}/status`, { status: newStatus });
-      setItems((prev) =>
-        prev.map((i) => (i.item_id === itemId ? { ...i, status: newStatus } : i))
-      );
+      console.log("[Cozinha] Status updated successfully, refreshing queue");
+      await fetchQueue();
     } catch (e) {
       console.error("[Cozinha] Status update error:", e);
     }
@@ -286,6 +293,9 @@ export default function CozinhaScreen() {
 
   const pendingCount = items.filter((i) => i.status === "pendente").length;
   const inProgressCount = items.filter((i) => i.status === "em_preparo" || i.status === "recebido").length;
+
+  const lastRefreshMin = Math.floor((Date.now() - lastRefresh.getTime()) / 60000);
+  const lastRefreshLabel = lastRefreshMin < 1 ? "agora" : `há ${lastRefreshMin} min`;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -314,19 +324,25 @@ export default function CozinhaScreen() {
             {pendingCount} pendentes · {inProgressCount} em preparo
           </Text>
         </View>
-        <AnimatedPressable
-          onPress={handleRefresh}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            backgroundColor: COLORS.surfaceSecondary,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <RefreshCw size={18} color={COLORS.textSecondary} />
-        </AnimatedPressable>
+        <View style={{ alignItems: "flex-end", gap: 4 }}>
+          <AnimatedPressable
+            onPress={handleRefresh}
+            accessibilityLabel="Atualizar fila da cozinha"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              backgroundColor: COLORS.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <RefreshCw size={18} color={COLORS.textSecondary} />
+          </AnimatedPressable>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 10, color: COLORS.textTertiary }}>
+            {lastRefreshLabel}
+          </Text>
+        </View>
       </View>
 
       {loading ? (
@@ -361,6 +377,7 @@ export default function CozinhaScreen() {
           renderItem={({ item }) => {
             if (item.type === "header") {
               const color = STATUS_COLORS[item.status] || COLORS.textSecondary;
+              const label = getItemStatusLabel(item.status);
               return (
                 <View
                   style={{
@@ -373,7 +390,7 @@ export default function CozinhaScreen() {
                 >
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
                   <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    {getItemStatusLabel(item.status)}
+                    {label}
                   </Text>
                 </View>
               );

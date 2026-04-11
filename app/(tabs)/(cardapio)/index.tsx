@@ -6,24 +6,37 @@ import {
   ScrollView,
   RefreshControl,
   Animated,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { Dish, Category } from "@/types";
 import { apiGet } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { Plus, Clock, UtensilsCrossed } from "lucide-react-native";
+import { Plus, Clock, UtensilsCrossed, Pencil } from "lucide-react-native";
+import type { ImageSourcePropType } from "react-native";
 
-function resolveImageSource(source: string | undefined) {
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  return { uri: source };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
 }
 
-function DishCard({ dish, onPress, index }: { dish: Dish; onPress: () => void; index: number }) {
+function DishCard({
+  dish,
+  onPress,
+  index,
+  canEdit,
+}: {
+  dish: Dish;
+  onPress: () => void;
+  index: number;
+  canEdit: boolean;
+}) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -37,6 +50,7 @@ function DishCard({ dish, onPress, index }: { dish: Dish; onPress: () => void; i
 
   const price = formatCurrency(dish.price);
   const isActive = dish.active;
+  const imageSource = resolveImageSource(dish.image_url);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
@@ -52,19 +66,21 @@ function DishCard({ dish, onPress, index }: { dish: Dish; onPress: () => void; i
           opacity: isActive ? 1 : 0.6,
         }}
       >
-        {/* Image */}
-        <View style={{ height: 110, backgroundColor: COLORS.surfaceSecondary }}>
+        {/* Image — full-width, height 140 */}
+        <View style={{ height: 140, backgroundColor: COLORS.surfaceSecondary }}>
           {dish.image_url ? (
             <Image
-              source={resolveImageSource(dish.image_url)}
+              source={imageSource}
               style={{ width: "100%", height: "100%" }}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={200}
             />
           ) : (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
               <UtensilsCrossed size={28} color={COLORS.textTertiary} />
             </View>
           )}
+          {/* Inactive badge */}
           {!isActive && (
             <View
               style={{
@@ -80,6 +96,24 @@ function DishCard({ dish, onPress, index }: { dish: Dish; onPress: () => void; i
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>
                 Inativo
               </Text>
+            </View>
+          )}
+          {/* Edit button overlay — only for admin/gerente */}
+          {canEdit && (
+            <View
+              style={{
+                position: "absolute",
+                top: 8,
+                left: 8,
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                backgroundColor: "rgba(0,0,0,0.45)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Pencil size={14} color="#fff" />
             </View>
           )}
         </View>
@@ -128,6 +162,10 @@ export default function CardapioScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const role = (user as any)?.role;
+  const canEdit = role === "administrador" || role === "gerente";
 
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -139,12 +177,14 @@ export default function CardapioScreen() {
   const fetchData = useCallback(async () => {
     console.log("[Cardapio] Fetching dishes and categories");
     try {
-      const [dishData, catData] = await Promise.all([
-        apiGet<Dish[]>("/api/dishes"),
-        apiGet<Category[]>("/api/categories"),
+      const [dishRes, catRes] = await Promise.all([
+        apiGet<any>("/api/dishes"),
+        apiGet<any>("/api/categories"),
       ]);
-      setDishes(dishData);
-      setCategories(catData);
+      const dishList: Dish[] = Array.isArray(dishRes) ? dishRes : (dishRes.dishes || []);
+      const catList: Category[] = Array.isArray(catRes) ? catRes : (catRes.categories || []);
+      setDishes(dishList);
+      setCategories(catList);
       setError("");
     } catch (e: any) {
       console.error("[Cardapio] Error:", e);
@@ -257,6 +297,9 @@ export default function CardapioScreen() {
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
             Erro ao carregar cardápio
           </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+            {error}
+          </Text>
           <AnimatedPressable
             onPress={fetchData}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
@@ -273,10 +316,13 @@ export default function CardapioScreen() {
             <DishCard
               dish={item}
               onPress={() => {
-                console.log("[Cardapio] Dish pressed:", item.id);
-                router.push(`/dish/${item.id}`);
+                console.log("[Cardapio] Dish pressed:", item.id, "canEdit:", canEdit);
+                if (canEdit) {
+                  router.push(`/dish/${item.id}`);
+                }
               }}
               index={index}
+              canEdit={canEdit}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -308,27 +354,29 @@ export default function CardapioScreen() {
         />
       )}
 
-      {/* FAB */}
-      <AnimatedPressable
-        onPress={() => {
-          console.log("[Cardapio] FAB - new dish");
-          router.push("/dish/new");
-        }}
-        style={{
-          position: "absolute",
-          bottom: insets.bottom + 90,
-          right: 20,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: COLORS.primary,
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
-        }}
-      >
-        <Plus size={24} color="#fff" />
-      </AnimatedPressable>
+      {/* FAB — only for admin/gerente */}
+      {canEdit && (
+        <AnimatedPressable
+          onPress={() => {
+            console.log("[Cardapio] FAB - new dish");
+            router.push("/dish/new");
+          }}
+          style={{
+            position: "absolute",
+            bottom: insets.bottom + 90,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: COLORS.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
+          }}
+        >
+          <Plus size={24} color="#fff" />
+        </AnimatedPressable>
+      )}
     </View>
   );
 }

@@ -89,7 +89,8 @@ export default function UserDetailScreen() {
     if (!id) return;
     console.log("[UserDetail] Fetching user:", id);
     try {
-      const data = await apiGet<User>(`/api/users/${id}`);
+      const res = await apiGet<any>(`/api/users/${id}`);
+      const data: User = res?.user || res;
       setUser(data);
       setName(data.name);
       setEmail(data.email);
@@ -108,7 +109,7 @@ export default function UserDetailScreen() {
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!email.trim()) { setError("E-mail é obrigatório."); return; }
-    console.log("[UserDetail] Saving user:", id);
+    console.log("[UserDetail] Save button pressed for user:", id);
     setError("");
     setSubmitting(true);
     try {
@@ -140,6 +141,7 @@ export default function UserDetailScreen() {
 
   const initials = getInitials(name || email);
   const roleColor = ROLE_COLORS[role] || COLORS.primary;
+  const activeLabel = active ? "Ativo" : "Inativo";
 
   return (
     <ScrollView
@@ -177,6 +179,7 @@ export default function UserDetailScreen() {
           {ROLES.map((r) => {
             const rc = ROLE_COLORS[r];
             const isSelected = role === r;
+            const roleLabel = getRoleLabel(r);
             return (
               <AnimatedPressable
                 key={r}
@@ -200,7 +203,7 @@ export default function UserDetailScreen() {
                     color: isSelected ? "#fff" : COLORS.textSecondary,
                   }}
                 >
-                  {getRoleLabel(r)}
+                  {roleLabel}
                 </Text>
               </AnimatedPressable>
             );

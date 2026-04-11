@@ -85,7 +85,7 @@ function StatCard({
             {title}
           </Text>
           {subtitle && (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: color }}>
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color }}>
               {subtitle}
             </Text>
           )}
@@ -110,14 +110,17 @@ export default function DashboardScreen() {
   const fetchData = useCallback(async () => {
     console.log("[Dashboard] Fetching dashboard data");
     try {
-      const [dashData, tablesData, ordersData] = await Promise.all([
-        apiGet<DashboardData>("/api/dashboard").catch(() => ({})),
-        apiGet<Table[]>("/api/tables").catch(() => []),
-        apiGet<Order[]>("/api/orders?status=fechada&limit=5").catch(() => []),
+      const [dashRes, tablesRes, ordersRes] = await Promise.all([
+        apiGet<any>("/api/dashboard").catch(() => ({})),
+        apiGet<any>("/api/tables").catch(() => []),
+        apiGet<any>("/api/orders?status=fechada&limit=5").catch(() => []),
       ]);
+      const dashData: DashboardData = dashRes?.dashboard || dashRes || {};
+      const tableList: Table[] = Array.isArray(tablesRes) ? tablesRes : (tablesRes.tables || []);
+      const orderList: Order[] = Array.isArray(ordersRes) ? ordersRes : (ordersRes.orders || []);
       setDashboard(dashData);
-      setTables(tablesData);
-      setRecentOrders(ordersData.slice(0, 5));
+      setTables(tableList);
+      setRecentOrders(orderList.slice(0, 5));
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (e) {
       console.error("[Dashboard] Error:", e);
@@ -332,7 +335,10 @@ export default function DashboardScreen() {
                         Mesa {tableNum}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                        {waiter} · {time}
+                        {waiter}
+                      </Text>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                        {time}
                       </Text>
                     </View>
                     <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>

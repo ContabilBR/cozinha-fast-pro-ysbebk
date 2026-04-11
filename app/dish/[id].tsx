@@ -6,25 +6,77 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
 import { Dish, Category } from "@/types";
 import { apiGet, apiPut } from "@/utils/api";
 import { UtensilsCrossed } from "lucide-react-native";
+import type { ImageSourcePropType } from "react-native";
 
-function resolveImageSource(source: string | undefined) {
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  return { uri: source };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+function FormField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  keyboardType,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: any;
+}) {
+  const COLORS = useColors();
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+        {label}
+      </Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={COLORS.textTertiary}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        style={{
+          backgroundColor: COLORS.surfaceSecondary,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          padding: 14,
+          fontFamily: "Outfit_400Regular",
+          fontSize: 15,
+          color: COLORS.text,
+          minHeight: multiline ? 80 : 52,
+          textAlignVertical: multiline ? "top" : "center",
+        }}
+      />
+    </View>
+  );
 }
 
 export default function DishDetailScreen() {
   const COLORS = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+
+  const role = (user as any)?.role;
+  const canEdit = role === "administrador" || role === "gerente";
 
   const [dish, setDish] = useState<Dish | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -45,12 +97,14 @@ export default function DishDetailScreen() {
     if (!id) return;
     console.log("[DishDetail] Fetching dish:", id);
     try {
-      const [dishData, catData] = await Promise.all([
-        apiGet<Dish>(`/api/dishes/${id}`),
-        apiGet<Category[]>("/api/categories"),
+      const [dishRes, catRes] = await Promise.all([
+        apiGet<any>(`/api/dishes/${id}`),
+        apiGet<any>("/api/categories"),
       ]);
+      const dishData: Dish = dishRes?.dish || dishRes;
+      const catList: Category[] = Array.isArray(catRes) ? catRes : (catRes.categories || []);
       setDish(dishData);
-      setCategories(catData);
+      setCategories(catList);
       setName(dishData.name);
       setDescription(dishData.description ?? "");
       setPrice(String(dishData.price));
@@ -66,12 +120,20 @@ export default function DishDetailScreen() {
     }
   }, [id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    // Redirect non-editors away
+    if (!canEdit) {
+      console.log("[DishDetail] Non-editor role, redirecting back");
+      router.back();
+      return;
+    }
+    fetchData();
+  }, [fetchData, canEdit]);
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!price.trim() || isNaN(Number(price))) { setError("Preço inválido."); return; }
-    console.log("[DishDetail] Saving dish:", id);
+    console.log("[DishDetail] Save button pressed for dish:", id);
     setError("");
     setSubmitting(true);
     try {
@@ -98,12 +160,15 @@ export default function DishDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: COLORS.background, padding: 20, gap: 16 }}>
         <SkeletonLine width="60%" height={20} />
+        <SkeletonLine width="100%" height={160} borderRadius={16} />
         <SkeletonLine width="100%" height={52} borderRadius={12} />
         <SkeletonLine width="100%" height={52} borderRadius={12} />
         <SkeletonLine width="100%" height={80} borderRadius={12} />
       </View>
     );
   }
+
+  const imageSource = resolveImageSource(imageUrl);
 
   return (
     <ScrollView
@@ -123,7 +188,7 @@ export default function DishDetailScreen() {
         }}
       >
         {imageUrl ? (
-          <Image source={resolveImageSource(imageUrl)} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+          <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" transition={200} />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
             <UtensilsCrossed size={32} color={COLORS.textTertiary} />
@@ -243,50 +308,5 @@ export default function DishDetailScreen() {
         )}
       </AnimatedPressable>
     </ScrollView>
-  );
-}
-
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline,
-  keyboardType,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  keyboardType?: any;
-}) {
-  const COLORS = useColors();
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-        {label}
-      </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={COLORS.textTertiary}
-        multiline={multiline}
-        keyboardType={keyboardType}
-        style={{
-          backgroundColor: COLORS.surfaceSecondary,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 14,
-          fontFamily: "Outfit_400Regular",
-          fontSize: 15,
-          color: COLORS.text,
-          minHeight: multiline ? 80 : 52,
-          textAlignVertical: multiline ? "top" : "center",
-        }}
-      />
-    </View>
   );
 }
