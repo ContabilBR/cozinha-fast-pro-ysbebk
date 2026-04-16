@@ -15,7 +15,7 @@ export async function requireAuth(
     return null;
   }
 
-  const token = authHeader.slice(7);
+  const token = authHeader.slice(7).trim();
 
   try {
     // Look up token in session table

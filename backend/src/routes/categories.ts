@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { eq, count } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface CreateCategoryBody {
   name: string;
@@ -107,6 +108,9 @@ export function registerCategoryRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateCategoryBody }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         if (!request.body.name) {
           return reply.status(400).send({ error: "name is required" });

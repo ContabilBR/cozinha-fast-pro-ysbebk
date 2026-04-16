@@ -1,9 +1,16 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
-import { user as userTable } from "../db/schema/auth-schema.js";
+import { user as userTable, session as sessionTable } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
+import { randomUUID } from "crypto";
 
 interface LoginBody {
+  email: string;
+  password: string;
+}
+
+interface SignUpBody {
+  name: string;
   email: string;
   password: string;
 }
@@ -15,6 +22,110 @@ function generateToken(userId: string): string {
 }
 
 export function registerAuthRoutes(app: App) {
+  // POST /api/auth/sign-up/email
+  app.fastify.post<{ Body: SignUpBody }>(
+    "/api/auth/sign-up/email",
+    {
+      schema: {
+        description: "Sign up new user with email",
+        tags: ["auth"],
+        body: {
+          type: "object",
+          required: ["name", "email", "password"],
+          properties: {
+            name: { type: "string" },
+            email: { type: "string", format: "email" },
+            password: { type: "string" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              token: { type: "string" },
+              user: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  name: { type: "string" },
+                  email: { type: "string" },
+                  emailVerified: { type: "boolean" },
+                  image: { type: ["string", "null"] },
+                  createdAt: { type: "string", format: "date-time" },
+                  updatedAt: { type: "string", format: "date-time" },
+                },
+              },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: SignUpBody }>, reply: FastifyReply) => {
+      try {
+        app.logger.info({ email: request.body.email }, "Sign up attempt");
+
+        const { name, email, password } = request.body;
+
+        if (!name || !email || !password) {
+          return reply.status(400).send({ error: "Name, email and password are required" });
+        }
+
+        // Use Better Auth sign up API
+        try {
+          const result = await app.auth.api.signUpEmail({
+            body: { name, email, password },
+          });
+
+          if (!result.user) {
+            app.logger.info({ email }, "Sign up failed: user creation failed");
+            return reply.status(400).send({ error: "Failed to create user" });
+          }
+
+          const authUser = result.user;
+
+          // Generate simple token
+          const token = generateToken(authUser.id);
+
+          // Store token in session table
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+          await app.db.insert(sessionTable).values({
+            id: randomUUID(),
+            userId: authUser.id,
+            token,
+            expiresAt,
+          });
+
+          app.logger.info({ userId: authUser.id, email }, "Sign up successful");
+
+          reply.code(200).send({
+            token,
+            user: {
+              id: authUser.id,
+              name: authUser.name,
+              email: authUser.email,
+              emailVerified: authUser.emailVerified,
+              image: authUser.image,
+              createdAt: authUser.createdAt,
+              updatedAt: authUser.updatedAt,
+            },
+          });
+        } catch (authError) {
+          app.logger.info({ email }, "Sign up failed: authentication error");
+          return reply.status(400).send({ error: "Email already exists" });
+        }
+      } catch (error) {
+        app.logger.error({ err: error }, "Sign up failed with error");
+        return reply.status(400).send({ error: "Failed to create user" });
+      }
+    }
+  );
+
   // POST /api/auth/login
   app.fastify.post<{ Body: LoginBody }>(
     "/api/auth/login",
@@ -76,34 +187,40 @@ export function registerAuthRoutes(app: App) {
             return reply.status(400).send({ error: "Credenciais inválidas" });
           }
 
-          // Fetch user with role from database
+          const authUser = result.user;
+
+          // Fetch role from database
           const users = await app.db
-            .select()
+            .select({ role: userTable.role })
             .from(userTable)
-            .where(eq(userTable.id, result.user.id))
+            .where(eq(userTable.id, authUser.id))
             .limit(1);
 
-          if (!users || users.length === 0) {
-            app.logger.info({ userId: result.user.id }, "Login failed: user not found in database");
-            return reply.status(400).send({ error: "Credenciais inválidas" });
-          }
-
-          const dbUser = users[0];
+          const role = users?.[0]?.role || "garcom";
 
           // Generate simple token
-          const token = generateToken(dbUser.id);
+          const token = generateToken(authUser.id);
 
-          app.logger.info({ userId: dbUser.id, email }, "Login successful");
+          // Store token in session table
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+          await app.db.insert(sessionTable).values({
+            id: randomUUID(),
+            userId: authUser.id,
+            token,
+            expiresAt,
+          });
 
-          return {
+          app.logger.info({ userId: authUser.id, email }, "Login successful");
+
+          reply.code(200).send({
             token,
             user: {
-              id: dbUser.id,
-              name: dbUser.name,
-              email: dbUser.email,
-              role: dbUser.role,
+              id: authUser.id,
+              name: authUser.name,
+              email: authUser.email,
+              role,
             },
-          };
+          });
         } catch (authError) {
           app.logger.info({ email }, "Login failed: authentication error");
           return reply.status(400).send({ error: "Credenciais inválidas" });
@@ -151,7 +268,7 @@ export function registerAuthRoutes(app: App) {
           };
         }
 
-        const token = authHeader.substring(7);
+        const token = authHeader.substring(7).trim();
 
         // Decode token (simple base64 decode)
         try {
@@ -191,6 +308,65 @@ export function registerAuthRoutes(app: App) {
         return {
           user: null,
         };
+      }
+    }
+  );
+
+  // POST /api/auth/delete-user - Delete authenticated user
+  app.fastify.post(
+    "/api/auth/delete-user",
+    {
+      schema: {
+        description: "Delete the authenticated user account",
+        tags: ["auth"],
+        response: {
+          200: { type: "object", properties: { success: { type: "boolean" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info({}, "Deleting user account");
+
+        const authHeader = request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return reply.status(401).send({ error: "Unauthorized" });
+        }
+
+        const token = authHeader.substring(7).trim();
+
+        // Look up token in session table
+        const sess = await app.db
+          .select()
+          .from(sessionTable)
+          .where(eq(sessionTable.token, token))
+          .limit(1);
+
+        if (!sess || sess.length === 0) {
+          return reply.status(401).send({ error: "Unauthorized" });
+        }
+
+        const sessionRecord = sess[0];
+        const userId = sessionRecord.userId;
+
+        // Delete the user
+        await app.db
+          .update(userTable)
+          .set({ active: false })
+          .where(eq(userTable.id, userId));
+
+        // Delete all sessions for this user
+        await app.db
+          .delete(sessionTable)
+          .where(eq(sessionTable.userId, userId));
+
+        app.logger.info({ userId }, "User account deleted");
+
+        reply.code(200).send({ success: true });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to delete user account");
+        return reply.status(500).send({ error: "Failed to delete user account" });
       }
     }
   );

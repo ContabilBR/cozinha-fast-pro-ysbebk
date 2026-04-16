@@ -5,29 +5,25 @@ import type { App } from "../index.js";
 
 const seedUsers = [
   {
-    id: "user-admin-001",
-    name: "Admin Sistema",
+    name: "Administrador",
     email: "admin@cozinhafast.com",
     password: "admin123",
     role: "admin",
   },
   {
-    id: "user-gerente-001",
-    name: "Carlos Gerente",
+    name: "Gerente Silva",
     email: "gerente@cozinhafast.com",
     password: "gerente123",
     role: "gerente",
   },
   {
-    id: "user-garcom-001",
-    name: "Joao Garcom",
+    name: "João Garçom",
     email: "garcom@cozinhafast.com",
     password: "garcom123",
     role: "garcom",
   },
   {
-    id: "user-cozinha-001",
-    name: "Maria Cozinheira",
+    name: "Chef Carlos",
     email: "cozinheiro@cozinhafast.com",
     password: "cozinha123",
     role: "cozinheiro",
@@ -43,16 +39,16 @@ const seedCategories = [
 ];
 
 const seedDishes = [
-  { name: "Bruschetta", category: "Entradas", price: "18.90", prepTime: 10, image: "bruschetta" },
-  { name: "Carpaccio", category: "Entradas", price: "32.00", prepTime: 15, image: "carpaccio" },
-  { name: "File Mignon", category: "Pratos Principais", price: "89.90", prepTime: 25, image: "filemignon" },
-  { name: "Salmao Grelhado", category: "Pratos Principais", price: "72.00", prepTime: 20, image: "salmao" },
-  { name: "Frango a Parmegiana", category: "Pratos Principais", price: "54.90", prepTime: 22, image: "frango" },
-  { name: "Petit Gateau", category: "Sobremesas", price: "24.90", prepTime: 12, image: "petitgateau" },
-  { name: "Pudim de Leite", category: "Sobremesas", price: "16.00", prepTime: 5, image: "pudim" },
-  { name: "Suco de Laranja", category: "Bebidas", price: "12.00", prepTime: 5, image: "suco" },
-  { name: "Refrigerante", category: "Bebidas", price: "8.00", prepTime: 2, image: "refri" },
-  { name: "X-Burguer Especial", category: "Lanches", price: "38.90", prepTime: 18, image: "xburguer" },
+  { name: "Coxinha de Frango", category: "Entradas", price: "8.90", prepTime: 10, image: "coxinha" },
+  { name: "Pastel de Queijo", category: "Entradas", price: "9.90", prepTime: 10, image: "pastel" },
+  { name: "Frango Grelhado", category: "Pratos Principais", price: "32.90", prepTime: 20, image: "frango" },
+  { name: "Picanha na Brasa", category: "Pratos Principais", price: "58.90", prepTime: 25, image: "picanha" },
+  { name: "Filé de Tilápia", category: "Pratos Principais", price: "38.90", prepTime: 20, image: "tilapia" },
+  { name: "Pudim de Leite", category: "Sobremesas", price: "12.90", prepTime: 5, image: "pudim" },
+  { name: "Mousse de Chocolate", category: "Sobremesas", price: "14.90", prepTime: 5, image: "mousse" },
+  { name: "Suco de Laranja", category: "Bebidas", price: "8.90", prepTime: 2, image: "suco" },
+  { name: "Refrigerante", category: "Bebidas", price: "6.90", prepTime: 2, image: "refri" },
+  { name: "X-Burguer", category: "Lanches", price: "24.90", prepTime: 15, image: "xburguer" },
 ];
 
 const seedTables = [
@@ -128,6 +124,7 @@ export async function seedDatabase(app: App) {
 
     // Seed users
     const userIds: Record<string, string> = {};
+    let garmcomUserId = "";
     for (const seedUser of seedUsers) {
       try {
         // Use Better Auth signup API
@@ -140,7 +137,10 @@ export async function seedDatabase(app: App) {
         });
 
         if (result.user) {
-          userIds[seedUser.id] = result.user.id;
+          userIds[seedUser.email] = result.user.id;
+          if (seedUser.role === "garcom") {
+            garmcomUserId = result.user.id;
+          }
           // Update role
           await app.db
             .update(userTable)
@@ -153,94 +153,96 @@ export async function seedDatabase(app: App) {
     }
 
     // Seed orders with items
-    const bruschettaId = dishIds["Bruschetta"];
-    const carpaccioId = dishIds["Carpaccio"];
-    const fileMignonId = dishIds["File Mignon"];
-    const salmaoId = dishIds["Salmao Grelhado"];
+    if (garmcomUserId) {
+      const coxinhaId = dishIds["Coxinha de Frango"];
+      const frangoGrelhadoId = dishIds["Frango Grelhado"];
+      const refrigeranteId = dishIds["Refrigerante"];
+      const xburgerId = dishIds["X-Burguer"];
 
-    // Order 1: Table 3
-    const [order1] = await app.db
-      .insert(schema.orders)
-      .values({
-        tableId: tableIds[3],
-        waiterId: "user-garcom-001",
-        status: "aberta",
-        customerCount: 4,
-        totalAmount: "0",
-      })
-      .returning();
+      // Order 1: Table 3 - Coxinha x2 + Frango Grelhado x1
+      const [order1] = await app.db
+        .insert(schema.orders)
+        .values({
+          tableId: tableIds[3],
+          waiterId: garmcomUserId,
+          status: "aberta",
+          customerCount: 2,
+          totalAmount: "0",
+          openedAt: new Date(),
+        })
+        .returning();
 
-    // Add items to Order 1
-    const [item1_1] = await app.db
-      .insert(schema.orderItems)
-      .values({
-        orderId: order1.id,
-        dishId: bruschettaId,
-        quantity: 1,
-        unitPrice: "18.90",
-        status: "pendente",
-      })
-      .returning();
+      // Add items to Order 1
+      await app.db
+        .insert(schema.orderItems)
+        .values({
+          orderId: order1.id,
+          dishId: coxinhaId,
+          quantity: 2,
+          unitPrice: "8.90",
+          status: "pendente",
+          requestedAt: new Date(),
+        });
 
-    const [item1_2] = await app.db
-      .insert(schema.orderItems)
-      .values({
-        orderId: order1.id,
-        dishId: carpaccioId,
-        quantity: 1,
-        unitPrice: "32.00",
-        status: "pendente",
-      })
-      .returning();
+      await app.db
+        .insert(schema.orderItems)
+        .values({
+          orderId: order1.id,
+          dishId: frangoGrelhadoId,
+          quantity: 1,
+          unitPrice: "32.90",
+          status: "pendente",
+          requestedAt: new Date(),
+        });
 
-    // Update Order 1 total
-    await app.db
-      .update(schema.orders)
-      .set({ totalAmount: "50.90" })
-      .where(eq(schema.orders.id, order1.id));
+      // Update Order 1 total: (2 * 8.90) + 32.90 = 50.70
+      await app.db
+        .update(schema.orders)
+        .set({ totalAmount: "50.70" })
+        .where(eq(schema.orders.id, order1.id));
 
-    // Order 2: Table 5
-    const [order2] = await app.db
-      .insert(schema.orders)
-      .values({
-        tableId: tableIds[5],
-        waiterId: "user-garcom-001",
-        status: "aberta",
-        customerCount: 6,
-        totalAmount: "0",
-      })
-      .returning();
+      // Order 2: Table 5 - Refrigerante x2 + X-Burguer x1
+      const [order2] = await app.db
+        .insert(schema.orders)
+        .values({
+          tableId: tableIds[5],
+          waiterId: garmcomUserId,
+          status: "aberta",
+          customerCount: 2,
+          totalAmount: "0",
+          openedAt: new Date(),
+        })
+        .returning();
 
-    // Add items to Order 2
-    const [item2_1] = await app.db
-      .insert(schema.orderItems)
-      .values({
-        orderId: order2.id,
-        dishId: fileMignonId,
-        quantity: 1,
-        unitPrice: "89.90",
-        status: "em_preparo",
-        startedAt: new Date(),
-      })
-      .returning();
+      // Add items to Order 2
+      await app.db
+        .insert(schema.orderItems)
+        .values({
+          orderId: order2.id,
+          dishId: refrigeranteId,
+          quantity: 2,
+          unitPrice: "6.90",
+          status: "pendente",
+          requestedAt: new Date(),
+        });
 
-    const [item2_2] = await app.db
-      .insert(schema.orderItems)
-      .values({
-        orderId: order2.id,
-        dishId: salmaoId,
-        quantity: 1,
-        unitPrice: "72.00",
-        status: "em_preparo",
-        startedAt: new Date(),
-      })
-      .returning();
+      await app.db
+        .insert(schema.orderItems)
+        .values({
+          orderId: order2.id,
+          dishId: xburgerId,
+          quantity: 1,
+          unitPrice: "24.90",
+          status: "pendente",
+          requestedAt: new Date(),
+        });
 
-    // Update Order 2 total
-    await app.db
-      .update(schema.orders)
-      .set({ totalAmount: "161.90" })
-      .where(eq(schema.orders.id, order2.id));
+      // Update Order 2 total: (2 * 6.90) + 24.90 = 38.70
+      await app.db
+        .update(schema.orders)
+        .set({ totalAmount: "38.70" })
+        .where(eq(schema.orders.id, order2.id));
+    }
 
     app.logger.info("Database seeded successfully");
   } catch (error) {
