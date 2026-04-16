@@ -134,7 +134,7 @@ export default function MesasScreen() {
       setMesas(list);
       setError("");
     } catch (e: any) {
-      console.error("[Mesas] Error fetching mesas:", e);
+      console.error("[Mesas] Error fetching mesas:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar as mesas.");
     } finally {
       setLoading(false);

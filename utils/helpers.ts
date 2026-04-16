@@ -1,18 +1,22 @@
 import { ItemStatus, TableStatus, UserRole, PedidoStatus, Mesa } from '@/types';
 
-export function formatCurrency(value: number | string | undefined): string {
+export function formatCurrency(value: number | string | undefined | null): string {
   const num = Number(value) || 0;
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
 }
 
-export function formatDate(dateStr: string | undefined): string {
+export function formatDate(dateStr: string | undefined | null): string {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function formatRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+export function formatRelativeTime(dateStr: string | undefined | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'agora';
   if (minutes < 60) return `há ${minutes} min`;
@@ -21,8 +25,11 @@ export function formatRelativeTime(dateStr: string): string {
   return `há ${Math.floor(hours / 24)}d`;
 }
 
-export function formatElapsed(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+export function formatElapsed(dateStr: string | undefined | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `${minutes}min`;
   const hours = Math.floor(minutes / 60);
@@ -42,8 +49,8 @@ export function getItemStatusLabel(status: ItemStatus): string {
   return labels[status] || status;
 }
 
-export function getPedidoStatusLabel(status: PedidoStatus): string {
-  const labels: Record<PedidoStatus, string> = {
+export function getPedidoStatusLabel(status: PedidoStatus | string): string {
+  const labels: Record<string, string> = {
     pendente: 'Pendente',
     recebido: 'Recebido',
     em_preparacao: 'Em Preparo',
@@ -54,8 +61,8 @@ export function getPedidoStatusLabel(status: PedidoStatus): string {
   return labels[status] || status;
 }
 
-export function getPedidoStatusColor(status: PedidoStatus): string {
-  const map: Record<PedidoStatus, string> = {
+export function getPedidoStatusColor(status: PedidoStatus | string): string {
+  const map: Record<string, string> = {
     pendente: '#94A3B8',
     recebido: '#3B82F6',
     em_preparacao: '#F59E0B',
@@ -66,8 +73,8 @@ export function getPedidoStatusColor(status: PedidoStatus): string {
   return map[status] || '#94A3B8';
 }
 
-export function getMesaStatusLabel(status: Mesa['status']): string {
-  const labels: Record<Mesa['status'], string> = {
+export function getMesaStatusLabel(status: Mesa['status'] | string): string {
+  const labels: Record<string, string> = {
     livre: 'Livre',
     ocupada: 'Ocupada',
     aguardando_pedido: 'Aguardando',
@@ -75,11 +82,11 @@ export function getMesaStatusLabel(status: Mesa['status']): string {
     pedido_pronto: 'Pronto',
     finalizada: 'Finalizada',
   };
-  return labels[status] || status;
+  return labels[status] || String(status);
 }
 
-export function getMesaStatusColor(status: Mesa['status']): string {
-  const map: Record<Mesa['status'], string> = {
+export function getMesaStatusColor(status: Mesa['status'] | string): string {
+  const map: Record<string, string> = {
     livre: '#22C55E',
     ocupada: '#E8521A',
     aguardando_pedido: '#F59E0B',
@@ -100,25 +107,29 @@ export function getTableStatusLabel(status: TableStatus): string {
   return labels[status] || status;
 }
 
-export function getRoleLabel(role: UserRole): string {
-  const labels: Record<UserRole, string> = {
+export function getRoleLabel(role: UserRole | string | undefined | null): string {
+  const labels: Record<string, string> = {
     garcom: 'Garçom',
     administrador: 'Administrador',
     gerente: 'Gerente',
     cozinheiro: 'Cozinheiro',
   };
-  return labels[role] || role;
+  if (!role) return 'Usuário';
+  return labels[role] || String(role);
 }
 
-export function getInitials(name: string): string {
+export function getInitials(name: string | undefined | null): string {
+  if (!name || !name.trim()) return '?';
   return name
+    .trim()
     .split(' ')
+    .filter(Boolean)
     .slice(0, 2)
     .map((n) => n[0])
     .join('')
     .toUpperCase();
 }
 
-export function isAdmin(role: UserRole): boolean {
+export function isAdmin(role: UserRole | string | undefined | null): boolean {
   return role === 'gerente' || role === 'administrador';
 }

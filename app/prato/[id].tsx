@@ -39,7 +39,7 @@ export default function PratoDetailScreen() {
       setPrato(p);
       setError("");
     } catch (e: any) {
-      console.error("[PratoDetail] Error:", e);
+      console.error("[PratoDetail] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar o prato.");
     } finally {
       setLoading(false);

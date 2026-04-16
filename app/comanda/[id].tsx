@@ -148,7 +148,7 @@ export default function ComandaDetailScreen() {
       setComanda(c);
       setError("");
     } catch (e: any) {
-      console.error("[Comanda] Error:", e);
+      console.error("[Comanda] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar a comanda.");
     } finally {
       setLoading(false);

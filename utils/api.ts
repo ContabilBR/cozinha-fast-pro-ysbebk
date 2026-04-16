@@ -3,11 +3,24 @@ import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { BEARER_TOKEN_KEY } from "@/lib/auth";
 
-export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
+const FALLBACK_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
+export const BACKEND_URL: string =
+  (Constants.expoConfig?.extra?.backendUrl as string | undefined) || FALLBACK_URL;
 
 export const isBackendConfigured = (): boolean => {
   return !!BACKEND_URL && BACKEND_URL.length > 0;
 };
+
+/** Extract a human-readable message from any thrown value */
+export function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
 
 export const getBearerToken = async (): Promise<string | null> => {
   try {
@@ -17,7 +30,7 @@ export const getBearerToken = async (): Promise<string | null> => {
       return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
     }
   } catch (error) {
-    console.error("[API] Error retrieving bearer token:", error);
+    console.error("[API] Error retrieving bearer token:", getErrorMessage(error));
     return null;
   }
 };
@@ -26,11 +39,8 @@ export const apiCall = async <T = any>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> => {
-  if (!isBackendConfigured()) {
-    throw new Error("Backend URL not configured. Please rebuild the app.");
-  }
-
   const url = `${BACKEND_URL}${endpoint}`;
+  console.log("[API]", options?.method ?? "GET", url);
 
   const fetchOptions: RequestInit = {
     ...options,
@@ -48,14 +58,29 @@ export const apiCall = async <T = any>(
     };
   }
 
-  const response = await fetch(url, fetchOptions);
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`API error: ${response.status} - ${text}`);
+  let response: Response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (networkError) {
+    const msg = getErrorMessage(networkError);
+    console.error("[API] Network error for", url, ":", msg);
+    throw new Error(`Network error: ${msg}`);
   }
 
-  return response.json();
+  if (!response.ok) {
+    const text = await response.text().catch(() => "(no body)");
+    const preview = text.slice(0, 200);
+    console.error("[API] HTTP", response.status, "for", url, ":", preview);
+    throw new Error(`HTTP ${response.status}: ${preview}`);
+  }
+
+  try {
+    return await response.json();
+  } catch (parseError) {
+    const msg = getErrorMessage(parseError);
+    console.error("[API] JSON parse error for", url, ":", msg);
+    throw new Error(`JSON parse error: ${msg}`);
+  }
 };
 
 export const apiGet = async <T = any>(endpoint: string): Promise<T> => {
@@ -95,11 +120,9 @@ export const authenticatedApiCall = async <T = any>(
   options?: RequestInit
 ): Promise<T> => {
   const token = await getBearerToken();
-
   if (!token) {
     throw new Error("Authentication token not found. Please sign in.");
   }
-
   return apiCall<T>(endpoint, {
     ...options,
     headers: {

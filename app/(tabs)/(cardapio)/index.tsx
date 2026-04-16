@@ -193,16 +193,26 @@ export default function CardapioScreen() {
     console.log("[Cardapio] Fetching pratos and categorias");
     try {
       const [pratosRes, catRes] = await Promise.all([
-        apiGet<any>("/api/pratos"),
-        apiGet<any>("/api/categorias"),
+        apiGet<any>("/api/pratos").catch((e: unknown) => {
+          console.error("[Cardapio] pratos fetch error:", e instanceof Error ? e.message : String(e));
+          return null;
+        }),
+        apiGet<any>("/api/categorias").catch((e: unknown) => {
+          console.error("[Cardapio] categorias fetch error:", e instanceof Error ? e.message : String(e));
+          return null;
+        }),
       ]);
-      const pratoList: Prato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
-      const catList: Categoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
+      if (pratosRes === null && catRes === null) {
+        setError("Não foi possível carregar o cardápio.");
+        return;
+      }
+      const pratoList: Prato[] = pratosRes == null ? [] : Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos ?? []);
+      const catList: Categoria[] = catRes == null ? [] : Array.isArray(catRes) ? catRes : (catRes.categorias ?? []);
       setPratos(pratoList);
       setCategorias(catList);
       setError("");
     } catch (e: any) {
-      console.error("[Cardapio] Error:", e);
+      console.error("[Cardapio] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar o cardápio.");
     } finally {
       setLoading(false);

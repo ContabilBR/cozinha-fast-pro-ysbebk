@@ -34,7 +34,7 @@ export default function PedidoDetailScreen() {
       setPedido(p);
       setError("");
     } catch (e: any) {
-      console.error("[PedidoDetail] Error:", e);
+      console.error("[PedidoDetail] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar o pedido.");
     } finally {
       setLoading(false);

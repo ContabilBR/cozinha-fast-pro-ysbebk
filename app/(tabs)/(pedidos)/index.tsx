@@ -126,7 +126,7 @@ export default function PedidosScreen() {
       setPedidos(sorted);
       setError("");
     } catch (e: any) {
-      console.error("[Pedidos] Error:", e);
+      console.error("[Pedidos] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar os pedidos.");
     } finally {
       setLoading(false);

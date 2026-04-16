@@ -116,7 +116,7 @@ export default function UsuariosScreen() {
       setUsers(list);
       setError("");
     } catch (e: any) {
-      console.error("[Usuarios] Error:", e);
+      console.error("[Usuarios] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar os usuários.");
     } finally {
       setLoading(false);

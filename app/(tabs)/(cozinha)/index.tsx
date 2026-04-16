@@ -228,7 +228,7 @@ export default function CozinhaScreen() {
       setLastRefresh(new Date());
       setError("");
     } catch (e: any) {
-      console.error("[Cozinha] Error:", e);
+      console.error("[Cozinha] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar a fila.");
     } finally {
       setLoading(false);
