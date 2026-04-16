@@ -2,7 +2,6 @@ import React from "react";
 import { Redirect } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { UserRole } from "@/types";
 
 export default function TabLayoutIOS() {
   const { user, loading } = useAuth();
@@ -10,7 +9,7 @@ export default function TabLayoutIOS() {
   if (loading) return null;
   if (!user) return <Redirect href="/auth-screen" />;
 
-  const role = ((user as any).role as UserRole) || "garcom";
+  const role = (user as any).role as string || "garcom";
 
   if (role === "garcom") {
     return (
@@ -54,7 +53,7 @@ export default function TabLayoutIOS() {
     );
   }
 
-  // gerente or administrador
+  // gerente, administrador, or admin
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="(dashboard)">

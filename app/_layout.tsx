@@ -10,6 +10,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import type { AuthUser } from "@/contexts/AuthContext";
 import {
   useFonts,
   Outfit_400Regular,

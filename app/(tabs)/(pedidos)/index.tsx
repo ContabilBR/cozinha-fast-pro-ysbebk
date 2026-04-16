@@ -11,12 +11,41 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { Pedido } from "@/types";
 import { apiGet } from "@/utils/api";
-import { formatRelativeTime, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { formatCurrency, formatRelativeTime } from "@/utils/helpers";
 import { ClipboardList, Clock, ShoppingBag } from "lucide-react-native";
 
-function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () => void; index: number }) {
+interface ApiOrder {
+  id: string;
+  table_id: string;
+  table_number: number;
+  user_id: string;
+  user_name?: string;
+  status: string;
+  total: number;
+  created_at: string;
+  items_count: number;
+}
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  aberta: "Aberta",
+  open: "Aberta",
+  fechada: "Fechada",
+  closed: "Fechada",
+  cancelada: "Cancelada",
+  cancelled: "Cancelada",
+};
+
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  aberta: "#22C55E",
+  open: "#22C55E",
+  fechada: "#94A3B8",
+  closed: "#94A3B8",
+  cancelada: "#EF4444",
+  cancelled: "#EF4444",
+};
+
+function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => void; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
@@ -28,11 +57,10 @@ function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () =>
     ]).start();
   }, [index, opacity, translateY]);
 
-  const statusColor = getPedidoStatusColor(pedido.status);
-  const statusLabel = getPedidoStatusLabel(pedido.status);
-  const mesaNum = pedido.mesa?.numero ?? "?";
-  const timeStr = formatRelativeTime(pedido.sent_at);
-  const itemCount = pedido.itens?.length ?? 0;
+  const statusColor = ORDER_STATUS_COLORS[order.status] || "#94A3B8";
+  const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status;
+  const timeStr = formatRelativeTime(order.created_at);
+  const totalStr = formatCurrency(order.total);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -46,7 +74,6 @@ function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () =>
           marginBottom: 10,
           borderWidth: 1,
           borderColor: COLORS.border,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
         }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -62,12 +89,12 @@ function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () =>
               }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.primary }}>
-                {mesaNum}
+                {order.table_number}
               </Text>
             </View>
             <View>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                Mesa {mesaNum}
+                Mesa {order.table_number}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                 <Clock size={12} color={COLORS.textSecondary} />
@@ -91,16 +118,16 @@ function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () =>
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-          <ShoppingBag size={13} color={COLORS.textSecondary} />
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-            {itemCount} {itemCount === 1 ? "item" : "itens"}
-          </Text>
-          {pedido.observacoes ? (
-            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary, flex: 1, marginLeft: 8 }}>
-              {pedido.observacoes}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <ShoppingBag size={13} color={COLORS.textSecondary} />
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+              {order.items_count} {order.items_count === 1 ? "item" : "itens"}
             </Text>
-          ) : null}
+          </View>
+          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
+            {totalStr}
+          </Text>
         </View>
       </AnimatedPressable>
     </Animated.View>
@@ -112,18 +139,19 @@ export default function PedidosScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchPedidos = useCallback(async () => {
-    console.log("[Pedidos] Fetching pedidos");
+  const fetchOrders = useCallback(async () => {
+    console.log("[Pedidos] Fetching orders from /api/orders");
     try {
-      const res = await apiGet<any>("/api/pedidos");
-      const list: Pedido[] = Array.isArray(res) ? res : (res.pedidos || []);
-      const sorted = list.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
-      setPedidos(sorted);
+      const res = await apiGet<any>("/api/orders");
+      const list: ApiOrder[] = Array.isArray(res) ? res : (res.orders || []);
+      const sorted = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      console.log("[Pedidos] Loaded", sorted.length, "orders");
+      setOrders(sorted);
       setError("");
     } catch (e: any) {
       console.error("[Pedidos] Error:", e instanceof Error ? e.message : String(e));
@@ -135,18 +163,18 @@ export default function PedidosScreen() {
   }, []);
 
   useEffect(() => {
-    fetchPedidos();
+    fetchOrders();
     const interval = setInterval(() => {
       console.log("[Pedidos] Auto-refresh");
-      fetchPedidos();
+      fetchOrders();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchPedidos]);
+  }, [fetchOrders]);
 
   const handleRefresh = () => {
     console.log("[Pedidos] Manual refresh");
     setRefreshing(true);
-    fetchPedidos();
+    fetchOrders();
   };
 
   return (
@@ -162,10 +190,10 @@ export default function PedidosScreen() {
         }}
       >
         <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Meus Pedidos
+          Pedidos
         </Text>
         <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {pedidos.length} pedidos
+          {orders.length} pedidos
         </Text>
       </View>
 
@@ -178,8 +206,11 @@ export default function PedidosScreen() {
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
             Erro ao carregar pedidos
           </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+            {error}
+          </Text>
           <AnimatedPressable
-            onPress={fetchPedidos}
+            onPress={fetchOrders}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
           >
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
@@ -189,13 +220,13 @@ export default function PedidosScreen() {
         </View>
       ) : (
         <FlatList
-          data={pedidos}
+          data={orders}
           renderItem={({ item, index }) => (
-            <PedidoCard
-              pedido={item}
+            <OrderCard
+              order={item}
               onPress={() => {
-                console.log("[Pedidos] Pedido pressed:", item.id);
-                router.push(`/pedido/${item.id}`);
+                console.log("[Pedidos] Order pressed:", item.id);
+                router.push(`/order/${item.id}`);
               }}
               index={index}
             />
@@ -224,7 +255,7 @@ export default function PedidosScreen() {
                 Nenhum pedido ainda
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Seus pedidos aparecerão aqui
+                Os pedidos aparecerão aqui
               </Text>
             </View>
           }

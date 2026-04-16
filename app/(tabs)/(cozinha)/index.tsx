@@ -11,25 +11,62 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { Pedido, PedidoStatus } from "@/types";
 import { apiGet, apiPatch } from "@/utils/api";
-import { formatElapsed, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { formatElapsed } from "@/utils/helpers";
 import { Flame, Clock, RefreshCw, ChefHat } from "lucide-react-native";
-import { COLORS as C } from "@/constants/Colors";
 
-const NEXT_ACTION: Partial<Record<PedidoStatus, { status: PedidoStatus; label: string }>> = {
-  pendente: { status: "recebido", label: "Receber" },
-  recebido: { status: "em_preparacao", label: "Iniciar Preparo" },
-  em_preparacao: { status: "pronto", label: "Marcar Pronto" },
+interface KitchenItem {
+  id: string;
+  order_id: string;
+  dish_id: string;
+  dish_name: string;
+  table_number: number;
+  quantity: number;
+  status: string;
+  notes?: string;
+  created_at: string;
+}
+
+const NEXT_ACTION: Record<string, { status: string; label: string }> = {
+  pendente: { status: "em_preparo", label: "Iniciar Preparo" },
+  pending: { status: "preparing", label: "Iniciar Preparo" },
+  em_preparo: { status: "pronto", label: "Marcar Pronto" },
+  preparing: { status: "ready", label: "Marcar Pronto" },
 };
 
-function PedidoCard({
-  pedido,
+const STATUS_COLORS: Record<string, string> = {
+  pendente: "#94A3B8",
+  pending: "#94A3B8",
+  em_preparo: "#F59E0B",
+  preparing: "#F59E0B",
+  pronto: "#22C55E",
+  ready: "#22C55E",
+  entregue: "#0D9488",
+  delivered: "#0D9488",
+  cancelado: "#EF4444",
+  cancelled: "#EF4444",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pendente: "Pendente",
+  pending: "Pendente",
+  em_preparo: "Em Preparo",
+  preparing: "Em Preparo",
+  pronto: "Pronto",
+  ready: "Pronto",
+  entregue: "Entregue",
+  delivered: "Entregue",
+  cancelado: "Cancelado",
+  cancelled: "Cancelado",
+};
+
+function KitchenItemCard({
+  item,
   onAction,
   index,
 }: {
-  pedido: Pedido;
-  onAction: (id: string, status: PedidoStatus) => Promise<void>;
+  item: KitchenItem;
+  onAction: (id: string, status: string) => Promise<void>;
   index: number;
 }) {
   const COLORS = useColors();
@@ -44,34 +81,30 @@ function PedidoCard({
     ]).start();
   }, [index, opacity, translateY]);
 
-  const elapsed = formatElapsed(pedido.sent_at);
-  const diffMin = Math.floor((Date.now() - new Date(pedido.sent_at).getTime()) / 60000);
+  const elapsed = formatElapsed(item.created_at);
+  const diffMin = Math.floor((Date.now() - new Date(item.created_at).getTime()) / 60000);
   const isUrgent = diffMin > 20;
   const isWarning = diffMin > 10 && !isUrgent;
-  const borderColor = isUrgent ? C.danger + "60" : isWarning ? C.warning + "60" : COLORS.border;
-  const nextAction = NEXT_ACTION[pedido.status];
-  const statusColor = getPedidoStatusColor(pedido.status);
-  const statusLabel = getPedidoStatusLabel(pedido.status);
-  const mesaNum = pedido.mesa?.numero ?? "?";
-  const garcomName = pedido.garcom?.name ?? "—";
+  const borderColor = isUrgent ? "#EF444460" : isWarning ? "#F59E0B60" : COLORS.border;
+  const nextAction = NEXT_ACTION[item.status];
+  const statusColor = STATUS_COLORS[item.status] || "#94A3B8";
+  const statusLabel = STATUS_LABELS[item.status] || item.status;
 
   const handleAction = async () => {
     if (!nextAction) return;
-    console.log("[Cozinha] Action button pressed:", pedido.id, "->", nextAction.status);
+    console.log("[Cozinha] Action button pressed:", item.id, "->", nextAction.status);
     setUpdating(true);
     try {
-      await onAction(pedido.id, nextAction.status);
+      await onAction(item.id, nextAction.status);
     } finally {
       setUpdating(false);
     }
   };
 
   const actionBgColor = nextAction
-    ? nextAction.status === "recebido"
-      ? C.statusRecebido
-      : nextAction.status === "em_preparacao"
-      ? C.statusEmPreparo
-      : C.statusPronto
+    ? nextAction.status === "em_preparo" || nextAction.status === "preparing"
+      ? "#F59E0B"
+      : "#22C55E"
     : COLORS.primary;
 
   return (
@@ -84,13 +117,12 @@ function PedidoCard({
           marginBottom: 10,
           borderWidth: 1.5,
           borderColor,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
           overflow: "hidden",
         }}
       >
         {isUrgent && (
-          <View style={{ backgroundColor: C.danger + "15", paddingHorizontal: 16, paddingVertical: 6 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: C.danger }}>
+          <View style={{ backgroundColor: "#EF444415", paddingHorizontal: 16, paddingVertical: 6 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: "#EF4444" }}>
               Aguardando há {diffMin} min — URGENTE
             </Text>
           </View>
@@ -110,15 +142,15 @@ function PedidoCard({
                 }}
               >
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>
-                  {mesaNum}
+                  {item.table_number}
                 </Text>
               </View>
               <View>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                  Mesa {mesaNum}
+                  Mesa {item.table_number}
                 </Text>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                  {garcomName}
+                  Pedido #{item.order_id.slice(-6)}
                 </Text>
               </View>
             </View>
@@ -136,51 +168,42 @@ function PedidoCard({
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Clock size={11} color={isUrgent ? C.danger : COLORS.textSecondary} />
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: isUrgent ? C.danger : COLORS.textSecondary }}>
+                <Clock size={11} color={isUrgent ? "#EF4444" : COLORS.textSecondary} />
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: isUrgent ? "#EF4444" : COLORS.textSecondary }}>
                   {elapsed}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Itens */}
           <View style={{ gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-            {pedido.itens.map((item) => (
-              <View key={item.id} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
-                <View
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 6,
-                    backgroundColor: COLORS.primaryMuted,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
-                    {item.quantidade}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
-                    {item.prato?.nome ?? "Prato"}
-                  </Text>
-                  {item.observacoes ? (
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
-                      {item.observacoes}
-                    </Text>
-                  ) : null}
-                </View>
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
+                  {item.quantity}
+                </Text>
               </View>
-            ))}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
+                  {item.dish_name}
+                </Text>
+                {item.notes ? (
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
+                    {item.notes}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
           </View>
-
-          {pedido.observacoes ? (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>
-              Obs: {pedido.observacoes}
-            </Text>
-          ) : null}
         </View>
 
         {nextAction && (
@@ -212,19 +235,20 @@ export default function CozinhaScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
 
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [items, setItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const fetchFila = useCallback(async () => {
-    console.log("[Cozinha] Fetching kitchen queue");
+    console.log("[Cozinha] Fetching kitchen items from /api/kitchen/items");
     try {
-      const res = await apiGet<any>("/api/cozinha/fila");
-      const list: Pedido[] = Array.isArray(res) ? res : (res.pedidos || []);
-      const sorted = list.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
-      setPedidos(sorted);
+      const res = await apiGet<any>("/api/kitchen/items");
+      const list: KitchenItem[] = Array.isArray(res) ? res : (res.items || []);
+      const sorted = list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      console.log("[Cozinha] Loaded", sorted.length, "kitchen items");
+      setItems(sorted);
       setLastRefresh(new Date());
       setError("");
     } catch (e: any) {
@@ -251,10 +275,10 @@ export default function CozinhaScreen() {
     fetchFila();
   };
 
-  const handleAction = async (id: string, status: PedidoStatus) => {
-    console.log("[Cozinha] PATCH pedido status:", id, "->", status);
+  const handleAction = async (id: string, status: string) => {
+    console.log("[Cozinha] PATCH kitchen item status:", id, "->", status);
     try {
-      await apiPatch(`/api/pedidos/${id}/status`, { status });
+      await apiPatch(`/api/kitchen/items/${id}`, { status });
       console.log("[Cozinha] Status updated, refreshing");
       await fetchFila();
     } catch (e) {
@@ -262,8 +286,8 @@ export default function CozinhaScreen() {
     }
   };
 
-  const pendingCount = pedidos.filter((p) => p.status === "pendente").length;
-  const inProgressCount = pedidos.filter((p) => p.status === "recebido" || p.status === "em_preparacao").length;
+  const pendingCount = items.filter((i) => i.status === "pendente" || i.status === "pending").length;
+  const inProgressCount = items.filter((i) => i.status === "em_preparo" || i.status === "preparing").length;
   const lastRefreshMin = Math.floor((Date.now() - lastRefresh.getTime()) / 60000);
   const lastRefreshLabel = lastRefreshMin < 1 ? "agora" : `há ${lastRefreshMin} min`;
 
@@ -323,6 +347,9 @@ export default function CozinhaScreen() {
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
             Erro ao carregar fila
           </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+            {error}
+          </Text>
           <AnimatedPressable
             onPress={fetchFila}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
@@ -334,7 +361,7 @@ export default function CozinhaScreen() {
         </View>
       ) : (
         <FlatList
-          data={pedidos}
+          data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
           contentInsetAdjustmentBehavior="automatic"
@@ -342,7 +369,7 @@ export default function CozinhaScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
           }
           renderItem={({ item, index }) => (
-            <PedidoCard pedido={item} onAction={handleAction} index={index} />
+            <KitchenItemCard item={item} onAction={handleAction} index={index} />
           )}
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
@@ -362,7 +389,7 @@ export default function CozinhaScreen() {
                 Fila vazia
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Nenhum pedido aguardando preparo
+                Nenhum item aguardando preparo
               </Text>
             </View>
           }

@@ -1,109 +1,89 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
-import * as Linking from "expo-linking";
-import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
+import * as SecureStore from "expo-secure-store";
+import { BACKEND_URL } from "@/utils/api";
 
-interface User {
+const TOKEN_KEY = "cozinhafast_token";
+
+export interface AuthUser {
   id: string;
   email: string;
-  name?: string;
-  image?: string;
+  name: string;
+  role: string;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  signInWithApple: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function openOAuthPopup(provider: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
-    const width = 500;
-    const height = 600;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
+async function storeToken(token: string) {
+  if (Platform.OS === "web") {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  }
+}
 
-    const popup = window.open(
-      popupUrl,
-      "oauth-popup",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-      reject(new Error("Failed to open popup. Please allow popups."));
-      return;
+async function getStoredToken(): Promise<string | null> {
+  try {
+    if (Platform.OS === "web") {
+      return localStorage.getItem(TOKEN_KEY);
+    } else {
+      return await SecureStore.getItemAsync(TOKEN_KEY);
     }
+  } catch {
+    return null;
+  }
+}
 
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === "oauth-success" && event.data?.token) {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        resolve(event.data.token);
-      } else if (event.data?.type === "oauth-error") {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        reject(new Error(event.data.error || "OAuth failed"));
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Authentication cancelled"));
-      }
-    }, 500);
-  });
+async function removeToken() {
+  if (Platform.OS === "web") {
+    localStorage.removeItem(TOKEN_KEY);
+  } else {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchUser();
-
-    const subscription = Linking.addEventListener("url", (event) => {
-      console.log("Deep link received, refreshing user session");
-      fetchUser();
-    });
-
-    const intervalId = setInterval(() => {
-      fetchUser();
-    }, 5 * 60 * 1000);
-
-    return () => {
-      subscription.remove();
-      clearInterval(intervalId);
-    };
+    restoreSession();
   }, []);
 
-  const fetchUser = async () => {
+  const restoreSession = async () => {
+    console.log("[Auth] Restoring session...");
     try {
-      setLoading(true);
-      const session = await authClient.getSession();
-      if (session?.data?.user) {
-        setUser(session.data.user as User);
-        if (session.data.session?.token) {
-          await setBearerToken(session.data.session.token);
-        }
-      } else {
+      const token = await getStoredToken();
+      if (!token) {
+        console.log("[Auth] No stored token found");
         setUser(null);
-        await clearAuthTokens();
+        return;
       }
-    } catch (error) {
-      console.error("Failed to fetch user:", error);
+      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        console.log("[Auth] Token validation failed, status:", response.status);
+        await removeToken();
+        setUser(null);
+        return;
+      }
+      const data = await response.json();
+      const userData: AuthUser = data.user || data;
+      console.log("[Auth] Session restored for:", userData.email, "role:", userData.role);
+      setUser(userData);
+    } catch (e) {
+      console.error("[Auth] Session restore error:", e);
       setUser(null);
     } finally {
       setLoading(false);
@@ -111,72 +91,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    try {
-      await authClient.signIn.email({ email, password });
-      await fetchUser();
-    } catch (error) {
-      console.error("Email sign in failed:", error);
-      throw error;
+    console.log("[Auth] Signing in with email:", email);
+    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      console.error("[Auth] Login failed, status:", response.status, text.slice(0, 200));
+      throw new Error("E-mail ou senha incorretos.");
     }
-  };
-
-  const signUpWithEmail = async (email: string, password: string, name?: string) => {
-    try {
-      await authClient.signUp.email({ email, password, name: name ?? "" });
-      await fetchUser();
-    } catch (error) {
-      console.error("Email sign up failed:", error);
-      throw error;
-    }
-  };
-
-  const signInWithSocial = async (provider: string) => {
-    if (Platform.OS === "web") {
-      const token = await openOAuthPopup(provider);
-      await setBearerToken(token);
-      await fetchUser();
-    } else {
-      const { error } = await authClient.signIn.social({
-        provider,
-        callbackURL: "/auth-callback",
-      });
-      if (error) {
-        throw new Error(error.message || "Social sign in failed");
-      }
-      await fetchUser();
-    }
-  };
-
-  const signInWithGoogle = () => signInWithSocial("google");
-
-  const signInWithApple = async () => {
-    await signInWithSocial("apple");
+    const data = await response.json();
+    const token: string = data.token;
+    const userData: AuthUser = data.user;
+    console.log("[Auth] Login successful for:", userData.email, "role:", userData.role);
+    await storeToken(token);
+    setUser(userData);
   };
 
   const signOut = async () => {
-    try {
-      await authClient.signOut();
-    } catch (error) {
-      console.error("Sign out failed (API):", error);
-    } finally {
-      setUser(null);
-      await clearAuthTokens();
-    }
+    console.log("[Auth] Signing out");
+    await removeToken();
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        signInWithEmail,
-        signUpWithEmail,
-        signInWithApple,
-        signInWithGoogle,
-        signOut,
-        fetchUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut }}>
       {children}
     </AuthContext.Provider>
   );

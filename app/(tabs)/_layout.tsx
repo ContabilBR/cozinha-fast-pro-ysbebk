@@ -4,9 +4,8 @@ import { Slot, Redirect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { useColors } from "@/hooks/useColors";
-import { UserRole } from "@/types";
 
-function getTabsForRole(role: UserRole): TabBarItem[] {
+function getTabsForRole(role: string): TabBarItem[] {
   const perfilTab: TabBarItem = {
     name: "perfil",
     route: "/(tabs)/(perfil)",
@@ -30,6 +29,7 @@ function getTabsForRole(role: UserRole): TabBarItem[] {
       ];
     case "gerente":
     case "administrador":
+    case "admin":
       return [
         { name: "dashboard", route: "/(tabs)/(dashboard)", icon: "bar-chart", label: "Dashboard" },
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
@@ -53,7 +53,7 @@ export default function TabLayout() {
   if (loading) return null;
   if (!user) return <Redirect href="/auth-screen" />;
 
-  const role = ((user as any).role as UserRole) || "garcom";
+  const role = user.role || "garcom";
   const tabs = getTabsForRole(role);
   const tabCount = tabs.length;
   const containerWidth = Math.min(60 + tabCount * 72, 420);

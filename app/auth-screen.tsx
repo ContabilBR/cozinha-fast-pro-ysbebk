@@ -18,15 +18,16 @@ import { ChefHat, Mail, Lock, Eye, EyeOff } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEMO_CREDENTIALS = [
-  { role: "Administrador", email: "admin@cozinhafast.com", password: "Admin@123" },
-  { role: "Gerente", email: "gerente@cozinhafast.com", password: "Gerente@123" },
-  { role: "Garçom", email: "garcom1@cozinhafast.com", password: "Garcom@123" },
-  { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "Cozinha@123" },
+  { role: "Administrador", email: "admin@cozinhafast.com", password: "admin123" },
+  { role: "Gerente", email: "gerente@cozinhafast.com", password: "gerente123" },
+  { role: "Garçom", email: "garcom@cozinhafast.com", password: "garcom123" },
+  { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "cozinha123" },
 ];
 
 const ROLE_ROUTES: Record<string, string> = {
   garcom: "/(tabs)/(mesas)",
-  administrador: "/(tabs)/(mesas)",
+  admin: "/(tabs)/(dashboard)",
+  administrador: "/(tabs)/(dashboard)",
   gerente: "/(tabs)/(dashboard)",
   cozinheiro: "/(tabs)/(cozinha)",
 };
@@ -55,7 +56,7 @@ export default function AuthScreen() {
 
   useEffect(() => {
     if (!loading && user) {
-      const role = (user as any).role as string;
+      const role = user.role as string;
       const route = ROLE_ROUTES[role] || "/(tabs)/(mesas)";
       console.log("[AuthScreen] User authenticated, role:", role, "-> redirecting to:", route);
       router.replace(route as any);
@@ -75,7 +76,7 @@ export default function AuthScreen() {
       console.log("[AuthScreen] Login successful");
     } catch (e: any) {
       console.error("[AuthScreen] Login error:", e);
-      setError("E-mail ou senha incorretos. Tente novamente.");
+      setError(e?.message || "E-mail ou senha incorretos. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +130,6 @@ export default function AuthScreen() {
               alignItems: "center",
               justifyContent: "center",
               marginBottom: 16,
-              boxShadow: "0 8px 24px rgba(232, 82, 26, 0.35)",
             }}
           >
             <ChefHat size={40} color="#fff" strokeWidth={2} />
@@ -171,7 +171,6 @@ export default function AuthScreen() {
               padding: 24,
               borderWidth: 1,
               borderColor: COLORS.border,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)",
               gap: 16,
             }}
           >
