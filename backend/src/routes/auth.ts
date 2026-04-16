@@ -73,7 +73,8 @@ export function registerAuthRoutes(app: App) {
         const { name, email, password } = request.body;
 
         if (!name || !email || !password) {
-          return reply.status(400).send({ error: "Name, email and password are required" });
+          reply.status(400);
+          return { error: "Name, email and password are required" };
         }
 
         // Use Better Auth sign up API
@@ -84,7 +85,8 @@ export function registerAuthRoutes(app: App) {
 
           if (!result.user) {
             app.logger.info({ email }, "Sign up failed: user creation failed");
-            return reply.status(400).send({ error: "Failed to create user" });
+            reply.status(400);
+            return { error: "Failed to create user" };
           }
 
           const authUser = result.user;
@@ -103,7 +105,8 @@ export function registerAuthRoutes(app: App) {
 
           app.logger.info({ userId: authUser.id, email }, "Sign up successful");
 
-          reply.code(200).send({
+          reply.status(200);
+          return {
             token,
             user: {
               id: authUser.id,
@@ -114,14 +117,16 @@ export function registerAuthRoutes(app: App) {
               createdAt: authUser.createdAt,
               updatedAt: authUser.updatedAt,
             },
-          });
+          };
         } catch (authError) {
           app.logger.info({ email }, "Sign up failed: authentication error");
-          return reply.status(400).send({ error: "Email already exists" });
+          reply.status(400);
+          return { error: "Email already exists" };
         }
       } catch (error) {
         app.logger.error({ err: error }, "Sign up failed with error");
-        return reply.status(400).send({ error: "Failed to create user" });
+        reply.status(400);
+        return { error: "Failed to create user" };
       }
     }
   );
@@ -173,7 +178,8 @@ export function registerAuthRoutes(app: App) {
         const { email, password } = request.body;
 
         if (!email || !password) {
-          return reply.status(400).send({ error: "Email and password are required" });
+          reply.status(400);
+          return { error: "Email and password are required" };
         }
 
         // Use Better Auth sign in API
@@ -184,7 +190,8 @@ export function registerAuthRoutes(app: App) {
 
           if (!result.user) {
             app.logger.info({ email }, "Login failed: invalid credentials");
-            return reply.status(400).send({ error: "Credenciais inválidas" });
+            reply.status(400);
+            return { error: "Credenciais inválidas" };
           }
 
           const authUser = result.user;
@@ -212,7 +219,8 @@ export function registerAuthRoutes(app: App) {
 
           app.logger.info({ userId: authUser.id, email }, "Login successful");
 
-          reply.code(200).send({
+          reply.status(200);
+          return {
             token,
             user: {
               id: authUser.id,
@@ -220,14 +228,16 @@ export function registerAuthRoutes(app: App) {
               email: authUser.email,
               role,
             },
-          });
+          };
         } catch (authError) {
           app.logger.info({ email }, "Login failed: authentication error");
-          return reply.status(400).send({ error: "Credenciais inválidas" });
+          reply.status(400);
+          return { error: "Credenciais inválidas" };
         }
       } catch (error) {
         app.logger.error({ err: error }, "Login failed with error");
-        return reply.status(400).send({ error: "Credenciais inválidas" });
+        reply.status(400);
+        return { error: "Credenciais inválidas" };
       }
     }
   );
@@ -268,7 +278,7 @@ export function registerAuthRoutes(app: App) {
           };
         }
 
-        const token = authHeader.substring(7).trim();
+        const token = authHeader.slice(7).trim();
 
         // Decode token (simple base64 decode)
         try {
@@ -331,10 +341,11 @@ export function registerAuthRoutes(app: App) {
 
         const authHeader = request.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          return reply.status(401).send({ error: "Unauthorized" });
+          reply.status(401);
+          return { error: "Unauthorized" };
         }
 
-        const token = authHeader.substring(7).trim();
+        const token = authHeader.slice(7).trim();
 
         // Look up token in session table
         const sess = await app.db
@@ -344,7 +355,8 @@ export function registerAuthRoutes(app: App) {
           .limit(1);
 
         if (!sess || sess.length === 0) {
-          return reply.status(401).send({ error: "Unauthorized" });
+          reply.status(401);
+          return { error: "Unauthorized" };
         }
 
         const sessionRecord = sess[0];
@@ -363,10 +375,12 @@ export function registerAuthRoutes(app: App) {
 
         app.logger.info({ userId }, "User account deleted");
 
-        reply.code(200).send({ success: true });
+        reply.status(200);
+        return { success: true };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete user account");
-        return reply.status(500).send({ error: "Failed to delete user account" });
+        reply.status(500);
+        return { error: "Failed to delete user account" };
       }
     }
   );
