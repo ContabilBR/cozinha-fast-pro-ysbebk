@@ -37,26 +37,22 @@ export const getBearerToken = async (): Promise<string | null> => {
 
 export const apiCall = async <T = any>(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit,
+  explicitToken?: string
 ): Promise<T> => {
   const url = `${BACKEND_URL}${endpoint}`;
   console.log("[API]", options?.method ?? "GET", url);
+
+  const storedToken = explicitToken ?? (await getBearerToken());
 
   const fetchOptions: RequestInit = {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...options?.headers,
+      ...(options?.headers as Record<string, string> || {}),
+      ...(storedToken ? { Authorization: `Bearer ${storedToken}` } : {}),
     },
   };
-
-  const token = await getBearerToken();
-  if (token) {
-    fetchOptions.headers = {
-      ...fetchOptions.headers,
-      Authorization: `Bearer ${token}`,
-    };
-  }
 
   let response: Response;
   try {
@@ -64,23 +60,23 @@ export const apiCall = async <T = any>(
   } catch (networkError) {
     const msg = getErrorMessage(networkError);
     console.error("[API] Network error for", url, ":", msg);
-    throw new Error(`Network error: ${msg}`);
+    throw new Error("Sem conexão com o servidor");
   }
+
+  const text = await response.text().catch(() => "");
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = text; }
 
   if (!response.ok) {
-    const text = await response.text().catch(() => "(no body)");
     const preview = text.slice(0, 200);
     console.error("[API] HTTP", response.status, "for", url, ":", preview);
-    throw new Error(`HTTP ${response.status}: ${preview}`);
+    const message = (typeof data === "object" && data !== null)
+      ? (data.message || data.error || `HTTP ${response.status}`)
+      : `HTTP ${response.status}`;
+    throw new Error(message);
   }
 
-  try {
-    return await response.json();
-  } catch (parseError) {
-    const msg = getErrorMessage(parseError);
-    console.error("[API] JSON parse error for", url, ":", msg);
-    throw new Error(`JSON parse error: ${msg}`);
-  }
+  return data as T;
 };
 
 export const apiGet = async <T = any>(endpoint: string): Promise<T> => {

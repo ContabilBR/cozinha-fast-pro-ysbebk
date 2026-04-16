@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import { BACKEND_URL } from "@/utils/api";
+import { BACKEND_URL, apiCall } from "@/utils/api";
 
 const TOKEN_KEY = "cozinhafast_token";
+const USER_KEY = "cozinhafast_user";
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: string;
+  token?: string;
 }
 
 interface AuthContextType {
@@ -44,9 +46,22 @@ async function getStoredToken(): Promise<string | null> {
 async function removeToken() {
   if (Platform.OS === "web") {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
   } else {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+    await SecureStore.deleteItemAsync(USER_KEY).catch(() => {});
   }
+}
+
+function buildUserFromResponse(data: any, meData: any, token: string): AuthUser {
+  const profile = meData?.profile || meData?.user?.profile;
+  return {
+    id: meData?.user?.id || data?.user?.id || "",
+    email: meData?.user?.email || data?.user?.email || "",
+    name: profile?.name || meData?.user?.name || data?.user?.name || "",
+    role: profile?.role || meData?.user?.role || data?.user?.role || "",
+    token,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -66,24 +81,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         return;
       }
-      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        console.log("[Auth] Token validation failed, status:", response.status);
-        await removeToken();
-        setUser(null);
-        return;
-      }
-      const data = await response.json();
-      const userData: AuthUser = data.user || data;
+      const meData = await apiCall("/api/auth/me", { method: "GET" }, token);
+      const profile = meData?.profile || meData?.user?.profile;
+      const userData: AuthUser = {
+        id: meData?.user?.id || meData?.id || "",
+        email: meData?.user?.email || meData?.email || "",
+        name: profile?.name || meData?.user?.name || meData?.name || "",
+        role: profile?.role || meData?.user?.role || meData?.role || "",
+        token,
+      };
       console.log("[Auth] Session restored for:", userData.email, "role:", userData.role);
       setUser(userData);
     } catch (e) {
       console.error("[Auth] Session restore error:", e);
+      await removeToken();
       setUser(null);
     } finally {
       setLoading(false);
@@ -92,19 +103,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     console.log("[Auth] Signing in with email:", email);
-    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      console.error("[Auth] Login failed, status:", response.status, text.slice(0, 200));
-      throw new Error("E-mail ou senha incorretos.");
+    let data: any;
+    try {
+      data = await apiCall("/api/auth/sign-in", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+    } catch (e: any) {
+      console.error("[Auth] Login request failed:", e?.message);
+      const msg: string = e?.message || "";
+      if (msg === "Sem conexão com o servidor") {
+        throw new Error("Sem conexão com o servidor");
+      }
+      if (msg.includes("401") || msg.includes("403") || msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("unauthorized")) {
+        throw new Error("E-mail ou senha incorretos");
+      }
+      throw new Error("Erro ao fazer login. Tente novamente.");
     }
-    const data = await response.json();
-    const token: string = data.token;
-    const userData: AuthUser = data.user;
+
+    const token: string = data?.token || data?.session?.token || data?.session?.id || "";
+    if (!token) {
+      console.error("[Auth] No token in response:", JSON.stringify(data));
+      throw new Error("Token não recebido. Tente novamente.");
+    }
+
+    let meData: any = {};
+    try {
+      meData = await apiCall("/api/auth/me", { method: "GET" }, token);
+    } catch (e) {
+      console.warn("[Auth] Could not fetch /api/auth/me, using sign-in data:", e);
+    }
+
+    const userData = buildUserFromResponse(data, meData, token);
     console.log("[Auth] Login successful for:", userData.email, "role:", userData.role);
     await storeToken(token);
     setUser(userData);
@@ -112,6 +142,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log("[Auth] Signing out");
+    try {
+      const token = await getStoredToken();
+      if (token) {
+        await apiCall("/api/auth/sign-out", { method: "POST" }, token).catch(() => {});
+      }
+    } catch {}
     await removeToken();
     setUser(null);
   };
