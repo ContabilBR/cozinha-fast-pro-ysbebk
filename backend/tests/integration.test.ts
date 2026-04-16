@@ -52,6 +52,20 @@ describe("API Integration Tests", () => {
     testUserId = data.id;
   });
 
+  test("Create user with duplicate email returns 409", async () => {
+    const res = await authenticatedApi("/api/users", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: uniqueEmail,
+        password: "different-password",
+        name: "Duplicate User",
+        role: "gerente",
+      }),
+    });
+    await expectStatus(res, 409);
+  });
+
   test("Create user missing required field fails", async () => {
     const res = await authenticatedApi("/api/users", authToken, {
       method: "POST",
@@ -309,6 +323,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Get deleted dish returns 404", async () => {
+    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken);
+    await expectStatus(res, 404);
+  });
+
   test("Delete non-existent dish returns 404", async () => {
     const res = await authenticatedApi(
       "/api/dishes/00000000-0000-0000-0000-000000000000",
@@ -405,6 +424,11 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 204);
+  });
+
+  test("Get deleted table returns 404", async () => {
+    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken);
+    await expectStatus(res, 404);
   });
 
   test("Delete non-existent table returns 404", async () => {

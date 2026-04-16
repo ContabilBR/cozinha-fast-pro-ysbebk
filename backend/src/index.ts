@@ -1,6 +1,7 @@
 import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerCategoryRoutes } from './routes/categories.js';
 import { registerDishRoutes } from './routes/dishes.js';
@@ -25,6 +26,7 @@ export type App = typeof app;
 app.withAuth();
 
 // Register routes - IMPORTANT: Always use registration functions to avoid circular dependency issues
+registerAuthRoutes(app);
 registerUserRoutes(app);
 registerCategoryRoutes(app);
 registerDishRoutes(app);

@@ -128,7 +128,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: table.id }, "Table created");
 
-        return reply.status(201).send({
+        reply.code(201).send({
           id: table.id,
           number: table.number,
           capacity: table.capacity,

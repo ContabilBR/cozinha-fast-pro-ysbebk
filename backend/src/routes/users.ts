@@ -139,7 +139,7 @@ export function registerUserRoutes(app: App) {
         const user = created[0];
         app.logger.info({ userId: user.id }, "User created successfully");
 
-        return reply.status(201).send({
+        reply.code(201).send({
           id: user.id,
           name: user.name,
           email: user.email,
@@ -149,7 +149,7 @@ export function registerUserRoutes(app: App) {
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
-        return reply.status(500).send({ error: "Internal server error" });
+        reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -164,7 +164,7 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: { id: { type: "string" } },
         },
         body: {
           type: "object",
@@ -236,7 +236,7 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: { id: { type: "string" } },
         },
         response: {
           204: { description: "User deleted" },

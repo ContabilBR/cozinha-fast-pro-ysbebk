@@ -127,7 +127,7 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: category.id }, "Category created");
 
-        return reply.status(201).send({
+        reply.code(201).send({
           id: category.id,
           name: category.name,
           description: category.description,

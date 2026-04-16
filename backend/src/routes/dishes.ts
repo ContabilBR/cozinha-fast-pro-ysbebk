@@ -187,7 +187,7 @@ export function registerDishRoutes(app: App) {
         }
 
         const row = rows[0];
-        return reply.status(201).send({
+        reply.code(201).send({
           id: row.id,
           name: row.name,
           description: row.description,
