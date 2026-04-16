@@ -1,12 +1,75 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "./schema/schema.js";
 import { user as userTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
 
+const seedUsers = [
+  {
+    id: "user-admin-001",
+    name: "Admin Sistema",
+    email: "admin@cozinhafast.com",
+    password: "admin123",
+    role: "admin",
+  },
+  {
+    id: "user-gerente-001",
+    name: "Carlos Gerente",
+    email: "gerente@cozinhafast.com",
+    password: "gerente123",
+    role: "gerente",
+  },
+  {
+    id: "user-garcom-001",
+    name: "Joao Garcom",
+    email: "garcom@cozinhafast.com",
+    password: "garcom123",
+    role: "garcom",
+  },
+  {
+    id: "user-cozinha-001",
+    name: "Maria Cozinheira",
+    email: "cozinheiro@cozinhafast.com",
+    password: "cozinha123",
+    role: "cozinheiro",
+  },
+];
+
+const seedCategories = [
+  { name: "Entradas", icon: "appetizer", color: "#FF6B35" },
+  { name: "Pratos Principais", icon: "restaurant", color: "#E63946" },
+  { name: "Sobremesas", icon: "cake", color: "#F4A261" },
+  { name: "Bebidas", icon: "local_bar", color: "#2A9D8F" },
+  { name: "Lanches", icon: "lunch_dining", color: "#457B9D" },
+];
+
+const seedDishes = [
+  { name: "Bruschetta", category: "Entradas", price: "18.90", prepTime: 10, image: "bruschetta" },
+  { name: "Carpaccio", category: "Entradas", price: "32.00", prepTime: 15, image: "carpaccio" },
+  { name: "File Mignon", category: "Pratos Principais", price: "89.90", prepTime: 25, image: "filemignon" },
+  { name: "Salmao Grelhado", category: "Pratos Principais", price: "72.00", prepTime: 20, image: "salmao" },
+  { name: "Frango a Parmegiana", category: "Pratos Principais", price: "54.90", prepTime: 22, image: "frango" },
+  { name: "Petit Gateau", category: "Sobremesas", price: "24.90", prepTime: 12, image: "petitgateau" },
+  { name: "Pudim de Leite", category: "Sobremesas", price: "16.00", prepTime: 5, image: "pudim" },
+  { name: "Suco de Laranja", category: "Bebidas", price: "12.00", prepTime: 5, image: "suco" },
+  { name: "Refrigerante", category: "Bebidas", price: "8.00", prepTime: 2, image: "refri" },
+  { name: "X-Burguer Especial", category: "Lanches", price: "38.90", prepTime: 18, image: "xburguer" },
+];
+
+const seedTables = [
+  { number: 1, capacity: 4, location: "Salao Principal", status: "livre" },
+  { number: 2, capacity: 2, location: "Salao Principal", status: "livre" },
+  { number: 3, capacity: 6, location: "Salao Principal", status: "ocupada" },
+  { number: 4, capacity: 4, location: "Varanda", status: "livre" },
+  { number: 5, capacity: 8, location: "Salao VIP", status: "ocupada" },
+  { number: 6, capacity: 2, location: "Varanda", status: "livre" },
+  { number: 7, capacity: 4, location: "Salao Principal", status: "livre" },
+  { number: 8, capacity: 6, location: "Salao VIP", status: "livre" },
+];
+
 export async function seedDatabase(app: App) {
   try {
-    // Check if categories already exist
-    const existingCategories = await app.db.select({ id: schema.categories.id }).from(schema.categories).limit(1);
+    // Check if database already seeded
+    const existingCategories = await app.db.select().from(schema.categories).limit(1);
 
     if (existingCategories.length > 0) {
       app.logger.info("Database already seeded");
@@ -16,370 +79,168 @@ export async function seedDatabase(app: App) {
     app.logger.info("Starting database seed");
 
     // Seed categories
-    const categoryIds = await app.db
-      .insert(schema.categories)
-      .values([
-        {
-          name: "Entradas",
-          description: "Entradas e aperitivos",
-          color: "#F97316",
-          icon: "salad",
+    const categoryIds: Record<string, string> = {};
+    for (const cat of seedCategories) {
+      const [category] = await app.db
+        .insert(schema.categories)
+        .values({
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color,
           active: true,
-        },
-        {
-          name: "Pratos Principais",
-          description: "Pratos principais do cardápio",
-          color: "#EF4444",
-          icon: "utensils",
-          active: true,
-        },
-        {
-          name: "Massas",
-          description: "Massas artesanais",
-          color: "#F59E0B",
-          icon: "pasta",
-          active: true,
-        },
-        {
-          name: "Sobremesas",
-          description: "Sobremesas e doces",
-          color: "#EC4899",
-          icon: "cake",
-          active: true,
-        },
-        {
-          name: "Bebidas",
-          description: "Bebidas e sucos",
-          color: "#3B82F6",
-          icon: "glass",
-          active: true,
-        },
-        {
-          name: "Porções",
-          description: "Porções para compartilhar",
-          color: "#8B5CF6",
-          icon: "share",
-          active: true,
-        },
-      ])
-      .returning({ id: schema.categories.id });
-
-    const categoryMap: Record<string, string> = {
-      Entradas: categoryIds[0].id,
-      "Pratos Principais": categoryIds[1].id,
-      Massas: categoryIds[2].id,
-      Sobremesas: categoryIds[3].id,
-      Bebidas: categoryIds[4].id,
-      Porções: categoryIds[5].id,
-    };
+        })
+        .returning();
+      categoryIds[cat.name] = category.id;
+    }
 
     // Seed dishes
-    const dishData = [
-      {
-        name: "Bruschetta ao Tomate",
-        description: "Pão italiano tostado com tomate fresco e manjericão",
-        category: "Entradas",
-        price: "28.00",
-        imageUrl: "https://images.unsplash.com/photo-1572695157366-5e585ab2b69f?w=400",
-        prepTimeMinutes: 10,
-      },
-      {
-        name: "Carpaccio de Filé",
-        description: "Filé mignon fatiado fino com alcaparras e parmesão",
-        category: "Entradas",
-        price: "45.00",
-        imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400",
-        prepTimeMinutes: 15,
-      },
-      {
-        name: "Filé Mignon ao Molho Madeira",
-        description: "Filé mignon grelhado com molho madeira e legumes",
-        category: "Pratos Principais",
-        price: "89.00",
-        imageUrl: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400",
-        prepTimeMinutes: 30,
-      },
-      {
-        name: "Salmão Grelhado",
-        description: "Salmão grelhado com ervas finas e limão siciliano",
-        category: "Pratos Principais",
-        price: "79.00",
-        imageUrl: "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400",
-        prepTimeMinutes: 25,
-      },
-      {
-        name: "Frango à Parmegiana",
-        description: "Frango empanado com molho de tomate e queijo gratinado",
-        category: "Pratos Principais",
-        price: "62.00",
-        imageUrl: "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400",
-        prepTimeMinutes: 25,
-      },
-      {
-        name: "Risoto de Camarão",
-        description: "Risoto cremoso com camarões frescos e ervas",
-        category: "Pratos Principais",
-        price: "85.00",
-        imageUrl: "https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=400",
-        prepTimeMinutes: 35,
-      },
-      {
-        name: "Fettuccine Carbonara",
-        description: "Fettuccine com bacon, ovos e parmesão",
-        category: "Massas",
-        price: "52.00",
-        imageUrl: "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400",
-        prepTimeMinutes: 20,
-      },
-      {
-        name: "Penne ao Pesto",
-        description: "Penne com molho pesto de manjericão e pinoli",
-        category: "Massas",
-        price: "48.00",
-        imageUrl: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400",
-        prepTimeMinutes: 18,
-      },
-      {
-        name: "Petit Gateau",
-        description: "Bolinho de chocolate quente com sorvete de baunilha",
-        category: "Sobremesas",
-        price: "32.00",
-        imageUrl: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400",
-        prepTimeMinutes: 15,
-      },
-      {
-        name: "Tiramisù",
-        description: "Clássico italiano com mascarpone e café",
-        category: "Sobremesas",
-        price: "28.00",
-        imageUrl: "https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400",
-        prepTimeMinutes: 5,
-      },
-      {
-        name: "Água Mineral",
-        description: "Água mineral com ou sem gás 500ml",
-        category: "Bebidas",
-        price: "8.00",
-        imageUrl: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400",
-        prepTimeMinutes: 2,
-      },
-      {
-        name: "Suco Natural",
-        description: "Suco natural de frutas da estação",
-        category: "Bebidas",
-        price: "18.00",
-        imageUrl: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400",
-        prepTimeMinutes: 5,
-      },
-      {
-        name: "Refrigerante",
-        description: "Refrigerante lata 350ml",
-        category: "Bebidas",
-        price: "12.00",
-        imageUrl: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400",
-        prepTimeMinutes: 2,
-      },
-      {
-        name: "Porção de Batata Frita",
-        description: "Batata frita crocante com molho especial",
-        category: "Porções",
-        price: "35.00",
-        imageUrl: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=400",
-        prepTimeMinutes: 20,
-      },
-      {
-        name: "Porção de Polenta Frita",
-        description: "Polenta frita crocante com molho de queijo",
-        category: "Porções",
-        price: "32.00",
-        imageUrl: "https://images.unsplash.com/photo-1541014741259-de529411b96a?w=400",
-        prepTimeMinutes: 20,
-      },
-    ];
-
-    const dishes = await app.db
-      .insert(schema.dishes)
-      .values(
-        dishData.map((d) => ({
-          name: d.name,
-          description: d.description,
-          categoryId: categoryMap[d.category],
-          price: d.price,
-          imageUrl: d.imageUrl,
-          prepTimeMinutes: d.prepTimeMinutes,
+    const dishIds: Record<string, string> = {};
+    for (const dish of seedDishes) {
+      const [createdDish] = await app.db
+        .insert(schema.dishes)
+        .values({
+          name: dish.name,
+          categoryId: categoryIds[dish.category],
+          price: dish.price,
+          prepTimeMinutes: dish.prepTime,
+          imageUrl: `https://picsum.photos/seed/${dish.image}/400/300`,
           active: true,
-        }))
-      )
-      .returning({ id: schema.dishes.id });
+        })
+        .returning();
+      dishIds[dish.name] = createdDish.id;
+    }
 
     // Seed tables
-    const tables = [];
-    for (let i = 1; i <= 12; i++) {
-      const location = i <= 8 ? "salão" : i <= 10 ? "varanda" : "bar";
-      const capacity = i <= 8 ? 4 : i <= 10 ? 6 : 2;
-      tables.push({ number: i, capacity, location, status: "livre" as const });
+    const tableIds: Record<number, string> = {};
+    for (const table of seedTables) {
+      const [createdTable] = await app.db
+        .insert(schema.tables)
+        .values({
+          number: table.number,
+          capacity: table.capacity,
+          location: table.location,
+          status: table.status as any,
+          active: true,
+        })
+        .returning();
+      tableIds[table.number] = createdTable.id;
     }
 
-    const tableIds = await app.db
-      .insert(schema.tables)
-      .values(tables)
-      .returning({ id: schema.tables.id });
-
-    const tableMap: Record<number, string> = {};
-    for (let i = 1; i <= 12; i++) {
-      tableMap[i] = tableIds[i - 1].id;
-    }
-
-    // Create users with auth API
-    const users = [
-      {
-        email: "admin@cozinhafast.com",
-        password: "Admin@123",
-        name: "Carlos Admin",
-        role: "administrador",
-      },
-      {
-        email: "gerente@cozinhafast.com",
-        password: "Gerente@123",
-        name: "Ana Gerente",
-        role: "gerente",
-      },
-      {
-        email: "garcom1@cozinhafast.com",
-        password: "Garcom@123",
-        name: "João Garçom",
-        role: "garcom",
-      },
-      {
-        email: "garcom2@cozinhafast.com",
-        password: "Garcom@123",
-        name: "Maria Garçom",
-        role: "garcom",
-      },
-      {
-        email: "cozinheiro@cozinhafast.com",
-        password: "Cozinha@123",
-        name: "Pedro Cozinheiro",
-        role: "cozinheiro",
-      },
-    ];
-
+    // Seed users
     const userIds: Record<string, string> = {};
-    for (const userData of users) {
+    for (const seedUser of seedUsers) {
       try {
+        // Use Better Auth signup API
         const result = await app.auth.api.signUpEmail({
           body: {
-            email: userData.email,
-            password: userData.password,
-            name: userData.name,
+            email: seedUser.email,
+            password: seedUser.password,
+            name: seedUser.name,
           },
         });
 
-        // Update user role
-        const currentUser = result.user;
-        if (currentUser) {
+        if (result.user) {
+          userIds[seedUser.id] = result.user.id;
+          // Update role
           await app.db
             .update(userTable)
-            .set({ role: userData.role as any })
-            .where(eq(userTable.id, currentUser.id));
-          userIds[userData.name] = currentUser.id;
+            .set({ role: seedUser.role as any })
+            .where(eq(userTable.id, result.user.id));
         }
-      } catch (e) {
-        // User might already exist
-        const existing = await app.db.query.user.findFirst({
-          where: eq(userTable.email, userData.email),
-        });
-        if (existing) {
-          userIds[userData.name] = existing.id;
-          // Update role if needed
-          if (existing.role !== userData.role) {
-            await app.db
-              .update(userTable)
-              .set({ role: userData.role as any })
-              .where(eq(userTable.id, existing.id));
-          }
-        }
+      } catch (err) {
+        app.logger.warn({ email: seedUser.email }, "Failed to create user via Better Auth, user may already exist");
       }
     }
 
-    // Create sample orders
-    const orderData = [
-      {
-        tableNumber: 3,
-        waiterName: "João Garçom",
-        customerCount: 2,
-        items: [
-          { dishName: "Bruschetta ao Tomate", quantity: 2, status: "em_preparo" },
-          { dishName: "Filé Mignon ao Molho Madeira", quantity: 2, status: "pendente" },
-        ],
-      },
-      {
-        tableNumber: 5,
-        waiterName: "Maria Garçom",
-        customerCount: 3,
-        items: [
-          { dishName: "Salmão Grelhado", quantity: 1, status: "recebido" },
-          { dishName: "Fettuccine Carbonara", quantity: 2, status: "pendente" },
-          { dishName: "Suco Natural", quantity: 3, status: "entregue" },
-        ],
-      },
-      {
-        tableNumber: 7,
-        waiterName: "João Garçom",
-        customerCount: 1,
-        items: [{ dishName: "Petit Gateau", quantity: 1, status: "pronto" }],
-      },
-    ];
+    // Seed orders with items
+    const bruschettaId = dishIds["Bruschetta"];
+    const carpaccioId = dishIds["Carpaccio"];
+    const fileMignonId = dishIds["File Mignon"];
+    const salmaoId = dishIds["Salmao Grelhado"];
 
-    for (const orderInfo of orderData) {
-      const waiterId = userIds[orderInfo.waiterName];
-      if (!waiterId) continue;
+    // Order 1: Table 3
+    const [order1] = await app.db
+      .insert(schema.orders)
+      .values({
+        tableId: tableIds[3],
+        waiterId: "user-garcom-001",
+        status: "aberta",
+        customerCount: 4,
+        totalAmount: "0",
+      })
+      .returning();
 
-      const order = await app.db
-        .insert(schema.orders)
-        .values({
-          tableId: tableMap[orderInfo.tableNumber],
-          waiterId: waiterId,
-          status: "aberta",
-          customerCount: orderInfo.customerCount,
-        })
-        .returning({ id: schema.orders.id });
+    // Add items to Order 1
+    const [item1_1] = await app.db
+      .insert(schema.orderItems)
+      .values({
+        orderId: order1.id,
+        dishId: bruschettaId,
+        quantity: 1,
+        unitPrice: "18.90",
+        status: "pendente",
+      })
+      .returning();
 
-      if (order.length === 0) continue;
+    const [item1_2] = await app.db
+      .insert(schema.orderItems)
+      .values({
+        orderId: order1.id,
+        dishId: carpaccioId,
+        quantity: 1,
+        unitPrice: "32.00",
+        status: "pendente",
+      })
+      .returning();
 
-      const orderId = order[0].id;
+    // Update Order 1 total
+    await app.db
+      .update(schema.orders)
+      .set({ totalAmount: "50.90" })
+      .where(eq(schema.orders.id, order1.id));
 
-      // Update table status to ocupada
-      await app.db
-        .update(schema.tables)
-        .set({ status: "ocupada" })
-        .where(eq(schema.tables.number, orderInfo.tableNumber));
+    // Order 2: Table 5
+    const [order2] = await app.db
+      .insert(schema.orders)
+      .values({
+        tableId: tableIds[5],
+        waiterId: "user-garcom-001",
+        status: "aberta",
+        customerCount: 6,
+        totalAmount: "0",
+      })
+      .returning();
 
-      // Add items to order
-      let totalAmount = 0;
-      for (const itemInfo of orderInfo.items) {
-        const dish = dishData.find((d) => d.name === itemInfo.dishName);
-        if (!dish) continue;
+    // Add items to Order 2
+    const [item2_1] = await app.db
+      .insert(schema.orderItems)
+      .values({
+        orderId: order2.id,
+        dishId: fileMignonId,
+        quantity: 1,
+        unitPrice: "89.90",
+        status: "em_preparo",
+        startedAt: new Date(),
+      })
+      .returning();
 
-        // Find the dish in the inserted dishes by matching the index
-        const dishIndex = dishData.indexOf(dish);
-        if (dishIndex === -1 || !dishes[dishIndex]) continue;
+    const [item2_2] = await app.db
+      .insert(schema.orderItems)
+      .values({
+        orderId: order2.id,
+        dishId: salmaoId,
+        quantity: 1,
+        unitPrice: "72.00",
+        status: "em_preparo",
+        startedAt: new Date(),
+      })
+      .returning();
 
-        const itemAmount = parseFloat(dish.price) * itemInfo.quantity;
-        totalAmount += itemAmount;
-
-        await app.db.insert(schema.orderItems).values({
-          orderId: orderId,
-          dishId: dishes[dishIndex].id,
-          quantity: itemInfo.quantity,
-          unitPrice: dish.price,
-          status: itemInfo.status as any,
-        });
-      }
-
-      // Update order total
-      await app.db.update(schema.orders).set({ totalAmount: totalAmount.toString() }).where(eq(schema.orders.id, orderId));
-    }
+    // Update Order 2 total
+    await app.db
+      .update(schema.orders)
+      .set({ totalAmount: "161.90" })
+      .where(eq(schema.orders.id, order2.id));
 
     app.logger.info("Database seeded successfully");
   } catch (error) {

@@ -182,7 +182,7 @@ export function registerOrderRoutes(app: App) {
         const row = rows[0];
         app.logger.info({ orderId: order.id }, "Order created");
 
-        return reply.status(201).send({
+        reply.status(201).send({
           id: row.orders.id,
           status: row.orders.status,
           customer_count: row.orders.customerCount,

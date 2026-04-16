@@ -174,7 +174,7 @@ export function registerDishRoutes(app: App) {
         }
 
         const row = rows[0];
-        return reply.status(201).send({
+        reply.status(201).send({
           id: row.dishes.id,
           name: row.dishes.name,
           description: row.dishes.description,

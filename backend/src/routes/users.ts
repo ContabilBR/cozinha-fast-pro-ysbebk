@@ -5,20 +5,22 @@ import type { App } from "../index.js";
 import { requireAuth } from "../utils/auth.js";
 
 interface CreateUserBody {
+  name: string;
   email: string;
   password: string;
-  name: string;
-  role: string;
+  role?: string;
 }
 
 interface UpdateUserBody {
   name?: string;
+  email?: string;
+  password?: string;
   role?: string;
   active?: boolean;
 }
 
 export function registerUserRoutes(app: App) {
-  // GET /api/users
+  // GET /api/users - List all users
   app.fastify.get(
     "/api/users",
     {
@@ -28,16 +30,7 @@ export function registerUserRoutes(app: App) {
         response: {
           200: {
             type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                name: { type: "string" },
-                email: { type: "string" },
-                role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
-                created_at: { type: "string", format: "date-time" },
-              },
-            },
+            items: { type: "object" },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
         },
@@ -50,17 +43,19 @@ export function registerUserRoutes(app: App) {
       try {
         app.logger.info({}, "Listing all users");
 
-        const users = await app.db.select().from(userTable);
-        const result = users.map((u) => ({
+        const users = await app.db.select().from(userTable).orderBy(userTable.name);
+
+        return users.map((u) => ({
           id: u.id,
           name: u.name,
           email: u.email,
+          email_verified: u.emailVerified,
+          image: u.image,
           role: u.role,
+          active: u.active,
           created_at: u.createdAt,
+          updated_at: u.updatedAt,
         }));
-
-        app.logger.info({ count: result.length }, "Users listed successfully");
-        return result;
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list users");
         return reply.status(500).send({ error: "Internal server error" });
@@ -68,27 +63,28 @@ export function registerUserRoutes(app: App) {
     }
   );
 
-  // POST /api/users
+  // POST /api/users - Create new user
   app.fastify.post<{ Body: CreateUserBody }>(
     "/api/users",
     {
       schema: {
-        description: "Create a new user with role",
+        description: "Create a new user",
         tags: ["users"],
         body: {
           type: "object",
-          required: ["email", "password", "name", "role"],
+          required: ["name", "email", "password"],
           properties: {
+            name: { type: "string" },
             email: { type: "string", format: "email" },
             password: { type: "string" },
-            name: { type: "string" },
-            role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
+            role: { type: "string", enum: ["admin", "gerente", "garcom", "cozinheiro"] },
           },
         },
         response: {
           201: { type: "object" },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          409: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -96,41 +92,24 @@ export function registerUserRoutes(app: App) {
       const auth = await requireAuth(app, request, reply);
       if (!auth) return;
 
-      if (!request.body.email || !request.body.password || !request.body.name || !request.body.role) {
-        return reply.status(400).send({ error: "email, password, name, and role are required" });
-      }
-
       try {
-        app.logger.info({ email: request.body.email, role: request.body.role }, "Creating new user");
-
-        // Check if user already exists
-        const existingUsers = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.email, request.body.email))
-          .limit(1);
-
-        if (existingUsers && existingUsers.length > 0) {
-          app.logger.info({ email: request.body.email }, "User already exists, updating role");
-          const existingUser = existingUsers[0];
-
-          // Update role if different
-          if (existingUser.role !== request.body.role) {
-            await app.db
-              .update(userTable)
-              .set({ role: request.body.role as any })
-              .where(eq(userTable.id, existingUser.id));
-          }
-
-          return reply.status(201).send({
-            id: existingUser.id,
-            name: existingUser.name,
-            email: existingUser.email,
-            role: request.body.role,
-            created_at: existingUser.createdAt,
-          });
+        if (!request.body.name || !request.body.email || !request.body.password) {
+          return reply.status(400).send({ error: "name, email, and password are required" });
         }
 
+        app.logger.info({ email: request.body.email }, "Creating new user");
+
+        // Check if user already exists
+        const existing = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.email, request.body.email));
+
+        if (existing.length > 0) {
+          return reply.status(409).send({ error: "User with this email already exists" });
+        }
+
+        // Use Better Auth signup
         const result = await app.auth.api.signUpEmail({
           body: {
             email: request.body.email,
@@ -139,100 +118,43 @@ export function registerUserRoutes(app: App) {
           },
         });
 
-        app.logger.debug({ result }, "Sign up result");
-
         if (!result.user) {
-          app.logger.warn({ result }, "Sign up did not return user");
           return reply.status(400).send({ error: "Failed to create user" });
         }
 
-        // Update user role
-        await app.db
-          .update(userTable)
-          .set({ role: request.body.role as any })
-          .where(eq(userTable.id, result.user.id));
+        // Update role if provided
+        if (request.body.role) {
+          await app.db
+            .update(userTable)
+            .set({ role: request.body.role as any })
+            .where(eq(userTable.id, result.user.id));
+        }
 
-        const createdUsers = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.id, result.user.id))
-          .limit(1);
+        const created = await app.db.select().from(userTable).where(eq(userTable.id, result.user.id));
 
-        if (!createdUsers || createdUsers.length === 0) {
+        if (!created.length) {
           return reply.status(400).send({ error: "Failed to retrieve created user" });
         }
 
-        const createdUser = createdUsers[0];
-        app.logger.info({ userId: result.user.id, role: request.body.role }, "User created successfully");
+        const user = created[0];
+        app.logger.info({ userId: user.id }, "User created successfully");
 
-        return reply.status(201).send({
-          id: createdUser.id,
-          name: createdUser.name,
-          email: createdUser.email,
-          role: createdUser.role,
-          created_at: createdUser.createdAt,
-        });
-      } catch (error) {
-        app.logger.error({ err: error, email: request.body.email }, "Failed to create user");
-        return reply.status(400).send({ error: "Failed to create user" });
-      }
-    }
-  );
-
-  // GET /api/users/:id
-  app.fastify.get<{ Params: { id: string } }>(
-    "/api/users/:id",
-    {
-      schema: {
-        description: "Get user by ID",
-        tags: ["users"],
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: { id: { type: "string" } },
-        },
-        response: {
-          200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
-          404: { type: "object", properties: { error: { type: "string" } } },
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      try {
-        app.logger.info({ userId: request.params.id }, "Getting user");
-
-        const users = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.id, request.params.id))
-          .limit(1);
-
-        if (!users || users.length === 0) {
-          return reply.status(404).send({ error: "User not found" });
-        }
-
-        const user = users[0];
-        app.logger.info({ userId: user.id }, "User retrieved successfully");
-
-        return {
+        reply.status(201).send({
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
+          active: user.active,
           created_at: user.createdAt,
-        };
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to get user");
+        app.logger.error({ err: error }, "Failed to create user");
         return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/users/:id
+  // PUT /api/users/:id - Update user
   app.fastify.put<{ Params: { id: string }; Body: UpdateUserBody }>(
     "/api/users/:id",
     {
@@ -242,13 +164,15 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string" } },
+          properties: { id: { type: "string", format: "uuid" } },
         },
         body: {
           type: "object",
           properties: {
             name: { type: "string" },
-            role: { type: "string", enum: ["garcom", "administrador", "gerente", "cozinheiro"] },
+            email: { type: "string", format: "email" },
+            password: { type: "string" },
+            role: { type: "string", enum: ["admin", "gerente", "garcom", "cozinheiro"] },
             active: { type: "boolean" },
           },
         },
@@ -266,20 +190,18 @@ export function registerUserRoutes(app: App) {
       try {
         app.logger.info({ userId: request.params.id }, "Updating user");
 
-        const existing = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.id, request.params.id))
-          .limit(1);
+        const existing = await app.db.select().from(userTable).where(eq(userTable.id, request.params.id));
 
-        if (!existing || existing.length === 0) {
+        if (!existing.length) {
           return reply.status(404).send({ error: "User not found" });
         }
 
         const updates: any = {};
         if (request.body.name !== undefined) updates.name = request.body.name;
+        if (request.body.email !== undefined) updates.email = request.body.email;
         if (request.body.role !== undefined) updates.role = request.body.role;
         if (request.body.active !== undefined) updates.active = request.body.active;
+        updates.updatedAt = new Date();
 
         const [updated] = await app.db
           .update(userTable)
@@ -287,17 +209,65 @@ export function registerUserRoutes(app: App) {
           .where(eq(userTable.id, request.params.id))
           .returning();
 
-        app.logger.info({ userId: updated.id }, "User updated successfully");
+        app.logger.info({ userId: updated.id }, "User updated");
 
         return {
           id: updated.id,
           name: updated.name,
           email: updated.email,
           role: updated.role,
+          active: updated.active,
           created_at: updated.createdAt,
         };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update user");
+        return reply.status(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // DELETE /api/users/:id - Delete (deactivate) user
+  app.fastify.delete<{ Params: { id: string } }>(
+    "/api/users/:id",
+    {
+      schema: {
+        description: "Delete user",
+        tags: ["users"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          204: { description: "User deleted" },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
+      try {
+        app.logger.info({ userId: request.params.id }, "Deleting user");
+
+        const existing = await app.db.select().from(userTable).where(eq(userTable.id, request.params.id));
+
+        if (!existing.length) {
+          return reply.status(404).send({ error: "User not found" });
+        }
+
+        await app.db
+          .update(userTable)
+          .set({ active: false, updatedAt: new Date() })
+          .where(eq(userTable.id, request.params.id));
+
+        app.logger.info({ userId: request.params.id }, "User deleted");
+
+        return reply.status(204).send();
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to delete user");
         return reply.status(500).send({ error: "Internal server error" });
       }
     }

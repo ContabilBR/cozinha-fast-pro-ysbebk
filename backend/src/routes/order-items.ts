@@ -106,7 +106,7 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ itemId: created.id }, "Item added to order");
 
-        return reply.status(201).send({
+        reply.status(201).send({
           id: created.id,
           order_id: created.orderId,
           dish_id: created.dishId,
