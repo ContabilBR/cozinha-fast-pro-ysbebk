@@ -29,7 +29,19 @@ export function registerKitchenRoutes(app: App) {
         app.logger.info({}, "Fetching kitchen queue");
 
         const items = await app.db
-          .select()
+          .select({
+            item_id: schema.orderItems.id,
+            order_id: schema.orderItems.orderId,
+            dish_id: schema.orderItems.dishId,
+            dish_name: schema.dishes.name,
+            prep_time_minutes: schema.dishes.prepTimeMinutes,
+            quantity: schema.orderItems.quantity,
+            notes: schema.orderItems.notes,
+            status: schema.orderItems.status,
+            requested_at: schema.orderItems.requestedAt,
+            started_at: schema.orderItems.startedAt,
+            table_number: schema.tables.number,
+          })
           .from(schema.orderItems)
           .leftJoin(schema.dishes, eq(schema.orderItems.dishId, schema.dishes.id))
           .leftJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
@@ -37,17 +49,17 @@ export function registerKitchenRoutes(app: App) {
           .where(inArray(schema.orderItems.status, ["pendente", "recebido", "em_preparo"]));
 
         const result = items.map((row) => ({
-          id: row.order_items.id,
-          order_id: row.order_items.orderId,
-          dish_id: row.order_items.dishId,
-          dish_name: row.dishes?.name,
-          prep_time_minutes: row.dishes?.prepTimeMinutes,
-          quantity: row.order_items.quantity,
-          notes: row.order_items.notes,
-          status: row.order_items.status,
-          requested_at: row.order_items.requestedAt,
-          started_at: row.order_items.startedAt,
-          table_number: row.tables?.number,
+          id: row.item_id,
+          order_id: row.order_id,
+          dish_id: row.dish_id,
+          dish_name: row.dish_name,
+          prep_time_minutes: row.prep_time_minutes,
+          quantity: row.quantity,
+          notes: row.notes,
+          status: row.status,
+          requested_at: row.requested_at,
+          started_at: row.started_at,
+          table_number: row.table_number,
         }));
 
         app.logger.info({ count: result.length }, "Kitchen queue fetched");

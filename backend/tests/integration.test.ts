@@ -259,6 +259,13 @@ describe("API Integration Tests", () => {
     testDishId = data.id;
   });
 
+  test("Get dish by ID", async () => {
+    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(testDishId);
+  });
+
   test("Create dish missing required field fails", async () => {
     const res = await authenticatedApi("/api/dishes", authToken, {
       method: "POST",
@@ -334,6 +341,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testTableId = data.id;
+  });
+
+  test("Get table by ID", async () => {
+    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(testTableId);
   });
 
   test("Create table missing required field fails", async () => {
@@ -707,6 +721,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data).toBeDefined();
+  });
+
+  test("Get orders report", async () => {
+    const res = await authenticatedApi("/api/reports/orders", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("Get orders report with date filters", async () => {
+    const res = await authenticatedApi(
+      `/api/reports/orders?date_from=2026-01-01T00:00:00Z&date_to=2026-12-31T23:59:59Z`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
   });
 
   // ==================== Dashboard ====================

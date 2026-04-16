@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 
@@ -50,9 +50,20 @@ export function registerCategoryRoutes(app: App) {
         app.logger.info({}, "Listing active categories");
 
         const categories = await app.db
-          .select()
+          .select({
+            id: schema.categories.id,
+            name: schema.categories.name,
+            description: schema.categories.description,
+            color: schema.categories.color,
+            icon: schema.categories.icon,
+            active: schema.categories.active,
+            created_at: schema.categories.createdAt,
+            dish_count: count(schema.dishes.id),
+          })
           .from(schema.categories)
+          .leftJoin(schema.dishes, eq(schema.categories.id, schema.dishes.categoryId))
           .where(eq(schema.categories.active, true))
+          .groupBy(schema.categories.id)
           .orderBy(schema.categories.name);
 
         return categories.map((c) => ({
@@ -62,7 +73,8 @@ export function registerCategoryRoutes(app: App) {
           color: c.color,
           icon: c.icon,
           active: c.active,
-          created_at: c.createdAt,
+          created_at: c.created_at,
+          dish_count: c.dish_count,
         }));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list categories");
@@ -115,7 +127,7 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: category.id }, "Category created");
 
-        reply.status(201).send({
+        return reply.status(201).send({
           id: category.id,
           name: category.name,
           description: category.description,

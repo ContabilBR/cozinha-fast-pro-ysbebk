@@ -1,7 +1,9 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, gte, lte, and, desc, count } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
+import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface ReportQuery {
   date_from?: string;
@@ -106,6 +108,107 @@ export function registerReportRoutes(app: App) {
         };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to generate summary report");
+        return reply.status(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // GET /api/reports/orders - List orders with optional date filters
+  app.fastify.get<{ Querystring: ReportQuery }>(
+    "/api/reports/orders",
+    {
+      schema: {
+        description: "List orders with optional date filters",
+        tags: ["reports"],
+        querystring: {
+          type: "object",
+          properties: {
+            date_from: { type: "string", format: "date-time" },
+            date_to: { type: "string", format: "date-time" },
+          },
+        },
+        response: {
+          200: {
+            type: "array",
+            items: { type: "object" },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Querystring: ReportQuery }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
+      try {
+        app.logger.info({ query: request.query }, "Listing orders with date filters");
+
+        let whereConditions = [];
+
+        if (request.query.date_from) {
+          whereConditions.push(gte(schema.orders.openedAt, new Date(request.query.date_from)));
+        }
+
+        if (request.query.date_to) {
+          whereConditions.push(lte(schema.orders.openedAt, new Date(request.query.date_to)));
+        }
+
+        const ordersWithCounts = await app.db
+          .select({
+            id: schema.orders.id,
+            status: schema.orders.status,
+            customer_count: schema.orders.customerCount,
+            notes: schema.orders.notes,
+            opened_at: schema.orders.openedAt,
+            closed_at: schema.orders.closedAt,
+            total_amount: schema.orders.totalAmount,
+            created_at: schema.orders.createdAt,
+            table_id: schema.tables.id,
+            table_number: schema.tables.number,
+            table_capacity: schema.tables.capacity,
+            waiter_id: user.id,
+            waiter_name: user.name,
+            waiter_email: user.email,
+            items_count: count(schema.orderItems.id),
+          })
+          .from(schema.orders)
+          .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
+          .leftJoin(user, eq(schema.orders.waiterId, user.id))
+          .leftJoin(schema.orderItems, eq(schema.orders.id, schema.orderItems.orderId))
+          .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+          .groupBy(schema.orders.id, schema.tables.id, user.id)
+          .orderBy(desc(schema.orders.openedAt));
+
+        const result = ordersWithCounts.map((row) => ({
+          id: row.id,
+          status: row.status,
+          customer_count: row.customer_count,
+          notes: row.notes,
+          opened_at: row.opened_at,
+          closed_at: row.closed_at,
+          total_amount: row.total_amount,
+          created_at: row.created_at,
+          items_count: row.items_count,
+          table: row.table_id
+            ? {
+                id: row.table_id,
+                number: row.table_number,
+                capacity: row.table_capacity,
+              }
+            : null,
+          waiter: row.waiter_id
+            ? {
+                id: row.waiter_id,
+                name: row.waiter_name,
+                email: row.waiter_email,
+              }
+            : null,
+        }));
+
+        app.logger.info({ count: result.length }, "Orders with date filters listed");
+        return result;
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to list orders with filters");
         return reply.status(500).send({ error: "Internal server error" });
       }
     }

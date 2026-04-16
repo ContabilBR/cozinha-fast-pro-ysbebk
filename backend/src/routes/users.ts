@@ -139,7 +139,7 @@ export function registerUserRoutes(app: App) {
         const user = created[0];
         app.logger.info({ userId: user.id }, "User created successfully");
 
-        reply.status(201).send({
+        return reply.status(201).send({
           id: user.id,
           name: user.name,
           email: user.email,

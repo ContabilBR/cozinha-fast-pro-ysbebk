@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, count } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -70,34 +70,53 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({}, "Listing orders");
 
-        const orders = await app.db
-          .select()
+        const ordersWithCounts = await app.db
+          .select({
+            id: schema.orders.id,
+            status: schema.orders.status,
+            customer_count: schema.orders.customerCount,
+            notes: schema.orders.notes,
+            opened_at: schema.orders.openedAt,
+            closed_at: schema.orders.closedAt,
+            total_amount: schema.orders.totalAmount,
+            created_at: schema.orders.createdAt,
+            table_id: schema.tables.id,
+            table_number: schema.tables.number,
+            table_capacity: schema.tables.capacity,
+            waiter_id: user.id,
+            waiter_name: user.name,
+            waiter_email: user.email,
+            items_count: count(schema.orderItems.id),
+          })
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
+          .leftJoin(schema.orderItems, eq(schema.orders.id, schema.orderItems.orderId))
+          .groupBy(schema.orders.id, schema.tables.id, user.id)
           .orderBy(desc(schema.orders.openedAt));
 
-        const result = orders.map((row) => ({
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
-          table: row.tables
+        const result = ordersWithCounts.map((row) => ({
+          id: row.id,
+          status: row.status,
+          customer_count: row.customer_count,
+          notes: row.notes,
+          opened_at: row.opened_at,
+          closed_at: row.closed_at,
+          total_amount: row.total_amount,
+          created_at: row.created_at,
+          items_count: row.items_count,
+          table: row.table_id
             ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
+                id: row.table_id,
+                number: row.table_number,
+                capacity: row.table_capacity,
               }
             : null,
-          waiter: row.user
+          waiter: row.waiter_id
             ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
+                id: row.waiter_id,
+                name: row.waiter_name,
+                email: row.waiter_email,
               }
             : null,
         }));
@@ -169,7 +188,22 @@ export function registerOrderRoutes(app: App) {
 
         // Fetch full order with relations
         const rows = await app.db
-          .select()
+          .select({
+            id: schema.orders.id,
+            status: schema.orders.status,
+            customer_count: schema.orders.customerCount,
+            notes: schema.orders.notes,
+            opened_at: schema.orders.openedAt,
+            closed_at: schema.orders.closedAt,
+            total_amount: schema.orders.totalAmount,
+            created_at: schema.orders.createdAt,
+            table_id: schema.tables.id,
+            table_number: schema.tables.number,
+            table_capacity: schema.tables.capacity,
+            waiter_id: user.id,
+            waiter_name: user.name,
+            waiter_email: user.email,
+          })
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
@@ -182,27 +216,27 @@ export function registerOrderRoutes(app: App) {
         const row = rows[0];
         app.logger.info({ orderId: order.id }, "Order created");
 
-        reply.status(201).send({
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
-          table: row.tables
+        return reply.status(201).send({
+          id: row.id,
+          status: row.status,
+          customer_count: row.customer_count,
+          notes: row.notes,
+          opened_at: row.opened_at,
+          closed_at: row.closed_at,
+          total_amount: row.total_amount,
+          created_at: row.created_at,
+          table: row.table_id
             ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
+                id: row.table_id,
+                number: row.table_number,
+                capacity: row.table_capacity,
               }
             : null,
-          waiter: row.user
+          waiter: row.waiter_id
             ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
+                id: row.waiter_id,
+                name: row.waiter_name,
+                email: row.waiter_email,
               }
             : null,
         });
@@ -240,7 +274,22 @@ export function registerOrderRoutes(app: App) {
         app.logger.info({ orderId: request.params.id }, "Getting order");
 
         const rows = await app.db
-          .select()
+          .select({
+            id: schema.orders.id,
+            status: schema.orders.status,
+            customer_count: schema.orders.customerCount,
+            notes: schema.orders.notes,
+            opened_at: schema.orders.openedAt,
+            closed_at: schema.orders.closedAt,
+            total_amount: schema.orders.totalAmount,
+            created_at: schema.orders.createdAt,
+            table_id: schema.tables.id,
+            table_number: schema.tables.number,
+            table_capacity: schema.tables.capacity,
+            waiter_id: user.id,
+            waiter_name: user.name,
+            waiter_email: user.email,
+          })
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
@@ -254,28 +303,41 @@ export function registerOrderRoutes(app: App) {
 
         // Fetch order items
         const items = await app.db
-          .select()
+          .select({
+            item_id: schema.orderItems.id,
+            dish_id: schema.orderItems.dishId,
+            quantity: schema.orderItems.quantity,
+            unit_price: schema.orderItems.unitPrice,
+            notes: schema.orderItems.notes,
+            status: schema.orderItems.status,
+            requested_at: schema.orderItems.requestedAt,
+            received_at: schema.orderItems.receivedAt,
+            started_at: schema.orderItems.startedAt,
+            ready_at: schema.orderItems.readyAt,
+            delivered_at: schema.orderItems.deliveredAt,
+            dish_name: schema.dishes.name,
+            dish_price: schema.dishes.price,
+          })
           .from(schema.orderItems)
           .leftJoin(schema.dishes, eq(schema.orderItems.dishId, schema.dishes.id))
           .where(eq(schema.orderItems.orderId, request.params.id));
 
         const mappedItems = items.map((item) => ({
-          id: item.order_items.id,
-          dish_id: item.order_items.dishId,
-          quantity: item.order_items.quantity,
-          unit_price: item.order_items.unitPrice,
-          notes: item.order_items.notes,
-          status: item.order_items.status,
-          requested_at: item.order_items.requestedAt,
-          received_at: item.order_items.receivedAt,
-          started_at: item.order_items.startedAt,
-          ready_at: item.order_items.readyAt,
-          delivered_at: item.order_items.deliveredAt,
-          dish: item.dishes
+          id: item.item_id,
+          dish_id: item.dish_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          notes: item.notes,
+          status: item.status,
+          requested_at: item.requested_at,
+          received_at: item.received_at,
+          started_at: item.started_at,
+          ready_at: item.ready_at,
+          delivered_at: item.delivered_at,
+          dish: item.dish_name
             ? {
-                id: item.dishes.id,
-                name: item.dishes.name,
-                price: item.dishes.price,
+                name: item.dish_name,
+                price: item.dish_price,
               }
             : null,
         }));
@@ -283,26 +345,26 @@ export function registerOrderRoutes(app: App) {
         app.logger.info({ orderId: request.params.id, itemCount: mappedItems.length }, "Order retrieved");
 
         return {
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
-          table: row.tables
+          id: row.id,
+          status: row.status,
+          customer_count: row.customer_count,
+          notes: row.notes,
+          opened_at: row.opened_at,
+          closed_at: row.closed_at,
+          total_amount: row.total_amount,
+          created_at: row.created_at,
+          table: row.table_id
             ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
+                id: row.table_id,
+                number: row.table_number,
+                capacity: row.table_capacity,
               }
             : null,
-          waiter: row.user
+          waiter: row.waiter_id
             ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
+                id: row.waiter_id,
+                name: row.waiter_name,
+                email: row.waiter_email,
               }
             : null,
           items: mappedItems,
@@ -387,7 +449,22 @@ export function registerOrderRoutes(app: App) {
 
         // Fetch full order with relations
         const rows = await app.db
-          .select()
+          .select({
+            id: schema.orders.id,
+            status: schema.orders.status,
+            customer_count: schema.orders.customerCount,
+            notes: schema.orders.notes,
+            opened_at: schema.orders.openedAt,
+            closed_at: schema.orders.closedAt,
+            total_amount: schema.orders.totalAmount,
+            created_at: schema.orders.createdAt,
+            table_id: schema.tables.id,
+            table_number: schema.tables.number,
+            table_capacity: schema.tables.capacity,
+            waiter_id: user.id,
+            waiter_name: user.name,
+            waiter_email: user.email,
+          })
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
@@ -397,26 +474,26 @@ export function registerOrderRoutes(app: App) {
         app.logger.info({ orderId: updated.id }, "Order updated");
 
         return {
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
-          table: row.tables
+          id: row.id,
+          status: row.status,
+          customer_count: row.customer_count,
+          notes: row.notes,
+          opened_at: row.opened_at,
+          closed_at: row.closed_at,
+          total_amount: row.total_amount,
+          created_at: row.created_at,
+          table: row.table_id
             ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
+                id: row.table_id,
+                number: row.table_number,
+                capacity: row.table_capacity,
               }
             : null,
-          waiter: row.user
+          waiter: row.waiter_id
             ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
+                id: row.waiter_id,
+                name: row.waiter_name,
+                email: row.waiter_email,
               }
             : null,
         };

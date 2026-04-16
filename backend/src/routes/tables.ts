@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface CreateTableBody {
   number: number;
@@ -49,8 +50,21 @@ export function registerTableRoutes(app: App) {
         app.logger.info({}, "Listing active tables");
 
         const tables = await app.db
-          .select()
+          .select({
+            id: schema.tables.id,
+            number: schema.tables.number,
+            capacity: schema.tables.capacity,
+            location: schema.tables.location,
+            status: schema.tables.status,
+            active: schema.tables.active,
+            created_at: schema.tables.createdAt,
+            current_order_id: schema.orders.id,
+          })
           .from(schema.tables)
+          .leftJoin(schema.orders, and(
+            eq(schema.tables.id, schema.orders.tableId),
+            eq(schema.orders.status, 'aberta')
+          ))
           .where(eq(schema.tables.active, true))
           .orderBy(schema.tables.number);
 
@@ -61,7 +75,8 @@ export function registerTableRoutes(app: App) {
           location: t.location,
           status: t.status,
           active: t.active,
-          created_at: t.createdAt,
+          created_at: t.created_at,
+          current_order_id: t.current_order_id || null,
         }));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list tables");
@@ -113,7 +128,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: table.id }, "Table created");
 
-        reply.status(201).send({
+        return reply.status(201).send({
           id: table.id,
           number: table.number,
           capacity: table.capacity,
@@ -124,6 +139,73 @@ export function registerTableRoutes(app: App) {
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create table");
+        return reply.status(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // GET /api/tables/:id - Get a table with current order
+  app.fastify.get<{ Params: { id: string } }>(
+    "/api/tables/:id",
+    {
+      schema: {
+        description: "Get a table by ID",
+        tags: ["tables"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: { type: "object" },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
+      try {
+        app.logger.info({ tableId: request.params.id }, "Getting table");
+
+        const rows = await app.db
+          .select({
+            id: schema.tables.id,
+            number: schema.tables.number,
+            capacity: schema.tables.capacity,
+            location: schema.tables.location,
+            status: schema.tables.status,
+            active: schema.tables.active,
+            created_at: schema.tables.createdAt,
+            current_order_id: schema.orders.id,
+          })
+          .from(schema.tables)
+          .leftJoin(schema.orders, and(
+            eq(schema.tables.id, schema.orders.tableId),
+            eq(schema.orders.status, 'aberta')
+          ))
+          .where(eq(schema.tables.id, request.params.id))
+          .limit(1);
+
+        if (!rows || rows.length === 0) {
+          return reply.status(404).send({ error: "Table not found" });
+        }
+
+        const row = rows[0];
+        return {
+          id: row.id,
+          number: row.number,
+          capacity: row.capacity,
+          location: row.location,
+          status: row.status,
+          active: row.active,
+          created_at: row.created_at,
+          current_order_id: row.current_order_id || null,
+        };
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to get table");
         return reply.status(500).send({ error: "Internal server error" });
       }
     }
