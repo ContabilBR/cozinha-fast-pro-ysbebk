@@ -6,41 +6,32 @@ import {
   RefreshControl,
   Animated,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { Table, Order, TableStatus } from "@/types";
+import { Pedido, Mesa } from "@/types";
 import { apiGet } from "@/utils/api";
-import { formatCurrency, formatRelativeTime } from "@/utils/helpers";
-import { TrendingUp, ShoppingBag, Grid3x3, Flame, RefreshCw } from "lucide-react-native";
+import { formatCurrency, formatRelativeTime, getMesaStatusColor, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { TrendingUp, ShoppingBag, Grid3x3, Flame, RefreshCw, ChevronRight } from "lucide-react-native";
 
-const STATUS_COLORS: Record<TableStatus, string> = {
-  livre: "#22C55E",
-  ocupada: "#E8521A",
-  reservada: "#F59E0B",
-  fechando: "#8B5CF6",
-};
-
-interface DashboardData {
-  revenue_today?: number;
-  open_orders?: number;
-  occupied_tables?: number;
-  total_tables?: number;
-  kitchen_queue?: number;
+interface ResumoData {
+  total_mesas?: number;
+  ocupacao_atual?: number;
+  comandas_abertas?: number;
+  faturamento_dia?: number;
 }
 
 function StatCard({
   title,
   value,
-  subtitle,
   color,
   icon,
   loading,
 }: {
   title: string;
   value: string;
-  subtitle?: string;
   color: string;
   icon: React.ReactNode;
   loading: boolean;
@@ -84,11 +75,6 @@ function StatCard({
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
             {title}
           </Text>
-          {subtitle && (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color }}>
-              {subtitle}
-            </Text>
-          )}
         </>
       )}
     </View>
@@ -98,10 +84,11 @@ function StatCard({
 export default function DashboardScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
-  const [dashboard, setDashboard] = useState<DashboardData>({});
-  const [tables, setTables] = useState<Table[]>([]);
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [resumo, setResumo] = useState<ResumoData>({});
+  const [mesas, setMesas] = useState<Mesa[]>([]);
+  const [recentPedidos, setRecentPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -110,17 +97,18 @@ export default function DashboardScreen() {
   const fetchData = useCallback(async () => {
     console.log("[Dashboard] Fetching dashboard data");
     try {
-      const [dashRes, tablesRes, ordersRes] = await Promise.all([
-        apiGet<any>("/api/dashboard").catch(() => ({})),
-        apiGet<any>("/api/tables").catch(() => []),
-        apiGet<any>("/api/orders?status=fechada&limit=5").catch(() => []),
+      const [resumoRes, mesasRes, pedidosRes] = await Promise.all([
+        apiGet<any>("/api/relatorios/resumo").catch(() => ({})),
+        apiGet<any>("/api/mesas").catch(() => []),
+        apiGet<any>("/api/pedidos").catch(() => []),
       ]);
-      const dashData: DashboardData = dashRes?.dashboard || dashRes || {};
-      const tableList: Table[] = Array.isArray(tablesRes) ? tablesRes : (tablesRes.tables || []);
-      const orderList: Order[] = Array.isArray(ordersRes) ? ordersRes : (ordersRes.orders || []);
-      setDashboard(dashData);
-      setTables(tableList);
-      setRecentOrders(orderList.slice(0, 5));
+      const resumoData: ResumoData = resumoRes?.resumo || resumoRes || {};
+      const mesaList: Mesa[] = Array.isArray(mesasRes) ? mesasRes : (mesasRes.mesas || []);
+      const pedidoList: Pedido[] = Array.isArray(pedidosRes) ? pedidosRes : (pedidosRes.pedidos || []);
+      setResumo(resumoData);
+      setMesas(mesaList);
+      const sorted = pedidoList.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
+      setRecentPedidos(sorted.slice(0, 5));
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (e) {
       console.error("[Dashboard] Error:", e);
@@ -128,7 +116,7 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fadeAnim]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -138,16 +126,15 @@ export default function DashboardScreen() {
     fetchData();
   };
 
-  const occupiedCount = tables.filter((t) => t.status === "ocupada" || t.status === "fechando").length;
-  const totalTables = tables.length;
-  const revenueToday = formatCurrency(dashboard.revenue_today ?? 0);
-  const openOrders = String(dashboard.open_orders ?? 0);
-  const kitchenQueue = String(dashboard.kitchen_queue ?? 0);
-  const occupiedLabel = `${occupiedCount}/${totalTables}`;
+  const totalMesas = resumo.total_mesas ?? mesas.length;
+  const ocupacaoAtual = resumo.ocupacao_atual ?? mesas.filter((m) => m.status !== "livre" && m.status !== "finalizada").length;
+  const comandasAbertas = resumo.comandas_abertas ?? 0;
+  const faturamentoDia = formatCurrency(resumo.faturamento_dia ?? 0);
+  const emPreparoCount = recentPedidos.filter((p) => p.status === "em_preparacao").length;
+  const prontoCount = recentPedidos.filter((p) => p.status === "pronto").length;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -191,19 +178,18 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
         }
       >
-        {/* Stats grid */}
         <Animated.View style={{ opacity: fadeAnim, gap: 12 }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
             <StatCard
               title="Faturamento Hoje"
-              value={revenueToday}
+              value={faturamentoDia}
               color={COLORS.success}
               icon={<TrendingUp size={20} color={COLORS.success} />}
               loading={loading}
             />
             <StatCard
               title="Comandas Abertas"
-              value={openOrders}
+              value={String(comandasAbertas)}
               color={COLORS.primary}
               icon={<ShoppingBag size={20} color={COLORS.primary} />}
               loading={loading}
@@ -212,14 +198,14 @@ export default function DashboardScreen() {
           <View style={{ flexDirection: "row", gap: 12 }}>
             <StatCard
               title="Mesas Ocupadas"
-              value={occupiedLabel}
+              value={`${ocupacaoAtual}/${totalMesas}`}
               color="#3B82F6"
               icon={<Grid3x3 size={20} color="#3B82F6" />}
               loading={loading}
             />
             <StatCard
-              title="Fila Cozinha"
-              value={kitchenQueue}
+              title="Em Preparo"
+              value={String(emPreparoCount)}
               color={COLORS.warning}
               icon={<Flame size={20} color={COLORS.warning} />}
               loading={loading}
@@ -227,7 +213,28 @@ export default function DashboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Tables mini-grid */}
+        {/* Quick stats */}
+        {prontoCount > 0 && (
+          <View
+            style={{
+              backgroundColor: COLORS.success + "15",
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: COLORS.success + "30",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success }} />
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.success }}>
+              {prontoCount} {prontoCount === 1 ? "pedido pronto" : "pedidos prontos"} aguardando entrega
+            </Text>
+          </View>
+        )}
+
+        {/* Mesas mini-grid */}
         <View>
           <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, marginBottom: 12 }}>
             Mesas
@@ -235,21 +242,18 @@ export default function DashboardScreen() {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {loading
               ? [0, 1, 2, 3, 4, 5].map((i) => (
-                  <View
-                    key={i}
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 12,
-                      backgroundColor: COLORS.surfaceSecondary,
-                    }}
-                  />
+                  <View key={i} style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary }} />
                 ))
-              : tables.map((table) => {
-                  const color = STATUS_COLORS[table.status] || COLORS.textSecondary;
+              : mesas.map((mesa) => {
+                  const color = getMesaStatusColor(mesa.status);
                   return (
-                    <View
-                      key={table.id}
+                    <AnimatedPressable
+                      key={mesa.id}
+                      onPress={() => {
+                        console.log("[Dashboard] Mesa mini pressed:", mesa.numero);
+                        if (mesa.comanda_id) router.push(`/comanda/${mesa.comanda_id}`);
+                        else router.push(`/mesa/${mesa.id}`);
+                      }}
                       style={{
                         width: 56,
                         height: 56,
@@ -262,63 +266,63 @@ export default function DashboardScreen() {
                       }}
                     >
                       <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color }}>
-                        {table.number}
+                        {mesa.numero}
                       </Text>
-                    </View>
+                    </AnimatedPressable>
                   );
                 })}
           </View>
         </View>
 
-        {/* Recent orders */}
+        {/* Recent pedidos */}
         <View>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, marginBottom: 12 }}>
-            Últimas Comandas
-          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>
+              Últimos Pedidos
+            </Text>
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[Dashboard] View all pedidos pressed");
+                router.push("/(tabs)/(relatorios)");
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+            >
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
+                Ver relatórios
+              </Text>
+              <ChevronRight size={14} color={COLORS.primary} />
+            </AnimatedPressable>
+          </View>
           {loading ? (
             <View style={{ gap: 10 }}>
               {[0, 1, 2].map((i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: COLORS.surface,
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: COLORS.border,
-                    gap: 8,
-                  }}
-                >
+                <View key={i} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
                   <SkeletonLine width="40%" height={14} />
                   <SkeletonLine width="60%" height={12} />
                 </View>
               ))}
             </View>
-          ) : recentOrders.length === 0 ? (
-            <View
-              style={{
-                backgroundColor: COLORS.surface,
-                borderRadius: 12,
-                padding: 24,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: COLORS.border,
-              }}
-            >
+          ) : recentPedidos.length === 0 ? (
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border }}>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
-                Nenhuma comanda fechada ainda
+                Nenhum pedido recente
               </Text>
             </View>
           ) : (
             <View style={{ gap: 8 }}>
-              {recentOrders.map((order) => {
-                const tableNum = order.table?.number ?? "?";
-                const waiter = order.waiter?.name ?? "—";
-                const total = formatCurrency(order.total_amount);
-                const time = formatRelativeTime(order.closed_at || order.opened_at);
+              {recentPedidos.map((pedido) => {
+                const mesaNum = pedido.mesa?.numero ?? "?";
+                const garcom = pedido.garcom?.name ?? "—";
+                const time = formatRelativeTime(pedido.sent_at);
+                const statusColor = getPedidoStatusColor(pedido.status);
+                const statusLabel = getPedidoStatusLabel(pedido.status);
                 return (
-                  <View
-                    key={order.id}
+                  <AnimatedPressable
+                    key={pedido.id}
+                    onPress={() => {
+                      console.log("[Dashboard] Recent pedido pressed:", pedido.id);
+                      router.push(`/pedido/${pedido.id}`);
+                    }}
                     style={{
                       backgroundColor: COLORS.surface,
                       borderRadius: 12,
@@ -332,19 +336,21 @@ export default function DashboardScreen() {
                   >
                     <View style={{ gap: 3 }}>
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-                        Mesa {tableNum}
+                        Mesa {mesaNum}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                        {waiter}
+                        {garcom}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
                         {time}
                       </Text>
                     </View>
-                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
-                      {total}
-                    </Text>
-                  </View>
+                    <View style={{ backgroundColor: statusColor + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </AnimatedPressable>
                 );
               })}
             </View>

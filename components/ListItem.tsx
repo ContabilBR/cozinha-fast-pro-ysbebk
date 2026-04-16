@@ -10,11 +10,11 @@ import Animated, {
 } from "react-native-reanimated";
 import Reanimated from "react-native-reanimated";
 import { COLORS } from "@/constants/Colors";
+import { IconCircle } from "./IconCircle";
+import { IconSymbol } from "./IconSymbol";
 
 const appleRed = COLORS.danger;
 const borderColor = COLORS.border;
-import { IconCircle } from "./IconCircle";
-import { IconSymbol } from "./IconSymbol";
 
 configureReanimatedLogger({ strict: false });
 

@@ -6,6 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   Animated,
+  Switch,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -14,9 +15,9 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { Dish, Category } from "@/types";
-import { apiGet } from "@/utils/api";
-import { formatCurrency } from "@/utils/helpers";
+import { Prato, Categoria } from "@/types";
+import { apiGet, apiPatch } from "@/utils/api";
+import { formatCurrency, isAdmin } from "@/utils/helpers";
 import { Plus, Clock, UtensilsCrossed, Pencil } from "lucide-react-native";
 import type { ImageSourcePropType } from "react-native";
 
@@ -26,16 +27,20 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
-function DishCard({
-  dish,
+function PratoCard({
+  prato,
   onPress,
   index,
   canEdit,
+  canToggle,
+  onToggle,
 }: {
-  dish: Dish;
+  prato: Prato;
   onPress: () => void;
   index: number;
   canEdit: boolean;
+  canToggle: boolean;
+  onToggle: (id: string, disponivel: boolean) => void;
 }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -46,11 +51,11 @@ function DishCard({
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 50, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 50, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateY]);
 
-  const price = formatCurrency(dish.price);
-  const isActive = dish.active;
-  const imageSource = resolveImageSource(dish.image_url);
+  const price = formatCurrency(prato.preco);
+  const imageSource = resolveImageSource(prato.imagem_url);
+  const disponivel = prato.disponivel;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
@@ -63,12 +68,11 @@ function DishCard({
           borderWidth: 1,
           borderColor: COLORS.border,
           boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
-          opacity: isActive ? 1 : 0.6,
+          opacity: disponivel ? 1 : 0.65,
         }}
       >
-        {/* Image — full-width, height 140 */}
-        <View style={{ height: 140, backgroundColor: COLORS.surfaceSecondary }}>
-          {dish.image_url ? (
+        <View style={{ height: 130, backgroundColor: COLORS.surfaceSecondary }}>
+          {prato.imagem_url ? (
             <Image
               source={imageSource}
               style={{ width: "100%", height: "100%" }}
@@ -80,8 +84,7 @@ function DishCard({
               <UtensilsCrossed size={28} color={COLORS.textTertiary} />
             </View>
           )}
-          {/* Inactive badge */}
-          {!isActive && (
+          {!disponivel && (
             <View
               style={{
                 position: "absolute",
@@ -94,11 +97,10 @@ function DishCard({
               }}
             >
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>
-                Inativo
+                Indisponível
               </Text>
             </View>
           )}
-          {/* Edit button overlay — only for admin/gerente */}
           {canEdit && (
             <View
               style={{
@@ -118,15 +120,11 @@ function DishCard({
           )}
         </View>
 
-        {/* Info */}
         <View style={{ padding: 12, gap: 4 }}>
-          <Text
-            numberOfLines={1}
-            style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}
-          >
-            {dish.name}
+          <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+            {prato.nome}
           </Text>
-          {dish.category && (
+          {prato.categoria && (
             <View
               style={{
                 backgroundColor: COLORS.primaryMuted,
@@ -137,7 +135,7 @@ function DishCard({
               }}
             >
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: COLORS.primary }}>
-                {dish.category.name}
+                {prato.categoria.nome}
               </Text>
             </View>
           )}
@@ -148,10 +146,26 @@ function DishCard({
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
               <Clock size={11} color={COLORS.textSecondary} />
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-                {dish.prep_time_minutes}min
+                {prato.tempo_preparo}min
               </Text>
             </View>
           </View>
+          {canToggle && (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                Disponível
+              </Text>
+              <Switch
+                value={disponivel}
+                onValueChange={(val) => {
+                  console.log("[Cardapio] Toggle disponivel:", prato.id, val);
+                  onToggle(prato.id, val);
+                }}
+                trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
+                thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
+              />
+            </View>
+          )}
         </View>
       </AnimatedPressable>
     </Animated.View>
@@ -165,26 +179,27 @@ export default function CardapioScreen() {
   const { user } = useAuth();
 
   const role = (user as any)?.role;
-  const canEdit = role === "administrador" || role === "gerente";
+  const canEdit = isAdmin(role);
+  const canToggle = role === "cozinheiro";
 
-  const [dishes, setDishes] = useState<Dish[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [pratos, setPratos] = useState<Prato[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const fetchData = useCallback(async () => {
-    console.log("[Cardapio] Fetching dishes and categories");
+    console.log("[Cardapio] Fetching pratos and categorias");
     try {
-      const [dishRes, catRes] = await Promise.all([
-        apiGet<any>("/api/dishes"),
-        apiGet<any>("/api/categories"),
+      const [pratosRes, catRes] = await Promise.all([
+        apiGet<any>("/api/pratos"),
+        apiGet<any>("/api/categorias"),
       ]);
-      const dishList: Dish[] = Array.isArray(dishRes) ? dishRes : (dishRes.dishes || []);
-      const catList: Category[] = Array.isArray(catRes) ? catRes : (catRes.categories || []);
-      setDishes(dishList);
-      setCategories(catList);
+      const pratoList: Prato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
+      const catList: Categoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
+      setPratos(pratoList);
+      setCategorias(catList);
       setError("");
     } catch (e: any) {
       console.error("[Cardapio] Error:", e);
@@ -203,13 +218,22 @@ export default function CardapioScreen() {
     fetchData();
   };
 
-  const filteredDishes = selectedCategory
-    ? dishes.filter((d) => d.category_id === selectedCategory)
-    : dishes;
+  const handleToggleDisponivel = async (id: string, disponivel: boolean) => {
+    console.log("[Cardapio] PATCH disponibilidade:", id, disponivel);
+    try {
+      await apiPatch(`/api/pratos/${id}/disponibilidade`, { disponivel });
+      setPratos((prev) => prev.map((p) => p.id === id ? { ...p, disponivel } : p));
+    } catch (e) {
+      console.error("[Cardapio] Toggle error:", e);
+    }
+  };
+
+  const filteredPratos = selectedCategoria
+    ? pratos.filter((p) => p.categoria_id === selectedCategoria)
+    : pratos;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -226,12 +250,11 @@ export default function CardapioScreen() {
               Cardápio
             </Text>
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-              {dishes.length} pratos
+              {pratos.length} pratos
             </Text>
           </View>
         </View>
 
-        {/* Category filter */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -241,47 +264,35 @@ export default function CardapioScreen() {
           <AnimatedPressable
             onPress={() => {
               console.log("[Cardapio] Category filter: all");
-              setSelectedCategory(null);
+              setSelectedCategoria(null);
             }}
             style={{
               paddingHorizontal: 14,
               paddingVertical: 7,
               borderRadius: 20,
-              backgroundColor: !selectedCategory ? COLORS.primary : COLORS.surfaceSecondary,
+              backgroundColor: !selectedCategoria ? COLORS.primary : COLORS.surfaceSecondary,
             }}
           >
-            <Text
-              style={{
-                fontFamily: "Outfit_600SemiBold",
-                fontSize: 13,
-                color: !selectedCategory ? "#fff" : COLORS.textSecondary,
-              }}
-            >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: !selectedCategoria ? "#fff" : COLORS.textSecondary }}>
               Todos
             </Text>
           </AnimatedPressable>
-          {categories.map((cat) => (
+          {categorias.map((cat) => (
             <AnimatedPressable
               key={cat.id}
               onPress={() => {
-                console.log("[Cardapio] Category filter:", cat.name);
-                setSelectedCategory(cat.id === selectedCategory ? null : cat.id);
+                console.log("[Cardapio] Category filter:", cat.nome);
+                setSelectedCategoria(cat.id === selectedCategoria ? null : cat.id);
               }}
               style={{
                 paddingHorizontal: 14,
                 paddingVertical: 7,
                 borderRadius: 20,
-                backgroundColor: selectedCategory === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
+                backgroundColor: selectedCategoria === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: "Outfit_600SemiBold",
-                  fontSize: 13,
-                  color: selectedCategory === cat.id ? "#fff" : COLORS.textSecondary,
-                }}
-              >
-                {cat.name}
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: selectedCategoria === cat.id ? "#fff" : COLORS.textSecondary }}>
+                {cat.nome}
               </Text>
             </AnimatedPressable>
           ))}
@@ -297,9 +308,6 @@ export default function CardapioScreen() {
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
             Erro ao carregar cardápio
           </Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-            {error}
-          </Text>
           <AnimatedPressable
             onPress={fetchData}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
@@ -311,18 +319,18 @@ export default function CardapioScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredDishes}
+          data={filteredPratos}
           renderItem={({ item, index }) => (
-            <DishCard
-              dish={item}
+            <PratoCard
+              prato={item}
               onPress={() => {
-                console.log("[Cardapio] Dish pressed:", item.id, "canEdit:", canEdit);
-                if (canEdit) {
-                  router.push(`/dish/${item.id}`);
-                }
+                console.log("[Cardapio] Prato pressed:", item.id, "canEdit:", canEdit);
+                router.push(`/prato/${item.id}`);
               }}
               index={index}
               canEdit={canEdit}
+              canToggle={canToggle}
+              onToggle={handleToggleDisponivel}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -354,12 +362,11 @@ export default function CardapioScreen() {
         />
       )}
 
-      {/* FAB — only for admin/gerente */}
       {canEdit && (
         <AnimatedPressable
           onPress={() => {
-            console.log("[Cardapio] FAB - new dish");
-            router.push("/dish/new");
+            console.log("[Cardapio] FAB - new prato");
+            router.push("/prato/novo");
           }}
           style={{
             position: "absolute",

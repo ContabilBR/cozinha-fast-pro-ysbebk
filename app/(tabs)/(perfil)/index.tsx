@@ -10,8 +10,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { LogOut, User, Mail, Shield } from "lucide-react-native";
-import { getRoleLabel, getInitials } from "@/utils/helpers";
+import { LogOut, User, Mail, Shield, Tag, ChevronRight } from "lucide-react-native";
+import { getRoleLabel, getInitials, isAdmin } from "@/utils/helpers";
 import { UserRole } from "@/types";
 import Constants from "expo-constants";
 
@@ -36,7 +36,7 @@ export default function PerfilScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const role = ((user as any)?.role as UserRole) || "garcom";
   const name = (user as any)?.name || user?.email || "Usuário";
@@ -45,12 +45,13 @@ export default function PerfilScreen() {
   const roleLabel = getRoleLabel(role);
   const roleColor = ROLE_COLORS[role] || COLORS.primary;
   const appVersion = Constants.expoConfig?.version || "1.0.0";
+  const canAdmin = isAdmin(role);
 
   const handleSignOut = async () => {
     console.log("[Perfil] Sign out button pressed");
     try {
       await signOut();
-      console.log("[Perfil] Sign out successful, redirecting to auth-screen");
+      console.log("[Perfil] Sign out successful");
       router.replace("/auth-screen");
     } catch (e) {
       console.error("[Perfil] Sign out error:", e);
@@ -59,7 +60,6 @@ export default function PerfilScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -80,7 +80,6 @@ export default function PerfilScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {/* Avatar + identity card */}
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <View
             style={{
@@ -94,7 +93,6 @@ export default function PerfilScreen() {
               gap: 12,
             }}
           >
-            {/* Avatar circle */}
             <View
               style={{
                 width: 80,
@@ -111,12 +109,10 @@ export default function PerfilScreen() {
               </Text>
             </View>
 
-            {/* Name */}
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.text, letterSpacing: -0.2, textAlign: "center" }}>
               {name}
             </Text>
 
-            {/* Role badge */}
             <View
               style={{
                 backgroundColor: roleColor + "18",
@@ -136,7 +132,6 @@ export default function PerfilScreen() {
           </View>
         </Animated.View>
 
-        {/* Info rows */}
         <Animated.View
           style={{
             opacity: fadeAnim,
@@ -149,27 +144,8 @@ export default function PerfilScreen() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
           }}
         >
-          {/* Email row */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 14,
-              padding: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: COLORS.divider,
-            }}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: COLORS.surfaceSecondary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
               <Mail size={18} color={COLORS.textSecondary} />
             </View>
             <View style={{ flex: 1 }}>
@@ -182,25 +158,8 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          {/* Role row */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 14,
-              padding: 16,
-            }}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: roleColor + "18",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: roleColor + "18", alignItems: "center", justifyContent: "center" }}>
               <User size={18} color={roleColor} />
             </View>
             <View style={{ flex: 1 }}>
@@ -214,10 +173,45 @@ export default function PerfilScreen() {
           </View>
         </Animated.View>
 
-        {/* Divider */}
+        {/* Admin links */}
+        {canAdmin && (
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+              backgroundColor: COLORS.surface,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              overflow: "hidden",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
+            }}
+          >
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[Perfil] Categorias link pressed");
+                router.push("/categoria");
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+                <Tag size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                  Gerenciar Categorias
+                </Text>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                  Adicionar, editar e remover categorias
+                </Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.textSecondary} />
+            </AnimatedPressable>
+          </Animated.View>
+        )}
+
         <View style={{ height: 1, backgroundColor: COLORS.divider }} />
 
-        {/* Logout button */}
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <AnimatedPressable
             onPress={handleSignOut}
@@ -239,7 +233,6 @@ export default function PerfilScreen() {
           </AnimatedPressable>
         </Animated.View>
 
-        {/* App version */}
         <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary, textAlign: "center" }}>
           CozinhaFast Pro v{appVersion}
         </Text>

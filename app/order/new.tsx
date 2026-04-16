@@ -52,7 +52,7 @@ export default function NewOrderScreen() {
         </AnimatedPressable>
       ),
     });
-  }, [navigation, COLORS]);
+  }, [navigation, COLORS, router]);
 
   const fetchTables = useCallback(async () => {
     console.log("[NewOrder] Fetching available tables");

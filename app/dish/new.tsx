@@ -111,7 +111,7 @@ export default function NewDishScreen() {
         </AnimatedPressable>
       ),
     });
-  }, [navigation, COLORS]);
+  }, [navigation, COLORS, router]);
 
   useEffect(() => {
     // Redirect non-editors away
@@ -127,7 +127,7 @@ export default function NewDishScreen() {
         setCategories(list);
       })
       .catch((e) => console.error("[NewDish] Error fetching categories:", e));
-  }, [canEdit]);
+  }, [canEdit, router]);
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }

@@ -27,7 +27,7 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateY]);
 
   const tableNumber = order.table?.number ?? "?";
   const waiterName = order.waiter?.name ?? "—";

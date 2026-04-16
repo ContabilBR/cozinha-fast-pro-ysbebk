@@ -16,66 +16,16 @@ export default function TabLayoutIOS() {
     return (
       <NativeTabs>
         <NativeTabs.Trigger name="(mesas)">
-          <Icon sf="square.grid.2x2" />
-          <Label>Mesas</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(comandas)">
-          <Icon sf="doc.text" />
-          <Label>Comandas</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(cardapio)">
-          <Icon sf="fork.knife" />
-          <Label>Cardápio</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(perfil)">
-          <Icon sf="person.circle" />
-          <Label>Perfil</Label>
-        </NativeTabs.Trigger>
-      </NativeTabs>
-    );
-  }
-
-  if (role === "administrador") {
-    return (
-      <NativeTabs>
-        <NativeTabs.Trigger name="(mesas)">
-          <Icon sf="square.grid.2x2" />
+          <Icon sf="table.furniture" />
           <Label>Mesas</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(cardapio)">
-          <Icon sf="fork.knife" />
+          <Icon sf="book.pages" />
           <Label>Cardápio</Label>
         </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(usuarios)">
-          <Icon sf="person.2" />
-          <Label>Usuários</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(perfil)">
-          <Icon sf="person.circle" />
-          <Label>Perfil</Label>
-        </NativeTabs.Trigger>
-      </NativeTabs>
-    );
-  }
-
-  if (role === "gerente") {
-    return (
-      <NativeTabs>
-        <NativeTabs.Trigger name="(dashboard)">
-          <Icon sf="chart.bar" />
-          <Label>Dashboard</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(relatorios)">
-          <Icon sf="chart.pie" />
-          <Label>Relatórios</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(historico)">
-          <Icon sf="clock.arrow.circlepath" />
-          <Label>Histórico</Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(cardapio)">
-          <Icon sf="fork.knife" />
-          <Label>Cardápio</Label>
+        <NativeTabs.Trigger name="(pedidos)">
+          <Icon sf="list.bullet.clipboard" />
+          <Label>Pedidos</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(perfil)">
           <Icon sf="person.circle" />
@@ -92,12 +42,8 @@ export default function TabLayoutIOS() {
           <Icon sf="flame" />
           <Label>Fila</Label>
         </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(historico)">
-          <Icon sf="clock.arrow.circlepath" />
-          <Label>Histórico</Label>
-        </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(cardapio)">
-          <Icon sf="fork.knife" />
+          <Icon sf="book.pages" />
           <Label>Cardápio</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(perfil)">
@@ -108,11 +54,28 @@ export default function TabLayoutIOS() {
     );
   }
 
+  // gerente or administrador
   return (
     <NativeTabs>
+      <NativeTabs.Trigger name="(dashboard)">
+        <Icon sf="chart.bar" />
+        <Label>Dashboard</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(mesas)">
-        <Icon sf="square.grid.2x2" />
+        <Icon sf="table.furniture" />
         <Label>Mesas</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(cardapio)">
+        <Icon sf="book.pages" />
+        <Label>Cardápio</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(usuarios)">
+        <Icon sf="person.2" />
+        <Label>Usuários</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(relatorios)">
+        <Icon sf="doc.text" />
+        <Label>Relatórios</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(perfil)">
         <Icon sf="person.circle" />

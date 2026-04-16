@@ -6,46 +6,38 @@ import {
   RefreshControl,
   Animated,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { StatusBadge } from "@/components/StatusBadge";
-import { Order } from "@/types";
+import { Pedido } from "@/types";
 import { apiGet } from "@/utils/api";
-import { formatCurrency, formatRelativeTime } from "@/utils/helpers";
-import { History, Clock, Users, ShoppingBag } from "lucide-react-native";
+import { formatRelativeTime, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { ClipboardList, Clock, ShoppingBag } from "lucide-react-native";
 
-function HistoryCard({ order, index }: { order: Order; index: number }) {
+function PedidoCard({ pedido, onPress, index }: { pedido: Pedido; onPress: () => void; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 50, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 50, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
   }, [index, opacity, translateY]);
 
-  const tableNum = order.table?.number ?? "?";
-  const waiter = order.waiter?.name ?? "—";
-  const total = formatCurrency(order.total_amount);
-  const openedAt = formatRelativeTime(order.opened_at);
-  const closedAt = order.closed_at ? formatRelativeTime(order.closed_at) : "—";
-  const itemCount = order.items?.length ?? 0;
-
-  // Duration
-  let duration = "—";
-  if (order.opened_at && order.closed_at) {
-    const diffMs = new Date(order.closed_at).getTime() - new Date(order.opened_at).getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    duration = diffMin < 60 ? `${diffMin} min` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}min`;
-  }
+  const statusColor = getPedidoStatusColor(pedido.status);
+  const statusLabel = getPedidoStatusLabel(pedido.status);
+  const mesaNum = pedido.mesa?.numero ?? "?";
+  const timeStr = formatRelativeTime(pedido.sent_at);
+  const itemCount = pedido.itens?.length ?? 0;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <View
+      <AnimatedPressable
+        onPress={onPress}
         style={{
           backgroundColor: COLORS.surface,
           borderRadius: 16,
@@ -64,93 +56,101 @@ function HistoryCard({ order, index }: { order: Order; index: number }) {
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: COLORS.surfaceSecondary,
+                backgroundColor: COLORS.primaryMuted,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.textSecondary }}>
-                {tableNum}
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.primary }}>
+                {mesaNum}
               </Text>
             </View>
             <View>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                Mesa {tableNum}
+                Mesa {mesaNum}
               </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                {waiter}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                <Clock size={12} color={COLORS.textSecondary} />
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                  {timeStr}
+                </Text>
+              </View>
             </View>
           </View>
-          <StatusBadge status={order.status} type="order" size="sm" />
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 16, flexWrap: "wrap" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Clock size={12} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {openedAt}
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <ShoppingBag size={12} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {itemCount} itens
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <History size={12} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {duration}
+          <View
+            style={{
+              backgroundColor: statusColor + "20",
+              borderRadius: 20,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: statusColor }}>
+              {statusLabel}
             </Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
-            {total}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+          <ShoppingBag size={13} color={COLORS.textSecondary} />
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+            {itemCount} {itemCount === 1 ? "item" : "itens"}
           </Text>
+          {pedido.observacoes ? (
+            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary, flex: 1, marginLeft: 8 }}>
+              {pedido.observacoes}
+            </Text>
+          ) : null}
         </View>
-      </View>
+      </AnimatedPressable>
     </Animated.View>
   );
 }
 
-export default function HistoricoScreen() {
+export default function PedidosScreen() {
   const COLORS = useColors();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchOrders = useCallback(async () => {
-    console.log("[Historico] Fetching order history");
+  const fetchPedidos = useCallback(async () => {
+    console.log("[Pedidos] Fetching pedidos");
     try {
-      const data = await apiGet<Order[]>("/api/orders?status=fechada");
-      setOrders(Array.isArray(data) ? data : []);
+      const res = await apiGet<any>("/api/pedidos");
+      const list: Pedido[] = Array.isArray(res) ? res : (res.pedidos || []);
+      const sorted = list.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
+      setPedidos(sorted);
       setError("");
     } catch (e: any) {
-      console.error("[Historico] Error:", e);
-      setError("Não foi possível carregar o histórico.");
+      console.error("[Pedidos] Error:", e);
+      setError("Não foi possível carregar os pedidos.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    fetchPedidos();
+    const interval = setInterval(() => {
+      console.log("[Pedidos] Auto-refresh");
+      fetchPedidos();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchPedidos]);
 
   const handleRefresh = () => {
-    console.log("[Historico] Manual refresh");
+    console.log("[Pedidos] Manual refresh");
     setRefreshing(true);
-    fetchOrders();
+    fetchPedidos();
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -162,10 +162,10 @@ export default function HistoricoScreen() {
         }}
       >
         <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Histórico
+          Meus Pedidos
         </Text>
         <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {orders.length} comandas fechadas
+          {pedidos.length} pedidos
         </Text>
       </View>
 
@@ -176,10 +176,10 @@ export default function HistoricoScreen() {
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-            Erro ao carregar histórico
+            Erro ao carregar pedidos
           </Text>
           <AnimatedPressable
-            onPress={fetchOrders}
+            onPress={fetchPedidos}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
           >
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
@@ -189,8 +189,17 @@ export default function HistoricoScreen() {
         </View>
       ) : (
         <FlatList
-          data={orders}
-          renderItem={({ item, index }) => <HistoryCard order={item} index={index} />}
+          data={pedidos}
+          renderItem={({ item, index }) => (
+            <PedidoCard
+              pedido={item}
+              onPress={() => {
+                console.log("[Pedidos] Pedido pressed:", item.id);
+                router.push(`/pedido/${item.id}`);
+              }}
+              index={index}
+            />
+          )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
           contentInsetAdjustmentBehavior="automatic"
@@ -209,13 +218,13 @@ export default function HistoricoScreen() {
                   justifyContent: "center",
                 }}
               >
-                <History size={32} color={COLORS.primary} />
+                <ClipboardList size={32} color={COLORS.primary} />
               </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-                Nenhum histórico
+                Nenhum pedido ainda
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Comandas fechadas aparecerão aqui
+                Seus pedidos aparecerão aqui
               </Text>
             </View>
           }

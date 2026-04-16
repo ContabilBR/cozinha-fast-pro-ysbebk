@@ -7,49 +7,29 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { KitchenQueueItem, ItemStatus } from "@/types";
-import { apiGet, apiPut } from "@/utils/api";
-import { formatRelativeTime, getItemStatusLabel } from "@/utils/helpers";
-import { Flame, Clock, ChefHat, RefreshCw } from "lucide-react-native";
+import { Pedido, PedidoStatus } from "@/types";
+import { apiGet, apiPatch } from "@/utils/api";
+import { formatElapsed, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { Flame, Clock, RefreshCw, ChefHat } from "lucide-react-native";
 import { COLORS as C } from "@/constants/Colors";
-import type { ImageSourcePropType } from "react-native";
 
-const STATUS_COLORS: Record<ItemStatus, string> = {
-  pendente: C.statusPendente,
-  recebido: C.statusRecebido,
-  em_preparo: C.statusEmPreparo,
-  pronto: C.statusPronto,
-  entregue: C.statusEntregue,
-  cancelado: C.statusCancelado,
+const NEXT_ACTION: Partial<Record<PedidoStatus, { status: PedidoStatus; label: string }>> = {
+  pendente: { status: "recebido", label: "Receber" },
+  recebido: { status: "em_preparacao", label: "Iniciar Preparo" },
+  em_preparacao: { status: "pronto", label: "Marcar Pronto" },
 };
 
-const NEXT_STATUS: Partial<Record<ItemStatus, { status: ItemStatus; label: string; color: string }>> = {
-  pendente: { status: "recebido", label: "Receber", color: C.statusRecebido },
-  recebido: { status: "em_preparo", label: "Iniciar Preparo", color: C.statusEmPreparo },
-  em_preparo: { status: "pronto", label: "Marcar Pronto", color: C.statusPronto },
-  pronto: { status: "entregue", label: "Confirmar Entrega", color: C.statusEntregue },
-};
-
-const SECTION_ORDER: ItemStatus[] = ["pendente", "recebido", "em_preparo", "pronto"];
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: "" };
-  if (typeof source === "string") return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-function KitchenCard({
-  item,
-  onStatusChange,
+function PedidoCard({
+  pedido,
+  onAction,
   index,
 }: {
-  item: KitchenQueueItem;
-  onStatusChange: (itemId: string, newStatus: ItemStatus) => Promise<void>;
+  pedido: Pedido;
+  onAction: (id: string, status: PedidoStatus) => Promise<void>;
   index: number;
 }) {
   const COLORS = useColors();
@@ -62,27 +42,37 @@ function KitchenCard({
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateY]);
 
-  const statusColor = STATUS_COLORS[item.status] || COLORS.textSecondary;
-  const timeStr = formatRelativeTime(item.requested_at);
-  const diffMs = Date.now() - new Date(item.requested_at).getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const isUrgent = diffMin > 15;
-  const nextAction = NEXT_STATUS[item.status];
-  const statusLabel = getItemStatusLabel(item.status);
-  const imageSource = resolveImageSource(item.dish_image_url);
+  const elapsed = formatElapsed(pedido.sent_at);
+  const diffMin = Math.floor((Date.now() - new Date(pedido.sent_at).getTime()) / 60000);
+  const isUrgent = diffMin > 20;
+  const isWarning = diffMin > 10 && !isUrgent;
+  const borderColor = isUrgent ? C.danger + "60" : isWarning ? C.warning + "60" : COLORS.border;
+  const nextAction = NEXT_ACTION[pedido.status];
+  const statusColor = getPedidoStatusColor(pedido.status);
+  const statusLabel = getPedidoStatusLabel(pedido.status);
+  const mesaNum = pedido.mesa?.numero ?? "?";
+  const garcomName = pedido.garcom?.name ?? "—";
 
   const handleAction = async () => {
     if (!nextAction) return;
-    console.log("[Cozinha] Status change button pressed:", item.item_id, "->", nextAction.status);
+    console.log("[Cozinha] Action button pressed:", pedido.id, "->", nextAction.status);
     setUpdating(true);
     try {
-      await onStatusChange(item.item_id, nextAction.status);
+      await onAction(pedido.id, nextAction.status);
     } finally {
       setUpdating(false);
     }
   };
+
+  const actionBgColor = nextAction
+    ? nextAction.status === "recebido"
+      ? C.statusRecebido
+      : nextAction.status === "em_preparacao"
+      ? C.statusEmPreparo
+      : C.statusPronto
+    : COLORS.primary;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -93,12 +83,11 @@ function KitchenCard({
           marginHorizontal: 16,
           marginBottom: 10,
           borderWidth: 1.5,
-          borderColor: isUrgent ? C.danger + "40" : COLORS.border,
+          borderColor,
           boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
           overflow: "hidden",
         }}
       >
-        {/* Urgent indicator */}
         {isUrgent && (
           <View style={{ backgroundColor: C.danger + "15", paddingHorizontal: 16, paddingVertical: 6 }}>
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: C.danger }}>
@@ -107,40 +96,33 @@ function KitchenCard({
           </View>
         )}
 
-        <View style={{ padding: 14, flexDirection: "row", gap: 12 }}>
-          {/* Dish image */}
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 12,
-              backgroundColor: COLORS.surfaceSecondary,
-              overflow: "hidden",
-            }}
-          >
-            {item.dish_image_url ? (
-              <Image
-                source={imageSource}
-                style={{ width: "100%", height: "100%" }}
-                contentFit="cover"
-                transition={200}
-              />
-            ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <ChefHat size={24} color={COLORS.textTertiary} />
-              </View>
-            )}
-          </View>
-
-          {/* Info */}
-          <View style={{ flex: 1, gap: 4 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Text
-                numberOfLines={2}
-                style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, flex: 1, marginRight: 8 }}
+        <View style={{ padding: 14, gap: 10 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {item.dish_name}
-              </Text>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>
+                  {mesaNum}
+                </Text>
+              </View>
+              <View>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
+                  Mesa {mesaNum}
+                </Text>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                  {garcomName}
+                </Text>
+              </View>
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 4 }}>
               <View
                 style={{
                   backgroundColor: statusColor + "20",
@@ -153,58 +135,61 @@ function KitchenCard({
                   {statusLabel}
                 </Text>
               </View>
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
-                Mesa {item.table_number}
-              </Text>
-              {item.waiter_name && (
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-                  {item.waiter_name}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Clock size={11} color={isUrgent ? C.danger : COLORS.textSecondary} />
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: isUrgent ? C.danger : COLORS.textSecondary }}>
+                  {elapsed}
                 </Text>
-              )}
+              </View>
             </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Clock size={12} color={isUrgent ? C.danger : COLORS.textSecondary} />
-              <Text
-                style={{
-                  fontFamily: "Outfit_400Regular",
-                  fontSize: 12,
-                  color: isUrgent ? C.danger : COLORS.textSecondary,
-                }}
-              >
-                {timeStr}
-              </Text>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: COLORS.text, marginLeft: 8 }}>
-                x{item.quantity}
-              </Text>
-            </View>
-
-            {item.notes && (
-              <Text
-                style={{
-                  fontFamily: "Outfit_400Regular",
-                  fontSize: 12,
-                  color: COLORS.textSecondary,
-                  fontStyle: "italic",
-                }}
-              >
-                Obs: {item.notes}
-              </Text>
-            )}
           </View>
+
+          {/* Itens */}
+          <View style={{ gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+            {pedido.itens.map((item) => (
+              <View key={item.id} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    backgroundColor: COLORS.primaryMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
+                    {item.quantidade}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
+                    {item.prato?.nome ?? "Prato"}
+                  </Text>
+                  {item.observacoes ? (
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
+                      {item.observacoes}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {pedido.observacoes ? (
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>
+              Obs: {pedido.observacoes}
+            </Text>
+          ) : null}
         </View>
 
-        {/* Action button */}
         {nextAction && (
           <AnimatedPressable
             onPress={handleAction}
             disabled={updating}
             style={{
-              backgroundColor: nextAction.color,
-              paddingVertical: 12,
+              backgroundColor: actionBgColor,
+              paddingVertical: 13,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -227,18 +212,19 @@ export default function CozinhaScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
 
-  const [items, setItems] = useState<KitchenQueueItem[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  const fetchQueue = useCallback(async () => {
+  const fetchFila = useCallback(async () => {
     console.log("[Cozinha] Fetching kitchen queue");
     try {
-      const res = await apiGet<any>("/api/kitchen/queue");
-      const list: KitchenQueueItem[] = Array.isArray(res) ? res : (res.items || []);
-      setItems(list);
+      const res = await apiGet<any>("/api/cozinha/fila");
+      const list: Pedido[] = Array.isArray(res) ? res : (res.pedidos || []);
+      const sorted = list.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
+      setPedidos(sorted);
       setLastRefresh(new Date());
       setError("");
     } catch (e: any) {
@@ -251,55 +237,38 @@ export default function CozinhaScreen() {
   }, []);
 
   useEffect(() => {
-    fetchQueue();
+    fetchFila();
     const interval = setInterval(() => {
       console.log("[Cozinha] Auto-refresh");
-      fetchQueue();
+      fetchFila();
     }, 15000);
     return () => clearInterval(interval);
-  }, [fetchQueue]);
+  }, [fetchFila]);
 
   const handleRefresh = () => {
-    console.log("[Cozinha] Manual refresh button pressed");
+    console.log("[Cozinha] Manual refresh");
     setRefreshing(true);
-    fetchQueue();
+    fetchFila();
   };
 
-  const handleStatusChange = async (itemId: string, newStatus: ItemStatus) => {
-    console.log("[Cozinha] Updating item status:", itemId, "->", newStatus);
+  const handleAction = async (id: string, status: PedidoStatus) => {
+    console.log("[Cozinha] PATCH pedido status:", id, "->", status);
     try {
-      await apiPut(`/api/kitchen/items/${itemId}/status`, { status: newStatus });
-      console.log("[Cozinha] Status updated successfully, refreshing queue");
-      await fetchQueue();
+      await apiPatch(`/api/pedidos/${id}/status`, { status });
+      console.log("[Cozinha] Status updated, refreshing");
+      await fetchFila();
     } catch (e) {
       console.error("[Cozinha] Status update error:", e);
     }
   };
 
-  // Group by status sections
-  const sections = SECTION_ORDER.map((status) => ({
-    status,
-    data: items.filter((i) => i.status === status),
-  })).filter((s) => s.data.length > 0);
-
-  const flatData: Array<{ type: "header"; status: ItemStatus } | { type: "item"; item: KitchenQueueItem; index: number }> = [];
-  let globalIndex = 0;
-  sections.forEach((section) => {
-    flatData.push({ type: "header", status: section.status });
-    section.data.forEach((item) => {
-      flatData.push({ type: "item", item, index: globalIndex++ });
-    });
-  });
-
-  const pendingCount = items.filter((i) => i.status === "pendente").length;
-  const inProgressCount = items.filter((i) => i.status === "em_preparo" || i.status === "recebido").length;
-
+  const pendingCount = pedidos.filter((p) => p.status === "pendente").length;
+  const inProgressCount = pedidos.filter((p) => p.status === "recebido" || p.status === "em_preparacao").length;
   const lastRefreshMin = Math.floor((Date.now() - lastRefresh.getTime()) / 60000);
   const lastRefreshLabel = lastRefreshMin < 1 ? "agora" : `há ${lastRefreshMin} min`;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -315,7 +284,7 @@ export default function CozinhaScreen() {
       >
         <View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Flame size={24} color={COLORS.primary} />
+            <Flame size={22} color={COLORS.primary} />
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
               Fila da Cozinha
             </Text>
@@ -327,7 +296,7 @@ export default function CozinhaScreen() {
         <View style={{ alignItems: "flex-end", gap: 4 }}>
           <AnimatedPressable
             onPress={handleRefresh}
-            accessibilityLabel="Atualizar fila da cozinha"
+            accessibilityLabel="Atualizar fila"
             style={{
               width: 40,
               height: 40,
@@ -355,7 +324,7 @@ export default function CozinhaScreen() {
             Erro ao carregar fila
           </Text>
           <AnimatedPressable
-            onPress={fetchQueue}
+            onPress={fetchFila}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
           >
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
@@ -365,44 +334,16 @@ export default function CozinhaScreen() {
         </View>
       ) : (
         <FlatList
-          data={flatData}
-          keyExtractor={(item, i) =>
-            item.type === "header" ? `header-${item.status}` : `item-${item.item.item_id}`
-          }
+          data={pedidos}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
           }
-          renderItem={({ item }) => {
-            if (item.type === "header") {
-              const color = STATUS_COLORS[item.status] || COLORS.textSecondary;
-              const label = getItemStatusLabel(item.status);
-              return (
-                <View
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>
-                    {label}
-                  </Text>
-                </View>
-              );
-            }
-            return (
-              <KitchenCard
-                item={item.item}
-                onStatusChange={handleStatusChange}
-                index={item.index}
-              />
-            );
-          }}
+          renderItem={({ item, index }) => (
+            <PedidoCard pedido={item} onAction={handleAction} index={index} />
+          )}
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <View
@@ -415,7 +356,7 @@ export default function CozinhaScreen() {
                   justifyContent: "center",
                 }}
               >
-                <Flame size={32} color={COLORS.primary} />
+                <ChefHat size={32} color={COLORS.primary} />
               </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
                 Fila vazia

@@ -51,7 +51,7 @@ export default function AuthScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
     if (!loading && user) {
@@ -60,7 +60,7 @@ export default function AuthScreen() {
       console.log("[AuthScreen] User authenticated, role:", role, "-> redirecting to:", route);
       router.replace(route as any);
     }
-  }, [user, loading]);
+  }, [user, loading, router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {

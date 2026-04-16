@@ -106,7 +106,7 @@ export default function NewUserScreen() {
         </AnimatedPressable>
       ),
     });
-  }, [navigation, COLORS]);
+  }, [navigation, COLORS, router]);
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }

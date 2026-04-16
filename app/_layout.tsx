@@ -64,58 +64,44 @@ export default function RootLayout() {
                   <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                   <Stack.Screen
-                    name="order/[id]"
-                    options={{
-                      headerShown: true,
-                      title: "Comanda",
-                      presentation: "card",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="comanda/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
                   />
                   <Stack.Screen
-                    name="order/new"
-                    options={{
-                      headerShown: true,
-                      title: "Nova Comanda",
-                      presentation: "modal",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="mesa/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
                   />
                   <Stack.Screen
-                    name="dish/[id]"
-                    options={{
-                      headerShown: true,
-                      title: "Prato",
-                      presentation: "card",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="pedido/novo"
+                    options={{ headerShown: true, presentation: "modal" }}
                   />
                   <Stack.Screen
-                    name="dish/new"
-                    options={{
-                      headerShown: true,
-                      title: "Novo Prato",
-                      presentation: "modal",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="pedido/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
                   />
                   <Stack.Screen
-                    name="user/[id]"
-                    options={{
-                      headerShown: true,
-                      title: "Usuário",
-                      presentation: "card",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="prato/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
                   />
                   <Stack.Screen
-                    name="user/new"
-                    options={{
-                      headerShown: true,
-                      title: "Novo Usuário",
-                      presentation: "modal",
-                      headerTintColor: "#E8521A",
-                    }}
+                    name="prato/novo"
+                    options={{ headerShown: true, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name="prato/editar/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="categoria/index"
+                    options={{ headerShown: true, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="usuario/novo"
+                    options={{ headerShown: true, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name="usuario/[id]"
+                    options={{ headerShown: true, presentation: "card" }}
                   />
                 </Stack>
                 <SystemBars style="auto" />

@@ -128,7 +128,7 @@ export default function DishDetailScreen() {
       return;
     }
     fetchData();
-  }, [fetchData, canEdit]);
+  }, [fetchData, canEdit, router]);
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }

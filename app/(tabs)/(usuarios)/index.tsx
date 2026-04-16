@@ -33,12 +33,11 @@ function UserCard({ user, onPress, index }: { user: User; onPress: () => void; i
       Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [index, opacity, translateY]);
 
   const roleColor = ROLE_COLORS[user.role] || COLORS.textSecondary;
   const initials = getInitials(user.name || user.email);
   const roleLabel = getRoleLabel(user.role);
-  const activeLabel = user.active ? "Ativo" : "Inativo";
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -58,7 +57,6 @@ function UserCard({ user, onPress, index }: { user: User; onPress: () => void; i
           gap: 14,
         }}
       >
-        {/* Avatar */}
         <View
           style={{
             width: 48,
@@ -74,49 +72,26 @@ function UserCard({ user, onPress, index }: { user: User; onPress: () => void; i
           </Text>
         </View>
 
-        {/* Info */}
         <View style={{ flex: 1, gap: 3 }}>
-          <Text
-            numberOfLines={1}
-            style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}
-          >
+          <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
             {user.name || "Sem nome"}
           </Text>
-          <Text
-            numberOfLines={1}
-            style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}
-          >
+          <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
             {user.email}
           </Text>
         </View>
 
-        {/* Role badge + active */}
-        <View style={{ alignItems: "flex-end", gap: 6 }}>
-          <View
-            style={{
-              backgroundColor: roleColor + "20",
-              borderRadius: 8,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: roleColor }}>
-              {roleLabel}
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <View
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                backgroundColor: user.active ? COLORS.success : COLORS.textTertiary,
-              }}
-            />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-              {activeLabel}
-            </Text>
-          </View>
+        <View
+          style={{
+            backgroundColor: roleColor + "20",
+            borderRadius: 8,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+          }}
+        >
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: roleColor }}>
+            {roleLabel}
+          </Text>
         </View>
       </AnimatedPressable>
     </Animated.View>
@@ -159,7 +134,6 @@ export default function UsuariosScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -204,7 +178,7 @@ export default function UsuariosScreen() {
               user={item}
               onPress={() => {
                 console.log("[Usuarios] User pressed:", item.id);
-                router.push(`/user/${item.id}`);
+                router.push(`/usuario/${item.id}`);
               }}
               index={index}
             />
@@ -237,11 +211,10 @@ export default function UsuariosScreen() {
         />
       )}
 
-      {/* FAB */}
       <AnimatedPressable
         onPress={() => {
           console.log("[Usuarios] FAB - new user");
-          router.push("/user/new");
+          router.push("/usuario/novo");
         }}
         style={{
           position: "absolute",

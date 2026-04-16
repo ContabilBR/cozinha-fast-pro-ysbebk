@@ -67,7 +67,7 @@ export default function OrderDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, navigation]);
 
   useEffect(() => { fetchOrder(); }, [fetchOrder]);
 

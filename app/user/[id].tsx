@@ -95,7 +95,7 @@ export default function UserDetailScreen() {
       setName(data.name);
       setEmail(data.email);
       setRole(data.role);
-      setActive(data.active);
+      setActive(true);
     } catch (e) {
       console.error("[UserDetail] Error:", e);
       setError("Não foi possível carregar o usuário.");

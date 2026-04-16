@@ -1,37 +1,27 @@
-import React from "react";
-import { StyleSheet, View, Text } from "react-native";
-import { useTheme } from "@react-navigation/native";
+import React, { useEffect } from "react";
+import { View, ActivityIndicator } from "react-native";
+import { Redirect } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
+import { useColors } from "@/hooks/useColors";
+import { UserRole } from "@/types";
 
-export default function HomeScreen() {
-  const theme = useTheme();
+export default function HomeRedirect() {
+  const { user, loading } = useAuth();
+  const COLORS = useColors();
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.title, { color: theme.colors.text }]}>
-        Welcome to Newly
-      </Text>
-      <Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
-        Your app is currently building...
-      </Text>
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.background }}>
+        <ActivityIndicator color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (!user) return <Redirect href="/auth-screen" />;
+
+  const role = ((user as any).role as UserRole) || "garcom";
+
+  if (role === "cozinheiro") return <Redirect href="/(tabs)/(cozinha)" />;
+  if (role === "gerente" || role === "administrador") return <Redirect href="/(tabs)/(dashboard)" />;
+  return <Redirect href="/(tabs)/(mesas)" />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-});

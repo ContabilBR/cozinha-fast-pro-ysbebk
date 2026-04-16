@@ -1,13 +1,91 @@
-export type UserRole = 'garcom' | 'administrador' | 'gerente' | 'cozinheiro';
+export type UserRole = 'garcom' | 'cozinheiro' | 'gerente' | 'administrador';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  active: boolean;
-  created_at: string;
 }
+
+export interface Categoria {
+  id: string;
+  nome: string;
+  descricao?: string;
+}
+
+export interface Prato {
+  id: string;
+  nome: string;
+  descricao?: string;
+  preco: number;
+  categoria_id?: string;
+  categoria?: Categoria;
+  imagem_url?: string;
+  tempo_preparo: number;
+  disponivel: boolean;
+  restricoes?: string;
+  adicionais?: string;
+}
+
+export interface Mesa {
+  id: string;
+  numero: number;
+  capacidade: number;
+  status: 'livre' | 'ocupada' | 'aguardando_pedido' | 'em_preparacao' | 'pedido_pronto' | 'finalizada';
+  garcom_id?: string;
+  garcom?: User;
+  comanda_id?: string;
+}
+
+export interface ItemPedido {
+  id: string;
+  pedido_id: string;
+  prato_id: string;
+  prato?: Prato;
+  quantidade: number;
+  preco_unitario: number;
+  observacoes?: string;
+}
+
+export type PedidoStatus = 'pendente' | 'recebido' | 'em_preparacao' | 'pronto' | 'entregue' | 'cancelado';
+
+export interface Pedido {
+  id: string;
+  comanda_id: string;
+  mesa_id: string;
+  mesa?: Mesa;
+  garcom_id: string;
+  garcom?: User;
+  status: PedidoStatus;
+  observacoes?: string;
+  sent_at: string;
+  received_at?: string;
+  started_at?: string;
+  ready_at?: string;
+  delivered_at?: string;
+  itens: ItemPedido[];
+}
+
+export type ComandaStatus = 'aberta' | 'fechada' | 'cancelada';
+
+export interface Comanda {
+  id: string;
+  mesa_id: string;
+  mesa?: Mesa;
+  garcom_id: string;
+  garcom?: User;
+  status: ComandaStatus;
+  total: number;
+  opened_at: string;
+  closed_at?: string;
+  pedidos: Pedido[];
+}
+
+// Legacy types kept for backward compat with existing components
+export type UserRole_Legacy = UserRole;
+export type TableStatus = 'livre' | 'ocupada' | 'reservada' | 'fechando';
+export type OrderStatus = 'aberta' | 'fechando' | 'fechada' | 'cancelada';
+export type ItemStatus = 'pendente' | 'recebido' | 'em_preparo' | 'pronto' | 'entregue' | 'cancelado';
 
 export interface Category {
   id: string;
@@ -30,8 +108,6 @@ export interface Dish {
   active: boolean;
 }
 
-export type TableStatus = 'livre' | 'ocupada' | 'reservada' | 'fechando';
-
 export interface Table {
   id: string;
   number: number;
@@ -41,8 +117,6 @@ export interface Table {
   active: boolean;
   current_order_id?: string;
 }
-
-export type OrderStatus = 'aberta' | 'fechando' | 'fechada' | 'cancelada';
 
 export interface Order {
   id: string;
@@ -58,8 +132,6 @@ export interface Order {
   total_amount: number;
   items?: OrderItem[];
 }
-
-export type ItemStatus = 'pendente' | 'recebido' | 'em_preparo' | 'pronto' | 'entregue' | 'cancelado';
 
 export interface OrderItem {
   id: string;
