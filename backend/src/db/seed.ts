@@ -361,12 +361,16 @@ export async function seedDatabase(app: App) {
         const dish = dishData.find((d) => d.name === itemInfo.dishName);
         if (!dish) continue;
 
+        // Find the dish in the inserted dishes by matching the index
+        const dishIndex = dishData.indexOf(dish);
+        if (dishIndex === -1 || !dishes[dishIndex]) continue;
+
         const itemAmount = parseFloat(dish.price) * itemInfo.quantity;
         totalAmount += itemAmount;
 
         await app.db.insert(schema.orderItems).values({
           orderId: orderId,
-          dishId: dishes.find((d) => d.id)?.id,
+          dishId: dishes[dishIndex].id,
           quantity: itemInfo.quantity,
           unitPrice: dish.price,
           status: itemInfo.status as any,

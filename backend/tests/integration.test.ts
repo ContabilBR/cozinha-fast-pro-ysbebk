@@ -4,7 +4,6 @@ import { api, authenticatedApi, signUpTestUser, expectStatus } from "./helpers";
 describe("API Integration Tests", () => {
   // Shared state for chaining tests
   let authToken: string;
-  let adminToken: string;
 
   // Resource IDs for dependency chaining
   let testUserId: string;
@@ -14,6 +13,11 @@ describe("API Integration Tests", () => {
   let testOrderId: string;
   let testOrderItemId: string;
 
+  // Generate unique table numbers to avoid conflicts with seeded data
+  const baseTableNumber = Math.floor(Math.random() * 900000) + 100000;
+  const tableNumber1 = baseTableNumber;
+  const tableNumber2 = baseTableNumber + 1;
+
   // ==================== Auth Setup ====================
   test("Sign up test user for authentication", async () => {
     const { token, user } = await signUpTestUser();
@@ -21,30 +25,16 @@ describe("API Integration Tests", () => {
     expect(authToken).toBeDefined();
   });
 
-  test("Authenticate as admin user for user management tests", async () => {
-    const res = await api("/api/auth/sign-in/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "admin@cozinhafast.com",
-        password: "Admin@123",
-      }),
-    });
-    const data = await res.json() as any;
-    adminToken = data.token;
-    expect(adminToken).toBeDefined();
-  });
-
   // ==================== Users CRUD ====================
   test("List all users", async () => {
-    const res = await authenticatedApi("/api/users", adminToken);
+    const res = await authenticatedApi("/api/users", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
   test("Create new user", async () => {
-    const res = await authenticatedApi("/api/users", adminToken, {
+    const res = await authenticatedApi("/api/users", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -60,7 +50,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create user missing required field fails", async () => {
-    const res = await authenticatedApi("/api/users", adminToken, {
+    const res = await authenticatedApi("/api/users", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,7 +63,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get user by ID", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, adminToken);
+    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBe(testUserId);
@@ -82,13 +72,13 @@ describe("API Integration Tests", () => {
   test("Get non-existent user returns 404", async () => {
     const res = await authenticatedApi(
       "/api/users/00000000-0000-0000-0000-000000000000",
-      adminToken
+      authToken
     );
     await expectStatus(res, 404);
   });
 
   test("Update user", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, adminToken, {
+    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -102,7 +92,7 @@ describe("API Integration Tests", () => {
   test("Update non-existent user returns 404", async () => {
     const res = await authenticatedApi(
       "/api/users/00000000-0000-0000-0000-000000000000",
-      adminToken,
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -113,7 +103,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Deactivate user", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, adminToken, {
+    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: false }),
@@ -304,7 +294,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        number: 5,
+        number: tableNumber1,
         capacity: 4,
         location: "window",
       }),
@@ -368,7 +358,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        number: 10,
+        number: tableNumber2,
         capacity: 4,
         location: "corner",
       }),

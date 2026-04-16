@@ -117,7 +117,7 @@ export function registerTableRoutes(app: App) {
           "Creating table"
         );
 
-        const tables = await app.db
+        const [table] = await app.db
           .insert(schema.tables)
           .values({
             number: request.body.number,
@@ -128,12 +128,11 @@ export function registerTableRoutes(app: App) {
           })
           .returning();
 
-        if (!tables || tables.length === 0) {
-          app.logger.error({}, "Insert returned no rows");
+        if (!table || !table.id) {
+          app.logger.error({}, "Failed to create table - invalid response");
           return reply.status(500).send({ error: "Failed to create table" });
         }
 
-        const table = tables[0];
         app.logger.info({ tableId: table.id }, "Table created");
 
         return reply.status(201).send({

@@ -175,6 +175,10 @@ export function registerOrderRoutes(app: App) {
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
           .where(eq(schema.orders.id, order.id));
 
+        if (!rows || rows.length === 0) {
+          return reply.status(500).send({ error: "Failed to retrieve created order" });
+        }
+
         const row = rows[0];
         app.logger.info({ orderId: order.id }, "Order created");
 

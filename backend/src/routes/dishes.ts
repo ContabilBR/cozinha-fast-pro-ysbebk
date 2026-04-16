@@ -169,6 +169,10 @@ export function registerDishRoutes(app: App) {
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
           .where(eq(schema.dishes.id, dish.id));
 
+        if (!rows || rows.length === 0) {
+          return reply.status(500).send({ error: "Failed to retrieve created dish" });
+        }
+
         const row = rows[0];
         return reply.status(201).send({
           id: row.dishes.id,
