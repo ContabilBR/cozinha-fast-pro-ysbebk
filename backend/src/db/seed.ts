@@ -33,69 +33,97 @@ const seedAuthUsers = [
 ];
 
 const seedCategorias = [
-  { nome: "Entradas", descricao: "Aperitivos e entradas" },
-  { nome: "Pratos Principais", descricao: "Pratos principais do cardápio" },
-  { nome: "Sobremesas", descricao: "Doces e sobremesas" },
-  { nome: "Bebidas", descricao: "Bebidas quentes e frias" },
-  { nome: "Lanches", descricao: "Sanduíches e lanches" },
+  { nome: "Entradas", descricao: "Aperitivos e entradas leves" },
+  { nome: "Pratos Principais", descricao: "Pratos quentes e frios principais" },
+  { nome: "Sobremesas", descricao: "Doces e sobremesas variadas" },
+  { nome: "Bebidas", descricao: "Bebidas quentes, frias e alcoólicas" },
+  { nome: "Lanches", descricao: "Sanduíches, hambúrgueres e lanches rápidos" },
 ];
 
 const seedPratos = [
   {
-    nome: "Coxinha de Frango",
-    descricao: "Coxinha crocante recheada com frango desfiado",
-    preco: "8.50",
+    nome: "Bruschetta ao Tomate",
+    descricao: "Pão crocante com tomate fresco, alho e manjericão",
+    preco: "18.90",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato1/400/300",
   },
   {
-    nome: "Pão de Queijo",
-    descricao: "Pão de queijo mineiro quentinho",
-    preco: "5.00",
+    nome: "Carpaccio de Carne",
+    descricao: "Carne bovina cortada finíssima com limão e azeite",
+    preco: "32.50",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato2/400/300",
   },
   {
-    nome: "Frango Grelhado",
-    descricao: "Filé de frango grelhado com legumes",
-    preco: "32.90",
+    nome: "Filé Mignon ao Molho Madeira",
+    descricao: "Filé mignon grelhado com molho madeira de primeira qualidade",
+    preco: "68.90",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato3/400/300",
   },
   {
-    nome: "Picanha na Brasa",
-    descricao: "Picanha grelhada com arroz, feijão e farofa",
-    preco: "58.90",
+    nome: "Salmão Grelhado",
+    descricao: "Salmão fresco grelhado com temperos aromáticos",
+    preco: "72.00",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato4/400/300",
   },
   {
-    nome: "Moqueca de Peixe",
-    descricao: "Moqueca baiana com arroz e pirão",
-    preco: "49.90",
+    nome: "Frango à Parmegiana",
+    descricao: "Frango à milanesa coberto com molho e queijo derretido",
+    preco: "45.90",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato5/400/300",
   },
   {
-    nome: "Pudim de Leite",
-    descricao: "Pudim de leite condensado com calda de caramelo",
-    preco: "12.00",
-    categoria: "Sobremesas",
+    nome: "Risoto de Funghi",
+    descricao: "Risoto cremoso com cogumelos frescos e vinho tinto",
+    preco: "52.00",
+    categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato6/400/300",
   },
   {
-    nome: "Suco de Laranja",
-    descricao: "Suco de laranja natural 500ml",
-    preco: "9.00",
-    categoria: "Bebidas",
+    nome: "Petit Gâteau",
+    descricao: "Bolo quentinho de chocolate com calda e sorvete de baunilha",
+    preco: "22.90",
+    categoria: "Sobremesas",
     imagemUrl: "https://picsum.photos/seed/prato7/400/300",
   },
   {
-    nome: "X-Burguer Especial",
-    descricao: "Hambúrguer artesanal com queijo, alface e tomate",
-    preco: "28.90",
-    categoria: "Lanches",
+    nome: "Pudim de Leite",
+    descricao: "Pudim de leite condensado com calda de caramelo caseira",
+    preco: "14.50",
+    categoria: "Sobremesas",
     imagemUrl: "https://picsum.photos/seed/prato8/400/300",
+  },
+  {
+    nome: "Suco Natural",
+    descricao: "Suco natural de frutas frescas do dia",
+    preco: "12.00",
+    categoria: "Bebidas",
+    imagemUrl: "https://picsum.photos/seed/prato9/400/300",
+  },
+  {
+    nome: "Refrigerante",
+    descricao: "Refrigerante gelado em copo com gelo",
+    preco: "8.00",
+    categoria: "Bebidas",
+    imagemUrl: "https://picsum.photos/seed/prato10/400/300",
+  },
+  {
+    nome: "X-Burguer Artesanal",
+    descricao: "Hambúrguer artesanal com pão caseiro, queijo e bacon",
+    preco: "38.90",
+    categoria: "Lanches",
+    imagemUrl: "https://picsum.photos/seed/prato11/400/300",
+  },
+  {
+    nome: "Wrap de Frango",
+    descricao: "Wrap quente com frango grelhado, alface e molho especial",
+    preco: "29.90",
+    categoria: "Lanches",
+    imagemUrl: "https://picsum.photos/seed/prato12/400/300",
   },
 ];
 
@@ -168,43 +196,93 @@ export async function seedDatabase(app: App) {
       return;
     }
 
-    // Seed mesas (10 tables)
+    // Seed mesas (10 tables with different capacidades)
     app.logger.info("Seeding mesas");
-    for (let i = 1; i <= 10; i++) {
-      await app.db.insert(schema.mesas).values({
-        numero: i,
-        status: "livre",
-        capacidade: 4,
-      });
+    const mesasToSeed = [
+      { numero: 1, capacidade: 2 },
+      { numero: 2, capacidade: 2 },
+      { numero: 3, capacidade: 2 },
+      { numero: 4, capacidade: 2 },
+      { numero: 5, capacidade: 4 },
+      { numero: 6, capacidade: 4 },
+      { numero: 7, capacidade: 4 },
+      { numero: 8, capacidade: 4 },
+      { numero: 9, capacidade: 6 },
+      { numero: 10, capacidade: 6 },
+    ];
+    for (const mesa of mesasToSeed) {
+      try {
+        const existing = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(eq(schema.mesas.numero, mesa.numero))
+          .limit(1);
+
+        if (existing.length === 0) {
+          await app.db.insert(schema.mesas).values({
+            numero: mesa.numero,
+            capacidade: mesa.capacidade,
+            status: "livre",
+          });
+        }
+      } catch (err) {
+        app.logger.debug({ numero: mesa.numero, err }, "Mesa already exists or error on insert");
+      }
     }
     app.logger.info("Mesas seeded successfully");
 
-    // Seed categorias
+    // Seed categorias with upsert
     app.logger.info("Seeding categorias");
     const categoriaIds: Record<string, string> = {};
     for (const cat of seedCategorias) {
-      const [categoria] = await app.db
-        .insert(schema.categorias)
-        .values({
-          nome: cat.nome,
-          descricao: cat.descricao,
-        })
-        .returning();
-      categoriaIds[cat.nome] = categoria.id;
+      try {
+        const existing = await app.db
+          .select()
+          .from(schema.categorias)
+          .where(eq(schema.categorias.nome, cat.nome))
+          .limit(1);
+
+        if (existing.length > 0) {
+          categoriaIds[cat.nome] = existing[0].id;
+        } else {
+          const [categoria] = await app.db
+            .insert(schema.categorias)
+            .values({
+              nome: cat.nome,
+              descricao: cat.descricao,
+            })
+            .returning();
+          categoriaIds[cat.nome] = categoria.id;
+        }
+      } catch (err) {
+        app.logger.warn({ categoria: cat.nome, err }, "Failed to seed categoria");
+      }
     }
     app.logger.info("Categorias seeded successfully");
 
-    // Seed pratos
+    // Seed pratos with upsert
     app.logger.info("Seeding pratos");
     for (const prato of seedPratos) {
-      await app.db.insert(schema.pratos).values({
-        nome: prato.nome,
-        descricao: prato.descricao,
-        preco: prato.preco,
-        categoriaId: categoriaIds[prato.categoria],
-        imagemUrl: prato.imagemUrl,
-        disponivel: true,
-      });
+      try {
+        const existing = await app.db
+          .select()
+          .from(schema.pratos)
+          .where(eq(schema.pratos.nome, prato.nome))
+          .limit(1);
+
+        if (existing.length === 0) {
+          await app.db.insert(schema.pratos).values({
+            nome: prato.nome,
+            descricao: prato.descricao,
+            preco: prato.preco,
+            categoriaId: categoriaIds[prato.categoria],
+            imagemUrl: prato.imagemUrl,
+            disponivel: true,
+          });
+        }
+      } catch (err) {
+        app.logger.warn({ prato: prato.nome, err }, "Failed to seed prato");
+      }
     }
     app.logger.info("Pratos seeded successfully");
 

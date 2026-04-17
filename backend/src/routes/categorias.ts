@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface CreateCategoriaBody {
   nome: string;
@@ -19,7 +20,7 @@ export function registerCategoriasRoutes(app: App) {
     "/api/categorias",
     {
       schema: {
-        description: "List all categorias",
+        description: "List all categorias (requires authentication)",
         tags: ["categorias"],
         response: {
           200: {
@@ -39,10 +40,14 @@ export function registerCategoriasRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({}, "Listing categorias");
 
@@ -96,6 +101,9 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateCategoriaBody }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         if (!request.body.nome) {
           return reply.code(400).send({ error: "nome is required" });
@@ -163,6 +171,9 @@ export function registerCategoriasRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoriaBody }>,
       reply: FastifyReply
     ) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ categoriaId: request.params.id }, "Updating categoria");
 
@@ -219,6 +230,9 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ categoriaId: request.params.id }, "Deleting categoria");
 

@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth } from "../utils/auth.js";
 
 interface CreatePratoBody {
   nome: string;
@@ -27,7 +28,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos",
     {
       schema: {
-        description: "List all pratos",
+        description: "List all pratos (requires authentication)",
         tags: ["pratos"],
         response: {
           200: {
@@ -43,7 +44,6 @@ export function registerDishRoutes(app: App) {
                     descricao: { type: "string" },
                     preco: { type: "string" },
                     categoriaId: { type: "string" },
-                    categoriaNome: { type: "string" },
                     imagemUrl: { type: "string" },
                     disponivel: { type: "boolean" },
                     createdAt: { type: "string", format: "date-time" },
@@ -52,10 +52,14 @@ export function registerDishRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({}, "Listing pratos");
 
@@ -99,7 +103,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos",
     {
       schema: {
-        description: "Create a new prato",
+        description: "Create a new prato (requires authentication)",
         tags: ["pratos"],
         body: {
           type: "object",
@@ -117,21 +121,25 @@ export function registerDishRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              id: { type: "string" },
+              id: { type: "string", format: "uuid" },
               nome: { type: "string" },
               descricao: { type: ["string", "null"] },
               preco: { type: "string" },
               categoriaId: { type: ["string", "null"] },
               imagemUrl: { type: ["string", "null"] },
               disponivel: { type: "boolean" },
-              createdAt: { type: "string" },
+              createdAt: { type: "string", format: "date-time" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         if (!request.body.nome || !request.body.preco) {
           return reply.code(400).send({ error: "nome and preco are required" });
@@ -175,7 +183,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Get a prato by ID",
+        description: "Get a prato by ID (requires authentication)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -183,12 +191,28 @@ export function registerDishRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              nome: { type: "string" },
+              descricao: { type: ["string", "null"] },
+              preco: { type: "string" },
+              categoriaId: { type: ["string", "null"] },
+              imagemUrl: { type: ["string", "null"] },
+              disponivel: { type: "boolean" },
+              createdAt: { type: "string", format: "date-time" },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ pratoId: request.params.id }, "Getting prato");
 
@@ -236,7 +260,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Update a prato",
+        description: "Update a prato (requires authentication)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -258,16 +282,17 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              id: { type: "string" },
+              id: { type: "string", format: "uuid" },
               nome: { type: "string" },
               descricao: { type: ["string", "null"] },
               preco: { type: "string" },
               categoriaId: { type: ["string", "null"] },
               imagemUrl: { type: ["string", "null"] },
               disponivel: { type: "boolean" },
-              createdAt: { type: "string" },
+              createdAt: { type: "string", format: "date-time" },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -276,6 +301,9 @@ export function registerDishRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdatePratoBody }>,
       reply: FastifyReply
     ) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ pratoId: request.params.id }, "Updating prato");
 
@@ -326,7 +354,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Delete a prato",
+        description: "Delete a prato (requires authentication)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -334,12 +362,19 @@ export function registerDishRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Prato deleted" },
+          200: {
+            type: "object",
+            properties: { message: { type: "string" } },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
 
@@ -356,7 +391,7 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ pratoId: request.params.id }, "Prato deleted successfully");
 
-        return reply.code(204).send();
+        return reply.code(200).send({ message: "Prato excluído com sucesso" });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete prato");
         return reply.code(500).send({ error: "Internal server error" });

@@ -112,7 +112,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Categorias CRUD ====================
   test("List all categorias", async () => {
-    const res = await api("/api/categorias");
+    const res = await authenticatedApi("/api/categorias", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
@@ -120,7 +120,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create categoria", async () => {
-    const res = await api("/api/categorias", {
+    const res = await authenticatedApi("/api/categorias", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -134,7 +134,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create categoria missing required field returns 400", async () => {
-    const res = await api("/api/categorias", {
+    const res = await authenticatedApi("/api/categorias", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -145,7 +145,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update categoria", async () => {
-    const res = await api(`/api/categorias/${testCategoryId}`, {
+    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -156,8 +156,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent categoria returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/categorias/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -168,15 +169,16 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete categoria", async () => {
-    const res = await api(`/api/categorias/${testCategoryId}`, {
+    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, authToken, {
       method: "DELETE",
     });
     await expectStatus(res, 204);
   });
 
   test("Delete non-existent categoria returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/categorias/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "DELETE",
       }
@@ -188,7 +190,7 @@ describe("API Integration Tests", () => {
   let pratoCategoryId: string;
 
   test("Create categoria for pratos", async () => {
-    const res = await api("/api/categorias", {
+    const res = await authenticatedApi("/api/categorias", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -201,7 +203,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List all pratos", async () => {
-    const res = await api("/api/pratos");
+    const res = await authenticatedApi("/api/pratos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
@@ -209,7 +211,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create prato", async () => {
-    const res = await api("/api/pratos", {
+    const res = await authenticatedApi("/api/pratos", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -226,19 +228,20 @@ describe("API Integration Tests", () => {
   });
 
   test("Get prato by ID", async () => {
-    const res = await api(`/api/pratos/${testDishId}`);
+    const res = await authenticatedApi(`/api/pratos/${testDishId}`, authToken);
     await expectStatus(res, 200);
   });
 
   test("Get non-existent prato returns 404", async () => {
-    const res = await api(
-      "/api/pratos/00000000-0000-0000-0000-000000000000"
+    const res = await authenticatedApi(
+      "/api/pratos/00000000-0000-0000-0000-000000000000",
+      authToken
     );
     await expectStatus(res, 404);
   });
 
   test("Create prato missing required field returns 400", async () => {
-    const res = await api("/api/pratos", {
+    const res = await authenticatedApi("/api/pratos", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -250,7 +253,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update prato", async () => {
-    const res = await api(`/api/pratos/${testDishId}`, {
+    const res = await authenticatedApi(`/api/pratos/${testDishId}`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -262,8 +265,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent prato returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -274,20 +278,28 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete prato", async () => {
-    const res = await api(`/api/pratos/${testDishId}`, {
-      method: "DELETE",
-    });
-    await expectStatus(res, 204);
+    const res = await authenticatedApi(
+      `/api/pratos/${testDishId}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
   });
 
   test("Get deleted prato returns 404", async () => {
-    const res = await api(`/api/pratos/${testDishId}`);
+    const res = await authenticatedApi(
+      `/api/pratos/${testDishId}`,
+      authToken
+    );
     await expectStatus(res, 404);
   });
 
   test("Delete non-existent prato returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "DELETE",
       }
@@ -297,7 +309,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Mesas CRUD ====================
   test("List all mesas", async () => {
-    const res = await api("/api/mesas");
+    const res = await authenticatedApi("/api/mesas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
@@ -305,7 +317,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create mesa", async () => {
-    const res = await api("/api/mesas", {
+    const res = await authenticatedApi("/api/mesas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -318,19 +330,20 @@ describe("API Integration Tests", () => {
   });
 
   test("Get mesa by ID", async () => {
-    const res = await api(`/api/mesas/${testTableId}`);
+    const res = await authenticatedApi(`/api/mesas/${testTableId}`, authToken);
     await expectStatus(res, 200);
   });
 
   test("Get non-existent mesa returns 404", async () => {
-    const res = await api(
-      "/api/mesas/00000000-0000-0000-0000-000000000000"
+    const res = await authenticatedApi(
+      "/api/mesas/00000000-0000-0000-0000-000000000000",
+      authToken
     );
     await expectStatus(res, 404);
   });
 
   test("Create mesa missing required field returns 400", async () => {
-    const res = await api("/api/mesas", {
+    const res = await authenticatedApi("/api/mesas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
@@ -339,7 +352,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update mesa status", async () => {
-    const res = await api(`/api/mesas/${testTableId}`, {
+    const res = await authenticatedApi(`/api/mesas/${testTableId}`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -350,12 +363,83 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent mesa returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "disponivel" }),
+        body: JSON.stringify({ status: "livre" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete mesa when libre", async () => {
+    // Create a mesa with libre status
+    const createRes = await authenticatedApi("/api/mesas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+        status: "livre",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    // Delete it
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.id}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Delete mesa when ocupada returns 400", async () => {
+    // Create a mesa and set it to ocupada
+    const createRes = await authenticatedApi("/api/mesas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    // Update to ocupada
+    const updateRes = await authenticatedApi(
+      `/api/mesas/${mesaData.id}`,
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ocupada" }),
+      }
+    );
+    await expectStatus(updateRes, 200);
+
+    // Try to delete occupied mesa
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.id}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Delete non-existent mesa returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/mesas/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "DELETE",
       }
     );
     await expectStatus(res, 404);
@@ -365,7 +449,7 @@ describe("API Integration Tests", () => {
   let comandaMesaId: string;
 
   test("Create mesa for comanda", async () => {
-    const res = await api("/api/mesas", {
+    const res = await authenticatedApi("/api/mesas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -479,7 +563,7 @@ describe("API Integration Tests", () => {
   let pedidoPratoId: string;
 
   test("Create prato for pedidos", async () => {
-    const res = await api("/api/pratos", {
+    const res = await authenticatedApi("/api/pratos", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -718,7 +802,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Upload ====================
   test("Upload image", async () => {
-    const res = await api("/api/upload/imagem", {
+    const res = await authenticatedApi("/api/upload/imagem", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -732,7 +816,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Upload image missing filename returns 400", async () => {
-    const res = await api("/api/upload/imagem", {
+    const res = await authenticatedApi("/api/upload/imagem", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
