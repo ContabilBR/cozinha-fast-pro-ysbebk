@@ -67,6 +67,88 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Sign in with valid credentials", async () => {
+    // Create a test user for sign-in
+    const testEmail = `signin-test-${Date.now()}@example.com`;
+    const testPassword = "testPassword123456";
+
+    const signUpRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+        name: "Sign In Test User",
+      }),
+    });
+    await expectStatus(signUpRes, 201);
+
+    // Now sign in with valid credentials
+    const signInRes = await api("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+      }),
+    });
+    await expectStatus(signInRes, 200);
+    const data = await signInRes.json();
+    expect(data.token).toBeDefined();
+    expect(data.user).toBeDefined();
+    expect(data.user.id).toBeDefined();
+    expect(data.user.email).toBe(testEmail);
+  });
+
+  test("Sign in with invalid password returns 401", async () => {
+    const testEmail = `signin-fail-${Date.now()}@example.com`;
+    const testPassword = "correctPassword123456";
+
+    // Create a user
+    const signUpRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+        name: "Sign In Fail Test User",
+      }),
+    });
+    await expectStatus(signUpRes, 201);
+
+    // Try to sign in with wrong password
+    const signInRes = await api("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: "wrongPassword123456",
+      }),
+    });
+    await expectStatus(signInRes, 401);
+  });
+
+  test("Sign in with non-existent email returns 401", async () => {
+    const signInRes = await api("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent@example.com",
+        password: "anyPassword123456",
+      }),
+    });
+    await expectStatus(signInRes, 401);
+  });
+
+  test("Get database seed status", async () => {
+    const res = await api("/api/seed-status");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.users).toBeDefined();
+    expect(data.accounts).toBeDefined();
+    expect(data.profiles).toBeDefined();
+  });
+
   // ==================== Users CRUD ====================
   test("List all users", async () => {
     const res = await authenticatedApi("/api/users", authToken);

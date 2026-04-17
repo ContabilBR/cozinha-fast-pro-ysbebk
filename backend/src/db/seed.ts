@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import * as schema from "./schema/schema.js";
-import { user as userTable, account as accountTable } from "./schema/auth-schema.js";
+import { user as userTable, account as accountTable, session as sessionTable, verification as verificationTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
@@ -164,83 +164,83 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
-    // Seed auth users - ALWAYS do this to ensure admin and other users exist
-    app.logger.info("Seeding auth users");
+    // Step 1: Clean slate - delete auth-related data
+    app.logger.info("Cleaning auth data (session, verification, account, profiles, user)");
+    try {
+      // Delete in order to respect foreign keys
+      await app.db.delete(sessionTable);
+      await app.db.delete(verificationTable);
+      await app.db.delete(accountTable);
+      await app.db.delete(schema.profiles);
+      await app.db.delete(userTable);
+      app.logger.info("Auth data cleaned successfully");
+    } catch (err) {
+      app.logger.warn({ err }, "Failed to clean auth data (might not exist yet)");
+    }
+
+    // Step 2: Seed auth users using Better Auth API
+    app.logger.info("Seeding auth users via Better Auth API");
     const userIds: Record<string, string> = {};
     let garcomUserId = "";
 
     for (const seedUser of seedAuthUsers) {
       try {
-        const existing = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.email, seedUser.email))
-          .limit(1);
+        app.logger.info({ email: seedUser.email }, "Creating auth user");
 
-        const userId = existing.length > 0 ? existing[0].id : randomUUID();
-        const now = new Date();
-
-        if (existing.length === 0) {
-          await app.db.insert(userTable).values({
-            id: userId,
-            name: seedUser.name,
+        // Use Better Auth API to create user - this properly handles password hashing
+        const result = await app.auth.api.signUpEmail({
+          body: {
             email: seedUser.email,
-            emailVerified: true,
-            role: seedUser.role as any,
-            active: true,
-            createdAt: now,
-            updatedAt: now,
-          });
+            password: seedUser.password,
+            name: seedUser.name,
+          },
+        });
 
-          const hashedPassword = await bcrypt.hash(seedUser.password, 10);
-          await app.db.insert(accountTable).values({
-            id: randomUUID(),
-            accountId: userId,
-            providerId: "credential",
-            userId: userId,
-            password: hashedPassword,
-            createdAt: now,
-            updatedAt: now,
-          });
-
-          app.logger.info({ email: seedUser.email, userId }, "Auth user created");
-        } else {
-          // User exists, but verify password is correct by checking account
-          const existingAccounts = await app.db
-            .select()
-            .from(accountTable)
-            .where(eq(accountTable.userId, existing[0].id))
-            .limit(1);
-
-          if (existingAccounts.length === 0) {
-            // No account found, create it
-            const hashedPassword = await bcrypt.hash(seedUser.password, 10);
-            await app.db.insert(accountTable).values({
-              id: randomUUID(),
-              accountId: userId,
-              providerId: "credential",
-              userId: userId,
-              password: hashedPassword,
-              createdAt: now,
-              updatedAt: now,
-            });
-            app.logger.info({ email: seedUser.email, userId }, "Auth user account created");
-          }
+        if (!result.user) {
+          throw new Error("Failed to create user via auth API");
         }
+
+        const userId = result.user.id;
+
+        // Step 3: Set roles and flags
+        app.logger.info({ userId, email: seedUser.email }, "Updating user role and flags");
+        await app.db
+          .update(userTable)
+          .set({
+            role: seedUser.role as any,
+            emailVerified: true,
+            active: true,
+          })
+          .where(eq(userTable.id, userId));
+
+        // Step 5: Create profile
+        app.logger.info({ userId }, "Creating user profile");
+        await app.db.insert(schema.profiles).values({
+          id: randomUUID(),
+          userId: userId,
+          role: seedUser.role,
+          name: seedUser.name,
+          createdAt: new Date(),
+        });
+
+        app.logger.info({ email: seedUser.email, userId }, "Auth user created successfully");
 
         userIds[seedUser.email] = userId;
         if (seedUser.role === "garcom") {
           garcomUserId = userId;
         }
       } catch (err) {
-        app.logger.warn({ email: seedUser.email, err }, "Failed to seed auth user");
+        app.logger.error({ email: seedUser.email, err }, "Failed to seed auth user");
+        throw err; // Re-throw to fail the seed on auth errors
       }
     }
+
+    app.logger.info("Auth users seeded successfully");
 
     // Check if already seeded (by checking mesas)
     const existingMesas = await app.db.select().from(schema.mesas).limit(1);
     if (existingMesas.length > 0) {
-      app.logger.info("Database already seeded");
+      app.logger.info("Database already seeded with mesas and other data");
       return;
     }
 
