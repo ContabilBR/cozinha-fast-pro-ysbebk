@@ -13,50 +13,37 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { TrendingUp, ShoppingBag, Grid3x3, Flame, RefreshCw, ChevronRight } from "lucide-react-native";
+import { TrendingUp, ShoppingBag, Grid3x3, Clock, RefreshCw, ChevronRight, DollarSign } from "lucide-react-native";
+import type { RelatorioResumo } from "@/types";
 
-interface ReportSummary {
-  total_revenue?: number;
-  total_orders?: number;
-  open_orders?: number;
-  avg_ticket?: number;
-  top_dishes?: { dish_name: string; quantity_sold: number }[];
-  orders_by_status?: { aberta?: number; fechada?: number; cancelada?: number };
-}
-
-interface ApiTable {
+interface ApiMesa {
   id: string;
-  number: number;
-  capacity: number;
+  numero: number;
+  capacidade: number;
   status: string;
 }
 
-interface ApiOrder {
+interface ApiComanda {
   id: string;
-  mesa: number | string;
+  mesa?: { numero?: number } | number | string;
+  mesa_id?: string;
   status: string;
   total: number;
-  items_count: number;
-  opened_at: string;
+  pedidos_count?: number;
+  opened_at?: string;
   created_at?: string;
 }
 
-const ORDER_STATUS_LABELS: Record<string, string> = {
+const COMANDA_STATUS_LABELS: Record<string, string> = {
   aberta: "Aberta",
-  open: "Aberta",
   fechada: "Fechada",
-  closed: "Fechada",
   cancelada: "Cancelada",
-  cancelled: "Cancelada",
 };
 
-const ORDER_STATUS_COLORS: Record<string, string> = {
+const COMANDA_STATUS_COLORS: Record<string, string> = {
   aberta: "#22C55E",
-  open: "#22C55E",
   fechada: "#94A3B8",
-  closed: "#94A3B8",
   cancelada: "#EF4444",
-  cancelled: "#EF4444",
 };
 
 function StatCard({
@@ -116,14 +103,23 @@ function StatCard({
   );
 }
 
+const EMPTY_RESUMO: RelatorioResumo = {
+  total_mesas: 0,
+  mesas_ocupadas: 0,
+  comandas_abertas: 0,
+  pedidos_pendentes: 0,
+  receita_hoje: 0,
+  receita_semana: 0,
+};
+
 export default function DashboardScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [summary, setSummary] = useState<ReportSummary>({});
-  const [tables, setTables] = useState<ApiTable[]>([]);
-  const [recentOrders, setRecentOrders] = useState<ApiOrder[]>([]);
+  const [resumo, setResumo] = useState<RelatorioResumo>(EMPTY_RESUMO);
+  const [tables, setTables] = useState<ApiMesa[]>([]);
+  const [recentComandas, setRecentComandas] = useState<ApiComanda[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -132,33 +128,55 @@ export default function DashboardScreen() {
   const fetchData = useCallback(async () => {
     console.log("[Dashboard] Fetching dashboard data");
     try {
-      const [summaryRes, tablesRes, ordersRes] = await Promise.all([
+      const [resumoRes, tablesRes, comandasRes] = await Promise.all([
         apiGet<any>("/api/relatorios/resumo").catch((e) => {
           console.error("[Dashboard] relatorios/resumo error:", e instanceof Error ? e.message : String(e));
-          return {};
+          return null;
         }),
         apiGet<any>("/api/mesas").catch((e) => {
           console.error("[Dashboard] mesas error:", e instanceof Error ? e.message : String(e));
-          return [];
+          return null;
         }),
         apiGet<any>("/api/comandas").catch((e) => {
           console.error("[Dashboard] comandas error:", e instanceof Error ? e.message : String(e));
-          return [];
+          return null;
         }),
       ]);
 
-      const summaryData: ReportSummary = summaryRes || {};
-      const tableList: ApiTable[] = Array.isArray(tablesRes) ? tablesRes : (tablesRes.mesas || []);
-      const orderList: ApiOrder[] = Array.isArray(ordersRes) ? ordersRes : (ordersRes.comandas || []);
+      // Unwrap resumo — handle both direct object and nested
+      if (resumoRes && typeof resumoRes === "object") {
+        const r = resumoRes.resumo || resumoRes;
+        setResumo({
+          total_mesas: Number(r.total_mesas ?? 0),
+          mesas_ocupadas: Number(r.mesas_ocupadas ?? 0),
+          comandas_abertas: Number(r.comandas_abertas ?? 0),
+          pedidos_pendentes: Number(r.pedidos_pendentes ?? 0),
+          receita_hoje: Number(r.receita_hoje ?? 0),
+          receita_semana: Number(r.receita_semana ?? 0),
+        });
+        console.log("[Dashboard] Resumo loaded:", r);
+      }
 
-      console.log("[Dashboard] Loaded summary, tables:", tableList.length, "orders:", orderList.length);
-      setSummary(summaryData);
+      const tableList: ApiMesa[] = tablesRes
+        ? (Array.isArray(tablesRes) ? tablesRes : (tablesRes.mesas || []))
+        : [];
+      console.log("[Dashboard] Tables loaded:", tableList.length);
       setTables(tableList);
-      const sorted = orderList.sort((a, b) => new Date(b.opened_at ?? b.created_at ?? "").getTime() - new Date(a.opened_at ?? a.created_at ?? "").getTime());
-      setRecentOrders(sorted.slice(0, 5));
+
+      const comandaList: ApiComanda[] = comandasRes
+        ? (Array.isArray(comandasRes) ? comandasRes : (comandasRes.comandas || []))
+        : [];
+      const sorted = [...comandaList].sort((a, b) => {
+        const dateA = new Date(a.opened_at ?? a.created_at ?? "").getTime();
+        const dateB = new Date(b.opened_at ?? b.created_at ?? "").getTime();
+        return dateB - dateA;
+      });
+      setRecentComandas(sorted.slice(0, 5));
+      console.log("[Dashboard] Comandas loaded:", comandaList.length);
+
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (e) {
-      console.error("[Dashboard] Error:", e);
+      console.error("[Dashboard] Unexpected error:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -173,12 +191,12 @@ export default function DashboardScreen() {
     fetchData();
   };
 
-  const totalRevenue = formatCurrency(summary.total_revenue ?? 0);
-  const openOrders = String(summary.open_orders ?? 0);
-  const totalOrders = String(summary.total_orders ?? 0);
-  const avgTicket = formatCurrency(summary.avg_ticket ?? 0);
-  const occupiedCount = tables.filter((t) => t.status !== "livre" && t.status !== "free").length;
-  const totalTables = tables.length;
+  const totalMesasStr = String(resumo.total_mesas || tables.length || 0);
+  const mesasOcupadasStr = String(resumo.mesas_ocupadas || tables.filter((t) => t.status !== "livre").length || 0);
+  const comandasAbertasStr = String(resumo.comandas_abertas);
+  const pedidosPendentesStr = String(resumo.pedidos_pendentes);
+  const receitaHojeStr = formatCurrency(resumo.receita_hoje);
+  const receitaSemanaStr = formatCurrency(resumo.receita_semana);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -226,69 +244,60 @@ export default function DashboardScreen() {
         }
       >
         <Animated.View style={{ opacity: fadeAnim, gap: 12 }}>
+          {/* Row 1: Mesas */}
           <View style={{ flexDirection: "row", gap: 12 }}>
             <StatCard
-              title="Faturamento Total"
-              value={totalRevenue}
-              color={COLORS.success}
-              icon={<TrendingUp size={20} color={COLORS.success} />}
-              loading={loading}
-            />
-            <StatCard
-              title="Pedidos Abertos"
-              value={openOrders}
-              color={COLORS.primary}
-              icon={<ShoppingBag size={20} color={COLORS.primary} />}
-              loading={loading}
-            />
-          </View>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <StatCard
-              title="Mesas Ocupadas"
-              value={`${occupiedCount}/${totalTables}`}
+              title="Total de Mesas"
+              value={totalMesasStr}
               color="#3B82F6"
               icon={<Grid3x3 size={20} color="#3B82F6" />}
               loading={loading}
             />
             <StatCard
-              title="Ticket Médio"
-              value={avgTicket}
+              title="Mesas Ocupadas"
+              value={mesasOcupadasStr}
+              color="#E8521A"
+              icon={<Grid3x3 size={20} color="#E8521A" />}
+              loading={loading}
+            />
+          </View>
+
+          {/* Row 2: Comandas / Pedidos */}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <StatCard
+              title="Comandas Abertas"
+              value={comandasAbertasStr}
+              color={COLORS.primary}
+              icon={<ShoppingBag size={20} color={COLORS.primary} />}
+              loading={loading}
+            />
+            <StatCard
+              title="Pedidos Pendentes"
+              value={pedidosPendentesStr}
               color={COLORS.warning}
-              icon={<Flame size={20} color={COLORS.warning} />}
+              icon={<Clock size={20} color={COLORS.warning} />}
+              loading={loading}
+            />
+          </View>
+
+          {/* Row 3: Receita */}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <StatCard
+              title="Receita Hoje"
+              value={receitaHojeStr}
+              color={COLORS.success}
+              icon={<DollarSign size={20} color={COLORS.success} />}
+              loading={loading}
+            />
+            <StatCard
+              title="Receita da Semana"
+              value={receitaSemanaStr}
+              color="#8B5CF6"
+              icon={<TrendingUp size={20} color="#8B5CF6" />}
               loading={loading}
             />
           </View>
         </Animated.View>
-
-        {/* Top dishes */}
-        {!loading && summary.top_dishes && summary.top_dishes.length > 0 && (
-          <View>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, marginBottom: 12 }}>
-              Pratos Mais Pedidos
-            </Text>
-            <View
-              style={{
-                backgroundColor: COLORS.surface,
-                borderRadius: 16,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                gap: 10,
-              }}
-            >
-              {summary.top_dishes.slice(0, 5).map((dish, i) => (
-                <View key={dish.dish_name + i} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text, flex: 1 }}>
-                    {dish.dish_name}
-                  </Text>
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary, marginLeft: 8 }}>
-                    {dish.quantity_sold}x
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* Tables mini-grid */}
         <View>
@@ -301,13 +310,13 @@ export default function DashboardScreen() {
                   <View key={i} style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary }} />
                 ))
               : tables.map((table) => {
-                  const isOccupied = table.status !== "livre" && table.status !== "free";
+                  const isOccupied = table.status !== "livre";
                   const color = isOccupied ? "#E8521A" : "#22C55E";
                   return (
                     <AnimatedPressable
                       key={table.id}
                       onPress={() => {
-                        console.log("[Dashboard] Table mini pressed:", table.number);
+                        console.log("[Dashboard] Table mini pressed:", table.numero);
                         router.push("/(tabs)/(mesas)");
                       }}
                       style={{
@@ -322,7 +331,7 @@ export default function DashboardScreen() {
                       }}
                     >
                       <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color }}>
-                        {table.number}
+                        {table.numero}
                       </Text>
                     </AnimatedPressable>
                   );
@@ -330,15 +339,15 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Recent orders */}
+        {/* Recent comandas */}
         <View>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>
-              Últimos Pedidos
+              Últimas Comandas
             </Text>
             <AnimatedPressable
               onPress={() => {
-                console.log("[Dashboard] View all orders pressed");
+                console.log("[Dashboard] View all comandas pressed");
                 router.push("/(tabs)/(relatorios)");
               }}
               style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
@@ -358,24 +367,27 @@ export default function DashboardScreen() {
                 </View>
               ))}
             </View>
-          ) : recentOrders.length === 0 ? (
+          ) : recentComandas.length === 0 ? (
             <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border }}>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
-                Nenhum pedido recente
+                Nenhuma comanda recente
               </Text>
             </View>
           ) : (
             <View style={{ gap: 8 }}>
-              {recentOrders.map((order) => {
-                const statusColor = ORDER_STATUS_COLORS[order.status] || "#94A3B8";
-                const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status;
-                const totalStr = formatCurrency(order.total);
+              {recentComandas.map((comanda) => {
+                const statusColor = COMANDA_STATUS_COLORS[comanda.status] || "#94A3B8";
+                const statusLabel = COMANDA_STATUS_LABELS[comanda.status] || comanda.status;
+                const totalStr = formatCurrency(comanda.total);
+                const mesaNum = typeof comanda.mesa === "object" && comanda.mesa !== null
+                  ? (comanda.mesa as any).numero ?? "—"
+                  : comanda.mesa ?? "—";
                 return (
                   <AnimatedPressable
-                    key={order.id}
+                    key={comanda.id}
                     onPress={() => {
-                      console.log("[Dashboard] Recent comanda pressed:", order.id);
-                      router.push(`/comanda/${order.id}`);
+                      console.log("[Dashboard] Recent comanda pressed:", comanda.id);
+                      router.push(`/comanda/${comanda.id}`);
                     }}
                     style={{
                       backgroundColor: COLORS.surface,
@@ -390,10 +402,7 @@ export default function DashboardScreen() {
                   >
                     <View style={{ gap: 3 }}>
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-                        Mesa {order.mesa}
-                      </Text>
-                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                        {order.items_count} {order.items_count === 1 ? "item" : "itens"}
+                        Mesa {mesaNum}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>
                         {totalStr}

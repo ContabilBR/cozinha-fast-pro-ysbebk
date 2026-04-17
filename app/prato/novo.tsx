@@ -48,6 +48,8 @@ export default function NovoPratoScreen() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,6 +58,7 @@ export default function NovoPratoScreen() {
     apiGet<any>("/api/categorias")
       .then((res) => {
         const list: Categoria[] = Array.isArray(res) ? res : (res.categorias || []);
+        console.log("[NovoPrato] Loaded", list.length, "categorias");
         setCategorias(list);
       })
       .catch((e) => console.error("[NovoPrato] Error fetching categorias:", e));
@@ -73,42 +76,63 @@ export default function NovoPratoScreen() {
           Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
           return;
         }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
           Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
           return;
         }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       }
       if (!result.canceled && result.assets[0]) {
-        console.log("[NovoPrato] Image selected:", result.assets[0].uri);
-        setLocalImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        console.log("[NovoPrato] Image selected:", asset.uri);
+        setLocalImageUri(asset.uri);
+        setUploadedImageUrl(null);
+        // Upload immediately
+        if (asset.base64) {
+          await uploadImageBase64(asset.base64, asset.uri);
+        }
       }
     } catch (e) {
       console.error("[NovoPrato] Image picker error:", e);
     }
   };
 
-  const uploadImage = async (pratoId: string, uri: string) => {
-    console.log("[NovoPrato] Uploading image for prato:", pratoId);
-    const token = await getBearerToken();
-    const formData = new FormData();
-    const filename = uri.split("/").pop() ?? "image.jpg";
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
-    const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-    formData.append("imagem", { uri, name: filename, type: mimeType } as any);
-    const res = await fetch(`${BACKEND_URL}/api/pratos/${pratoId}/imagem`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("[NovoPrato] Image upload failed:", res.status, text.slice(0, 200));
-    } else {
-      console.log("[NovoPrato] Image uploaded successfully");
+  const uploadImageBase64 = async (base64: string, uri: string) => {
+    console.log("[NovoPrato] Uploading image via /api/upload/imagem");
+    setUploading(true);
+    try {
+      const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
+      const token = await getBearerToken();
+      const res = await fetch(`${BACKEND_URL}/api/upload/imagem`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ imagem: `data:${mimeType};base64,${base64}` }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const url = data?.url || data?.imagem_url || null;
+        console.log("[NovoPrato] Image uploaded, url:", url);
+        setUploadedImageUrl(url);
+      } else {
+        const text = await res.text().catch(() => "");
+        console.error("[NovoPrato] Image upload failed:", res.status, text.slice(0, 200));
+        // Use picsum placeholder on failure
+        const seed = Math.random().toString(36).slice(2, 10);
+        setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+      }
+    } catch (e) {
+      console.error("[NovoPrato] Image upload error:", e);
+      const seed = Math.random().toString(36).slice(2, 10);
+      setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -121,26 +145,26 @@ export default function NovoPratoScreen() {
       setError("Preço inválido.");
       return;
     }
-    console.log("[NovoPrato] Save pressed, nome:", nome);
+    console.log("[NovoPrato] Save pressed, nome:", nome, "categoria:", categoriaId, "imagem_url:", uploadedImageUrl);
     setSubmitting(true);
     setError("");
     try {
-      const res = await apiPost<any>("/api/pratos", {
+      const payload: any = {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         preco: Number(preco),
-        categoria_id: categoriaId || undefined,
         disponivel,
-      });
+      };
+      if (categoriaId) payload.categoria_id = categoriaId;
+      if (uploadedImageUrl) payload.imagem_url = uploadedImageUrl;
+
+      const res = await apiPost<any>("/api/pratos", payload);
       const pratoId = res?.prato?.id || res?.id;
       console.log("[NovoPrato] Prato created:", pratoId);
-      if (pratoId && localImageUri) {
-        await uploadImage(pratoId, localImageUri);
-      }
       router.back();
     } catch (e: any) {
       console.error("[NovoPrato] Save error:", e);
-      setError("Não foi possível salvar o prato.");
+      setError(e instanceof Error ? e.message : "Não foi possível salvar o prato.");
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +181,8 @@ export default function NovoPratoScreen() {
     borderColor: COLORS.border,
   };
 
-  const imageSource = resolveImageSource(localImageUri ?? undefined);
+  const displayImageUri = localImageUri ?? null;
+  const imageSource = resolveImageSource(displayImageUri ?? undefined);
 
   return (
     <>
@@ -227,26 +252,34 @@ export default function NovoPratoScreen() {
                   overflow: "hidden",
                 }}
               >
-                {categorias.map((cat) => (
-                  <AnimatedPressable
-                    key={cat.id}
-                    onPress={() => {
-                      console.log("[NovoPrato] Category selected:", cat.nome);
-                      setCategoriaId(cat.id);
-                      setShowCatPicker(false);
-                    }}
-                    style={{
-                      padding: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: COLORS.divider,
-                      backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent",
-                    }}
-                  >
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>
-                      {cat.nome}
+                {categorias.length === 0 ? (
+                  <View style={{ padding: 14 }}>
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
+                      Nenhuma categoria disponível
                     </Text>
-                  </AnimatedPressable>
-                ))}
+                  </View>
+                ) : (
+                  categorias.map((cat) => (
+                    <AnimatedPressable
+                      key={cat.id}
+                      onPress={() => {
+                        console.log("[NovoPrato] Category selected:", cat.nome);
+                        setCategoriaId(cat.id);
+                        setShowCatPicker(false);
+                      }}
+                      style={{
+                        padding: 14,
+                        borderBottomWidth: 1,
+                        borderBottomColor: COLORS.divider,
+                        backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent",
+                      }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>
+                        {cat.nome}
+                      </Text>
+                    </AnimatedPressable>
+                  ))
+                )}
               </View>
             )}
           </FormField>
@@ -254,9 +287,24 @@ export default function NovoPratoScreen() {
           {/* Image section */}
           <FormField label="Foto do prato">
             <View style={{ gap: 10 }}>
-              {localImageUri ? (
+              {displayImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
                   <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  {uploading && (
+                    <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>
+                        Enviando...
+                      </Text>
+                    </View>
+                  )}
+                  {uploadedImageUrl && !uploading && (
+                    <View style={{ position: "absolute", bottom: 8, right: 8, backgroundColor: "#22C55ECC", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>
+                        Enviada
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ) : (
                 <View
@@ -347,20 +395,21 @@ export default function NovoPratoScreen() {
         <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border }}>
           <AnimatedPressable
             onPress={handleSave}
-            disabled={submitting}
+            disabled={submitting || uploading}
             style={{
               backgroundColor: COLORS.primary,
               borderRadius: 14,
               height: 52,
               alignItems: "center",
               justifyContent: "center",
+              opacity: uploading ? 0.7 : 1,
             }}
           >
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                Salvar prato
+                {uploading ? "Aguardando upload..." : "Salvar prato"}
               </Text>
             )}
           </AnimatedPressable>

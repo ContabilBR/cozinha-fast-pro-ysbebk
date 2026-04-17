@@ -26,6 +26,12 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+function getPlaceholderUrl(id: string): string {
+  // Use a deterministic picsum seed based on dish id
+  const seed = id ? id.slice(0, 8) : "prato";
+  return `https://picsum.photos/seed/${seed}/400/300`;
+}
+
 interface ApiPrato {
   id: string;
   nome: string;
@@ -68,7 +74,8 @@ function DishCard({
   }, [index, opacity, translateY]);
 
   const price = formatCurrency(prato.preco);
-  const imageSource = resolveImageSource(prato.imagem_url);
+  const imageUri = prato.imagem_url || getPlaceholderUrl(prato.id);
+  const imageSource = resolveImageSource(imageUri);
   const disponivel = prato.disponivel ?? true;
   const categoriaNome = prato.categoria?.nome;
 
@@ -86,18 +93,12 @@ function DishCard({
         }}
       >
         <View style={{ height: 130, backgroundColor: COLORS.surfaceSecondary }}>
-          {prato.imagem_url ? (
-            <Image
-              source={imageSource}
-              style={{ width: "100%", height: "100%" }}
-              contentFit="cover"
-              transition={200}
-            />
-          ) : (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-            </View>
-          )}
+          <Image
+            source={imageSource}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+            transition={200}
+          />
           {!disponivel && (
             <View
               style={{

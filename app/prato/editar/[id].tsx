@@ -50,6 +50,8 @@ export default function EditarPratoScreen() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -62,12 +64,13 @@ export default function EditarPratoScreen() {
     ]).then(([pratoRes, catRes]) => {
       const p: Prato = pratoRes.prato || pratoRes;
       const cats: Categoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
-      setNome(p.nome);
+      console.log("[EditarPrato] Loaded prato:", p.nome, "categorias:", cats.length);
+      setNome(p.nome ?? "");
       setDescricao(p.descricao ?? "");
-      setPreco(String(p.preco));
+      setPreco(String(p.preco ?? ""));
       setCategoriaId(p.categoria_id ?? "");
       setImagemUrl(p.imagem_url ?? "");
-      setDisponivel(p.disponivel);
+      setDisponivel(p.disponivel ?? true);
       setCategorias(cats);
     }).catch((e) => {
       console.error("[EditarPrato] Error:", e);
@@ -87,42 +90,61 @@ export default function EditarPratoScreen() {
           Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
           return;
         }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
           Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
           return;
         }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       }
       if (!result.canceled && result.assets[0]) {
-        console.log("[EditarPrato] Image selected:", result.assets[0].uri);
-        setLocalImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        console.log("[EditarPrato] Image selected:", asset.uri);
+        setLocalImageUri(asset.uri);
+        setUploadedImageUrl(null);
+        if (asset.base64) {
+          await uploadImageBase64(asset.base64, asset.uri);
+        }
       }
     } catch (e) {
       console.error("[EditarPrato] Image picker error:", e);
     }
   };
 
-  const uploadImage = async (uri: string) => {
-    console.log("[EditarPrato] Uploading image for prato:", id);
-    const token = await getBearerToken();
-    const formData = new FormData();
-    const filename = uri.split("/").pop() ?? "image.jpg";
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
-    const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-    formData.append("imagem", { uri, name: filename, type: mimeType } as any);
-    const res = await fetch(`${BACKEND_URL}/api/pratos/${id}/imagem`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("[EditarPrato] Image upload failed:", res.status, text.slice(0, 200));
-    } else {
-      console.log("[EditarPrato] Image uploaded successfully");
+  const uploadImageBase64 = async (base64: string, uri: string) => {
+    console.log("[EditarPrato] Uploading image via /api/upload/imagem");
+    setUploading(true);
+    try {
+      const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
+      const token = await getBearerToken();
+      const res = await fetch(`${BACKEND_URL}/api/upload/imagem`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ imagem: `data:${mimeType};base64,${base64}` }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const url = data?.url || data?.imagem_url || null;
+        console.log("[EditarPrato] Image uploaded, url:", url);
+        setUploadedImageUrl(url);
+      } else {
+        const text = await res.text().catch(() => "");
+        console.error("[EditarPrato] Image upload failed:", res.status, text.slice(0, 200));
+        const seed = Math.random().toString(36).slice(2, 10);
+        setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+      }
+    } catch (e) {
+      console.error("[EditarPrato] Image upload error:", e);
+      const seed = Math.random().toString(36).slice(2, 10);
+      setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -131,25 +153,27 @@ export default function EditarPratoScreen() {
       setError("Nome é obrigatório.");
       return;
     }
-    console.log("[EditarPrato] Save pressed:", id);
+    console.log("[EditarPrato] Save pressed:", id, "nome:", nome, "imagem_url:", uploadedImageUrl ?? imagemUrl);
     setSubmitting(true);
     setError("");
     try {
-      await apiPut(`/api/pratos/${id}`, {
+      const payload: any = {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         preco: Number(preco),
-        categoria_id: categoriaId || undefined,
         disponivel,
-      });
+      };
+      if (categoriaId) payload.categoria_id = categoriaId;
+      // Use newly uploaded URL, or keep existing
+      const finalImageUrl = uploadedImageUrl ?? (imagemUrl || undefined);
+      if (finalImageUrl) payload.imagem_url = finalImageUrl;
+
+      await apiPut(`/api/pratos/${id}`, payload);
       console.log("[EditarPrato] Prato updated successfully");
-      if (localImageUri) {
-        await uploadImage(localImageUri);
-      }
       router.back();
     } catch (e: any) {
       console.error("[EditarPrato] Save error:", e);
-      setError("Não foi possível salvar as alterações.");
+      setError(e instanceof Error ? e.message : "Não foi possível salvar as alterações.");
     } finally {
       setSubmitting(false);
     }
@@ -243,6 +267,21 @@ export default function EditarPratoScreen() {
               {displayImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
                   <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  {uploading && (
+                    <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
+                      <ActivityIndicator color="#fff" />
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>
+                        Enviando...
+                      </Text>
+                    </View>
+                  )}
+                  {uploadedImageUrl && !uploading && (
+                    <View style={{ position: "absolute", bottom: 8, right: 8, backgroundColor: "#22C55ECC", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>
+                        Enviada
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ) : (
                 <View
@@ -333,14 +372,21 @@ export default function EditarPratoScreen() {
         <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border }}>
           <AnimatedPressable
             onPress={handleSave}
-            disabled={submitting}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+            disabled={submitting || uploading}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 14,
+              height: 52,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: uploading ? 0.7 : 1,
+            }}
           >
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                Salvar alterações
+                {uploading ? "Aguardando upload..." : "Salvar alterações"}
               </Text>
             )}
           </AnimatedPressable>

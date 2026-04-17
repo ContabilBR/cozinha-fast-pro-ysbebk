@@ -54,6 +54,7 @@ export function getPedidoStatusLabel(status: PedidoStatus | string): string {
     pendente: 'Pendente',
     recebido: 'Recebido',
     em_preparacao: 'Em Preparo',
+    em_preparo: 'Em Preparo',
     pronto: 'Pronto',
     entregue: 'Entregue',
     cancelado: 'Cancelado',
@@ -66,6 +67,7 @@ export function getPedidoStatusColor(status: PedidoStatus | string): string {
     pendente: '#94A3B8',
     recebido: '#3B82F6',
     em_preparacao: '#F59E0B',
+    em_preparo: '#F59E0B',
     pronto: '#22C55E',
     entregue: '#0D9488',
     cancelado: '#EF4444',
@@ -77,6 +79,7 @@ export function getMesaStatusLabel(status: Mesa['status'] | string): string {
   const labels: Record<string, string> = {
     livre: 'Livre',
     ocupada: 'Ocupada',
+    reservada: 'Reservada',
     aguardando_pedido: 'Aguardando',
     em_preparacao: 'Em Preparo',
     pedido_pronto: 'Pronto',
@@ -89,6 +92,7 @@ export function getMesaStatusColor(status: Mesa['status'] | string): string {
   const map: Record<string, string> = {
     livre: '#22C55E',
     ocupada: '#E8521A',
+    reservada: '#F59E0B',
     aguardando_pedido: '#F59E0B',
     em_preparacao: '#3B82F6',
     pedido_pronto: '#8B5CF6',
@@ -111,6 +115,7 @@ export function getRoleLabel(role: UserRole | string | undefined | null): string
   const labels: Record<string, string> = {
     garcom: 'Garçom',
     administrador: 'Administrador',
+    admin: 'Administrador',
     gerente: 'Gerente',
     cozinheiro: 'Cozinheiro',
   };
@@ -131,5 +136,5 @@ export function getInitials(name: string | undefined | null): string {
 }
 
 export function isAdmin(role: UserRole | string | undefined | null): boolean {
-  return role === 'gerente' || role === 'administrador';
+  return role === 'gerente' || role === 'administrador' || role === 'admin';
 }

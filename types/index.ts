@@ -1,4 +1,4 @@
-export type UserRole = 'garcom' | 'cozinheiro' | 'gerente' | 'administrador';
+export type UserRole = 'garcom' | 'cozinheiro' | 'gerente' | 'administrador' | 'admin';
 
 export interface User {
   id: string;
@@ -21,7 +21,7 @@ export interface Prato {
   categoria_id?: string;
   categoria?: Categoria;
   imagem_url?: string;
-  tempo_preparo: number;
+  tempo_preparo?: number;
   disponivel: boolean;
   restricoes?: string;
   adicionais?: string;
@@ -31,7 +31,7 @@ export interface Mesa {
   id: string;
   numero: number;
   capacidade: number;
-  status: 'livre' | 'ocupada' | 'aguardando_pedido' | 'em_preparacao' | 'pedido_pronto' | 'finalizada';
+  status: 'livre' | 'ocupada' | 'reservada' | 'aguardando_pedido' | 'em_preparacao' | 'pedido_pronto' | 'finalizada';
   garcom_id?: string;
   garcom?: User;
   comanda_id?: string;
@@ -52,18 +52,24 @@ export type PedidoStatus = 'pendente' | 'recebido' | 'em_preparacao' | 'pronto' 
 export interface Pedido {
   id: string;
   comanda_id: string;
-  mesa_id: string;
+  prato_id?: string;
+  prato?: Prato;
+  mesa_id?: string;
   mesa?: Mesa;
-  garcom_id: string;
+  garcom_id?: string;
   garcom?: User;
+  quantidade?: number;
+  preco_unitario?: number;
   status: PedidoStatus;
+  observacao?: string;
   observacoes?: string;
-  sent_at: string;
+  sent_at?: string;
+  created_at?: string;
   received_at?: string;
   started_at?: string;
   ready_at?: string;
   delivered_at?: string;
-  itens: ItemPedido[];
+  itens?: ItemPedido[];
 }
 
 export type ComandaStatus = 'aberta' | 'fechada' | 'cancelada';
@@ -72,13 +78,31 @@ export interface Comanda {
   id: string;
   mesa_id: string;
   mesa?: Mesa;
-  garcom_id: string;
+  garcom_id?: string;
   garcom?: User;
   status: ComandaStatus;
   total: number;
-  opened_at: string;
+  opened_at?: string;
+  created_at?: string;
   closed_at?: string;
-  pedidos: Pedido[];
+  pedidos?: Pedido[];
+}
+
+export interface Usuario {
+  id: string;
+  nome: string;
+  name?: string;
+  email: string;
+  role: 'admin' | 'gerente' | 'garcom' | 'cozinheiro' | 'administrador';
+}
+
+export interface RelatorioResumo {
+  total_mesas: number;
+  mesas_ocupadas: number;
+  comandas_abertas: number;
+  pedidos_pendentes: number;
+  receita_hoje: number;
+  receita_semana: number;
 }
 
 // Legacy types kept for backward compat with existing components
