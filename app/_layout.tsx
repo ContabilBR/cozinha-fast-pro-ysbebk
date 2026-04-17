@@ -64,6 +64,7 @@ export default function RootLayout() {
                   <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
                   <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(gestao)" options={{ headerShown: false }} />
                   <Stack.Screen
                     name="comanda/[id]"
                     options={{ headerShown: true, presentation: "card" }}

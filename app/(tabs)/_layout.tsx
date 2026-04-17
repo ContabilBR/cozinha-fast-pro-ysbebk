@@ -35,7 +35,7 @@ function getTabsForRole(role: string): TabBarItem[] {
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
         { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
-        { name: "usuarios", route: "/(tabs)/(usuarios)", icon: "group", label: "Usuários" },
+        { name: "gestao", route: "/(tabs)/(gestao)", icon: "settings", label: "Gestão" },
         perfilTab,
       ];
     default:

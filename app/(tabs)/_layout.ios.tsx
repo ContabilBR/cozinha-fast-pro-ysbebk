@@ -72,9 +72,9 @@ export default function TabLayoutIOS() {
         <Icon sf="book.pages" />
         <Label>Cardápio</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(usuarios)">
-        <Icon sf="person.2" />
-        <Label>Usuários</Label>
+      <NativeTabs.Trigger name="(gestao)">
+        <Icon sf="gearshape" />
+        <Label>Gestão</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(perfil)">
         <Icon sf="person.circle" />
