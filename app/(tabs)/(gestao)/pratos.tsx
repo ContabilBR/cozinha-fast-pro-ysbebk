@@ -28,7 +28,13 @@ import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  if (typeof source === "string") return { uri: source };
+  if (typeof source === "string") {
+    // Handle raw base64 strings (no data: prefix)
+    if (!source.startsWith("http") && !source.startsWith("file") && !source.startsWith("data:")) {
+      return { uri: `data:image/jpeg;base64,${source}` };
+    }
+    return { uri: source };
+  }
   return source as ImageSourcePropType;
 }
 

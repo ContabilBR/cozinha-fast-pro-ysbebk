@@ -109,13 +109,13 @@ export default function EditarUsuarioScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, backgroundColor: "#fff" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56 + insets.top, paddingTop: insets.top, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
           <TouchableOpacity onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
           </TouchableOpacity>
-          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>Detalhes do Usuário</Text>
+          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>Detalhes do Usuário</Text>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={COLORS.primary} />
@@ -125,12 +125,16 @@ export default function EditarUsuarioScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -144,13 +148,12 @@ export default function EditarUsuarioScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
           Detalhes do Usuário
         </Text>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
             <TextInput value={nome} onChangeText={setNome} placeholder="Nome completo" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
           </FormField>
@@ -193,7 +196,7 @@ export default function EditarUsuarioScreen() {
           <AnimatedPressable
             onPress={() => { console.log("[EditarUsuario] Salvar alterações pressionado"); handleSave(); }}
             disabled={submitting}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginBottom: insets.bottom + 8 }}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
           >
             {submitting ? (
               <ActivityIndicator color="#fff" />
@@ -202,7 +205,6 @@ export default function EditarUsuarioScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

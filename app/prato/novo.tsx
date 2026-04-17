@@ -25,7 +25,12 @@ import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  if (typeof source === "string") return { uri: source };
+  if (typeof source === "string") {
+    if (!source.startsWith("http") && !source.startsWith("file") && !source.startsWith("data:")) {
+      return { uri: `data:image/jpeg;base64,${source}` };
+    }
+    return { uri: source };
+  }
   return source as ImageSourcePropType;
 }
 
@@ -159,12 +164,16 @@ export default function NovoPratoScreen() {
   const imageSource = resolveImageSource(localImageUri ?? undefined);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -178,13 +187,12 @@ export default function NovoPratoScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
           Novo Prato
         </Text>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
             <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Frango Grelhado" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
           </FormField>
@@ -282,7 +290,7 @@ export default function NovoPratoScreen() {
           <AnimatedPressable
             onPress={() => { console.log("[NovoPrato] Salvar prato pressionado"); handleSave(); }}
             disabled={submitting || uploading}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1, marginBottom: insets.bottom + 8 }}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1 }}
           >
             {submitting || uploading ? (
               <ActivityIndicator color="#fff" />
@@ -291,7 +299,6 @@ export default function NovoPratoScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

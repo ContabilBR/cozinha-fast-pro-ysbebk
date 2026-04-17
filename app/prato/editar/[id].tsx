@@ -25,7 +25,12 @@ import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: "" };
-  if (typeof source === "string") return { uri: source };
+  if (typeof source === "string") {
+    if (!source.startsWith("http") && !source.startsWith("file") && !source.startsWith("data:")) {
+      return { uri: `data:image/jpeg;base64,${source}` };
+    }
+    return { uri: source };
+  }
   return source as ImageSourcePropType;
 }
 
@@ -173,13 +178,13 @@ export default function EditarPratoScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, backgroundColor: "#fff" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56 + insets.top, paddingTop: insets.top, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
           <TouchableOpacity onPress={() => { console.log("[EditarPrato] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
           </TouchableOpacity>
-          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>Editar Prato</Text>
+          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>Editar Prato</Text>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={COLORS.primary} />
@@ -189,12 +194,16 @@ export default function EditarPratoScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -208,13 +217,12 @@ export default function EditarPratoScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
           Editar Prato
         </Text>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
             <TextInput value={nome} onChangeText={setNome} placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
           </FormField>
@@ -311,7 +319,7 @@ export default function EditarPratoScreen() {
           <AnimatedPressable
             onPress={() => { console.log("[EditarPrato] Salvar alterações pressionado"); handleSave(); }}
             disabled={submitting || uploading}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1, marginBottom: insets.bottom + 8 }}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1 }}
           >
             {submitting || uploading ? (
               <ActivityIndicator color="#fff" />
@@ -320,7 +328,6 @@ export default function EditarPratoScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
