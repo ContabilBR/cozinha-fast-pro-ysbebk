@@ -13,10 +13,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { getInitials, getRoleLabel } from "@/utils/helpers";
+import { getInitials } from "@/utils/helpers";
 import { X, Users, Search } from "lucide-react-native";
 
 interface ApiGarcom {
@@ -24,16 +25,17 @@ interface ApiGarcom {
   nome?: string;
   name?: string;
   email: string;
-  role: string;
+  role?: string;
 }
 
 function getDisplayName(u: ApiGarcom): string {
-  return u.nome || u.name || "";
+  return u.name || u.nome || "";
 }
 
 export default function GestaoGarconsScreen() {
   const COLORS = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [garcons, setGarcons] = useState<ApiGarcom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,27 +52,16 @@ export default function GestaoGarconsScreen() {
   const [modalError, setModalError] = useState("");
 
   const fetchGarcons = useCallback(async () => {
-    console.log("[GestaoGarcons] GET /api/usuarios (role=garcom)");
+    console.log("[GestaoGarcons] GET /api/garcons");
     try {
-      const res = await apiGet<any>("/api/usuarios");
-      const all: ApiGarcom[] = Array.isArray(res) ? res : (res.usuarios || res.users || []);
-      const filtered = all.filter((u) => u.role === "garcom" || u.role === "waiter" || u.role === "garçom");
-      console.log("[GestaoGarcons] Carregados", filtered.length, "garçons");
-      setGarcons(filtered);
+      const res = await apiGet<any>("/api/garcons");
+      const list: ApiGarcom[] = Array.isArray(res) ? res : (res.garcons || []);
+      console.log("[GestaoGarcons] Carregados", list.length, "garçons");
+      setGarcons(list);
       setError("");
     } catch (e: unknown) {
       console.error("[GestaoGarcons] Erro:", e);
-      try {
-        console.log("[GestaoGarcons] Fallback GET /api/garcons");
-        const res2 = await apiGet<any>("/api/garcons");
-        const list: ApiGarcom[] = Array.isArray(res2) ? res2 : (res2.garcons || []);
-        console.log("[GestaoGarcons] Fallback carregados", list.length, "garçons");
-        setGarcons(list);
-        setError("");
-      } catch (e2: unknown) {
-        console.error("[GestaoGarcons] Fallback erro:", e2);
-        setError("Não foi possível carregar os garçons.");
-      }
+      setError("Não foi possível carregar os garçons.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -115,20 +106,17 @@ export default function GestaoGarconsScreen() {
             setSaving(true); setModalError("");
             try {
               if (editingGarcom) {
-                const payload: Record<string, unknown> = { nome: nome.trim(), name: nome.trim(), email: email.trim(), role: "garcom" };
-                if (senha.trim()) payload.senha = senha;
-                console.log("[GestaoGarcons] PUT /api/usuarios/" + editingGarcom.id);
-                await apiPut(`/api/usuarios/${editingGarcom.id}`, payload);
+                const payload: Record<string, unknown> = { name: nome.trim(), email: email.trim() };
+                if (senha.trim()) payload.password = senha.trim();
+                console.log("[GestaoGarcons] PUT /api/garcons/" + editingGarcom.id);
+                await apiPut(`/api/garcons/${editingGarcom.id}`, payload);
                 console.log("[GestaoGarcons] Garçom atualizado:", editingGarcom.id);
               } else {
-                console.log("[GestaoGarcons] POST /api/usuarios (garcom)");
-                await apiPost("/api/usuarios", {
-                  nome: nome.trim(),
+                console.log("[GestaoGarcons] POST /api/garcons");
+                await apiPost("/api/garcons", {
                   name: nome.trim(),
                   email: email.trim(),
-                  senha,
-                  password: senha,
-                  role: "garcom",
+                  password: senha.trim(),
                 });
                 console.log("[GestaoGarcons] Garçom criado");
               }
@@ -158,9 +146,9 @@ export default function GestaoGarconsScreen() {
           text: "Excluir",
           style: "destructive",
           onPress: async () => {
-            console.log("[GestaoGarcons] DELETE /api/usuarios/" + id);
+            console.log("[GestaoGarcons] DELETE /api/garcons/" + id);
             try {
-              await apiDelete(`/api/usuarios/${id}`);
+              await apiDelete(`/api/garcons/${id}`);
               console.log("[GestaoGarcons] Garçom excluído:", id);
               setGarcons((prev) => prev.filter((g) => g.id !== id));
             } catch (e: unknown) {
@@ -199,7 +187,8 @@ export default function GestaoGarconsScreen() {
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -221,6 +210,9 @@ export default function GestaoGarconsScreen() {
           fontSize: 17,
           fontWeight: "700",
           color: "#111",
+          top: insets.top,
+          height: 56,
+          lineHeight: 56,
         }}>
           Garçons
         </Text>

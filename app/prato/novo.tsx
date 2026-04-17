@@ -106,14 +106,15 @@ export default function NovoPratoScreen() {
       const formData = new FormData();
       const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-      formData.append("foto", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      formData.append("file", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
       const res = await fetch(`${BACKEND_URL}/api/pratos/${pratoId}/foto`, {
         method: "POST",
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
       });
       if (res.ok) {
-        console.log("[NovoPrato] Upload de foto concluído para prato:", pratoId);
+        const data = await res.json().catch(() => ({}));
+        console.log("[NovoPrato] Upload de foto concluído para prato:", pratoId, "url:", data?.url);
       } else {
         const text = await res.text().catch(() => "");
         console.warn("[NovoPrato] Upload de foto falhou:", res.status, text.slice(0, 100));

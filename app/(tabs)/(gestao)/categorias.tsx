@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
@@ -27,6 +28,7 @@ interface ApiCategoria {
 export default function GestaoCategorias() {
   const COLORS = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +154,8 @@ export default function GestaoCategorias() {
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -174,6 +177,9 @@ export default function GestaoCategorias() {
           fontSize: 17,
           fontWeight: "700",
           color: "#111",
+          top: insets.top,
+          height: 56,
+          lineHeight: 56,
         }}>
           Categorias
         </Text>

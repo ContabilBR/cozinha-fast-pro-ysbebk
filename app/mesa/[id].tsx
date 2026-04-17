@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, SafeAreaView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -15,6 +16,7 @@ export default function MesaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
@@ -54,13 +56,19 @@ export default function MesaDetailScreen() {
     console.log("[Mesa] Abrir comanda pressionado para mesa:", mesa.numero);
     setOpeningComanda(true);
     try {
-      console.log("[Mesa] POST /api/comandas");
-      const res = await apiPost<any>("/api/comandas", { mesa_id: mesa.id });
+      console.log("[Mesa] POST /api/comandas", { mesa_id: mesa.id });
+      const payload: any = { mesa_id: mesa.id };
+      if (user?.id) payload.garcom_id = user.id;
+      const res = await apiPost<any>("/api/comandas", payload);
       const comanda = res.comanda || res;
       console.log("[Mesa] Comanda aberta:", comanda.id);
-      router.replace(`/comanda/${comanda.id}`);
+      if (comanda.id) {
+        router.replace(`/comanda/${comanda.id}`);
+      } else {
+        console.warn("[Mesa] Comanda criada mas sem ID na resposta:", JSON.stringify(res));
+      }
     } catch (e: any) {
-      console.error("[Mesa] Erro ao abrir comanda:", e);
+      console.error("[Mesa] Erro ao abrir comanda:", e instanceof Error ? e.message : String(e));
     } finally {
       setOpeningComanda(false);
     }
@@ -76,7 +84,8 @@ export default function MesaDetailScreen() {
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -90,7 +99,7 @@ export default function MesaDetailScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
           {mesaTitle}
         </Text>
       </View>

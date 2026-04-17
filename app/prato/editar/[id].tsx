@@ -120,14 +120,15 @@ export default function EditarPratoScreen() {
       const formData = new FormData();
       const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-      formData.append("foto", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      formData.append("file", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
       const res = await fetch(`${BACKEND_URL}/api/pratos/${id}/foto`, {
         method: "POST",
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
       });
       if (res.ok) {
-        console.log("[EditarPrato] Upload de foto concluído");
+        const data = await res.json().catch(() => ({}));
+        console.log("[EditarPrato] Upload de foto concluído, url:", data?.url);
       } else {
         const text = await res.text().catch(() => "");
         console.warn("[EditarPrato] Upload de foto falhou:", res.status, text.slice(0, 100));

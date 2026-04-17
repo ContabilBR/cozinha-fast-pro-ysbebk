@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -71,6 +72,7 @@ export default function ComandaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
@@ -160,7 +162,8 @@ export default function ComandaDetailScreen() {
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56,
+        height: 56 + insets.top,
+        paddingTop: insets.top,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
@@ -174,7 +177,7 @@ export default function ComandaDetailScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
           {navTitle}
         </Text>
       </View>
