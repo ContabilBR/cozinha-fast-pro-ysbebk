@@ -94,10 +94,9 @@ export function registerOrderRoutes(app: App) {
         tags: ["comandas"],
         body: {
           type: "object",
-          required: ["mesa_id"],
           properties: {
-            mesa_id: { type: "string", format: "uuid" },
-            mesaId: { type: "string", format: "uuid" },
+            mesa_id: { type: ["string", "null"], format: "uuid" },
+            mesaId: { type: ["string", "null"], format: "uuid" },
             garcom_id: { type: ["string", "null"] },
             garcomId: { type: ["string", "null"] },
           },

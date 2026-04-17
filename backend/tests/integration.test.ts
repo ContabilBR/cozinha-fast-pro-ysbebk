@@ -8,6 +8,7 @@ describe("API Integration Tests", () => {
   let adminUserId: string;
   let testUsuarioId: string;
   let testGarcomId: string;
+  let regularUserToken: string; // Non-admin user for 403 tests
 
   // Resource IDs for dependency chaining
   let testCategoryId: string;
@@ -41,6 +42,12 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({ role: "administrador" }),
     });
     await expectStatus(updateRes, 200);
+  });
+
+  test("Sign up regular user for 403 tests", async () => {
+    const { token, user } = await signUpTestUser();
+    regularUserToken = token;
+    // Keep as default role (garcom), don't set to admin
   });
 
   // ==================== Auth Endpoints ====================
@@ -121,7 +128,7 @@ describe("API Integration Tests", () => {
 
   test("Update user", async () => {
     // Create a user to update
-    const createRes = await authenticatedApi("/api/users", authToken, {
+    const createRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -135,7 +142,7 @@ describe("API Integration Tests", () => {
     const userData = await createRes.json();
 
     // Update the user
-    const res = await authenticatedApi(`/api/users/${userData.id}`, authToken, {
+    const res = await authenticatedApi(`/api/users/${userData.id}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -161,7 +168,7 @@ describe("API Integration Tests", () => {
   test("Delete non-existent user returns 404", async () => {
     const res = await authenticatedApi(
       "/api/users/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
@@ -227,7 +234,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete categoria", async () => {
+  test("Delete categoria as admin", async () => {
     const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "DELETE",
     });
@@ -243,6 +250,25 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete categoria as non-admin returns 403", async () => {
+    // Create a categoria first
+    const createRes = await authenticatedApi("/api/categorias", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Delete 403",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(`/api/categorias/${data.categoria.id}`, regularUserToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 403);
   });
 
   // ==================== Pratos CRUD (depends on categoria) ====================
@@ -365,7 +391,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete prato", async () => {
+  test("Delete prato as admin", async () => {
     const res = await authenticatedApi(
       `/api/pratos/${testDishId}`,
       adminToken,
@@ -393,6 +419,31 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete prato as non-admin returns 403", async () => {
+    // Create a new prato to test 403
+    const createRes = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Prato 403",
+        preco: "15.99",
+        categoriaId: pratoCategoryId,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(
+      `/api/pratos/${data.prato.id}`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Pratos Photo Upload ====================
@@ -451,6 +502,18 @@ describe("API Integration Tests", () => {
       body: formData,
     });
     await expectStatus(res, 400);
+  });
+
+  test("Upload prato photo as non-admin returns 403", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("test.jpg", "test", "image/jpeg");
+    formData.append("file", testFile);
+
+    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, regularUserToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 403);
   });
 
   // ==================== Mesas CRUD ====================
@@ -545,7 +608,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete mesa", async () => {
+  test("Delete mesa as admin", async () => {
     // Create a mesa for deletion
     const createRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
@@ -577,6 +640,29 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete mesa as non-admin returns 403", async () => {
+    // Create a mesa to test 403
+    const createRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.mesa.id}`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Mesas Force Delete ====================
@@ -612,6 +698,29 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Force delete mesa as non-admin returns 403", async () => {
+    // Create a mesa to test 403
+    const createRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    // Try to force delete with regular user
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.mesa.id}/force`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Comandas CRUD (depends on mesa) ====================
@@ -945,7 +1054,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete usuario", async () => {
+  test("Delete usuario as admin", async () => {
     const res = await authenticatedApi(`/api/usuarios/${testUsuarioId}`, adminToken, {
       method: "DELETE",
     });
@@ -961,6 +1070,31 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete usuario as non-admin returns 403", async () => {
+    // Create a usuario first
+    const createRes = await authenticatedApi("/api/usuarios", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Usuario 403",
+        email: `usuario403-${Date.now()}@example.com`,
+        senha: "senha123456",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(
+      `/api/usuarios/${data.id}`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Garcons CRUD ====================
@@ -1052,7 +1186,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete garcon", async () => {
+  test("Delete garcon as admin", async () => {
     const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, adminToken, {
       method: "DELETE",
     });
@@ -1068,6 +1202,31 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete garcon as non-admin returns 403", async () => {
+    // Create a garcon first
+    const createRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Garcon 403",
+        email: `garcom403-${Date.now()}@example.com`,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(
+      `/api/garcons/${data.id}`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Relatorios ====================

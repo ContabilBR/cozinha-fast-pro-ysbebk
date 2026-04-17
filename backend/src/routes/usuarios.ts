@@ -114,6 +114,11 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateUsuarioBody }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         if (!request.body.nome || !request.body.email || !request.body.senha) {
           return reply.code(400).send({ error: "nome, email, and senha are required" });
@@ -189,6 +194,11 @@ export function registerUsuariosRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateUsuarioBody }>,
       reply: FastifyReply
     ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         app.logger.info({ usuarioId: request.params.id }, "Updating usuario");
 

@@ -11,12 +11,18 @@ const seedAuthUsers = [
     name: "Administrador",
     email: "admin@cozinhafast.com",
     password: "admin123",
-    role: "admin",
+    role: "administrador",
   },
   {
     name: "Gerente",
     email: "gerente@cozinhafast.com",
-    password: "gerente123",
+    password: "123456",
+    role: "gerente",
+  },
+  {
+    name: "Gerente Teste",
+    email: "gerente@teste.com",
+    password: "123456",
     role: "gerente",
   },
   {
@@ -129,8 +135,9 @@ const seedPratos = [
 ];
 
 const seedUsuarios = [
-  { nome: "Administrador", email: "admin@cozinhafast.com", password: "admin123", role: "admin" },
-  { nome: "Gerente", email: "gerente@cozinhafast.com", password: "gerente123", role: "gerente" },
+  { nome: "Administrador", email: "admin@cozinhafast.com", password: "admin123", role: "administrador" },
+  { nome: "Gerente", email: "gerente@cozinhafast.com", password: "123456", role: "gerente" },
+  { nome: "Gerente Teste", email: "gerente@teste.com", password: "123456", role: "gerente" },
   { nome: "Garçom", email: "garcom@cozinhafast.com", password: "garcom123", role: "garcom" },
   { nome: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "cozinheiro123", role: "cozinheiro" },
 ];

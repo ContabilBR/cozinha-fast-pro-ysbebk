@@ -96,6 +96,8 @@ export function registerUserRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         if (!request.body.name || !request.body.email || !request.body.password) {
           return reply.status(400).send({ error: "name, email, and password are required" });
@@ -152,14 +154,16 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId }, "User created successfully");
 
-        return reply.status(201).send({
+        const responseData = {
           id: userId,
           name: request.body.name,
           email: request.body.email,
           role: role,
           active: true,
           created_at: now.toISOString(),
-        });
+        };
+
+        return reply.code(201).send(responseData);
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
         return reply.status(500).send({ error: "Internal server error" });
@@ -221,6 +225,14 @@ export function registerUserRoutes(app: App) {
           .set(updates)
           .where(eq(userTable.id, request.params.id))
           .returning();
+
+        // If role was updated, also update the profile
+        if (request.body.role !== undefined) {
+          await app.db
+            .update(schema.profiles)
+            .set({ role: request.body.role })
+            .where(eq(schema.profiles.userId, request.params.id));
+        }
 
         app.logger.info({ userId: updated.id }, "User updated");
 
