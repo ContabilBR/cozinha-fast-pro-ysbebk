@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,13 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { X, Tag, Search } from "lucide-react-native";
@@ -28,7 +29,6 @@ interface ApiCategoria {
 export default function GestaoCategorias() {
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,13 @@ export default function GestaoCategorias() {
     }
   }, []);
 
-  useEffect(() => { fetchCategorias(); }, [fetchCategorias]);
+  useFocusEffect(
+    useCallback(() => {
+      console.log("[GestaoCategorias] Tela focada — recarregando categorias");
+      setLoading(true);
+      fetchCategorias();
+    }, [fetchCategorias])
+  );
 
   const handleRefresh = () => {
     console.log("[GestaoCategorias] Refresh manual");
@@ -149,26 +155,24 @@ export default function GestaoCategorias() {
     : categorias;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
+        height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
-        <TouchableOpacity
+        <AnimatedPressable
           onPress={() => { console.log("[GestaoCategorias] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
         >
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
         <Text style={{
           position: "absolute",
           left: 0,
@@ -176,37 +180,36 @@ export default function GestaoCategorias() {
           textAlign: "center",
           fontSize: 17,
           fontWeight: "700",
-          color: "#111",
-          top: insets.top,
+          color: COLORS.text,
           height: 56,
           lineHeight: 56,
         }}>
           Categorias
         </Text>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity
+        <AnimatedPressable
           onPress={() => { console.log("[GestaoCategorias] Botão incluir pressionado"); openCreate(); }}
-          style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#34C759", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
         >
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {/* Search bar */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
-          <Search size={16} color="#8E8E93" />
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+          <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             value={search}
             onChangeText={(t) => { console.log("[GestaoCategorias] Busca:", t); setSearch(t); }}
             placeholder="Buscar..."
-            placeholderTextColor="#8E8E93"
-            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: "#111", padding: 0 }}
+            placeholderTextColor={COLORS.textTertiary}
+            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, padding: 0 }}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color="#8E8E93" />
+              <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -219,9 +222,10 @@ export default function GestaoCategorias() {
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar categorias</Text>
-          <TouchableOpacity onPress={fetchCategorias} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
+          <AnimatedPressable onPress={fetchCategorias} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       ) : (
         <FlatList
@@ -230,37 +234,39 @@ export default function GestaoCategorias() {
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
           renderItem={({ item }) => (
-            <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2, borderWidth: 1, borderColor: COLORS.border }}>
               <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
                 <Tag size={18} color={COLORS.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: "600", color: "#111" }}>{item.nome}</Text>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>{item.nome}</Text>
                 {item.descricao ? (
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.descricao}</Text>
+                  <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.descricao}</Text>
                 ) : null}
               </View>
               <View style={{ gap: 6 }}>
-                <TouchableOpacity
+                <AnimatedPressable
                   onPress={() => { console.log("[GestaoCategorias] Editar pressionado:", item.id); openEdit(item); }}
                   style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
                 >
                   <Ionicons name="pencil" size={14} color="#fff" />
                   <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AnimatedPressable>
+                <AnimatedPressable
                   onPress={() => { console.log("[GestaoCategorias] Excluir pressionado:", item.id); handleDelete(item.id, item.nome); }}
                   style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
                 >
                   <Ionicons name="trash" size={14} color="#fff" />
                   <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
             </View>
           )}
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-              <Tag size={32} color={COLORS.textTertiary} />
+              <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+                <Tag size={32} color={COLORS.primary} />
+              </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
                 {search.trim() ? "Nenhum resultado encontrado" : "Nenhuma categoria"}
               </Text>
@@ -279,12 +285,12 @@ export default function GestaoCategorias() {
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
                 {editingCat ? "Editar Categoria" : "Nova Categoria"}
               </Text>
-              <TouchableOpacity
+              <AnimatedPressable
                 onPress={() => { console.log("[GestaoCategorias] Modal fechado"); setShowModal(false); }}
                 style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
               >
                 <X size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
+              </AnimatedPressable>
             </View>
 
             <View style={{ gap: 6 }}>
@@ -299,7 +305,7 @@ export default function GestaoCategorias() {
 
             {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
 
-            <TouchableOpacity
+            <AnimatedPressable
               onPress={() => { console.log("[GestaoCategorias] Salvar categoria pressionado"); handleSave(); }}
               disabled={saving}
               style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
@@ -311,7 +317,7 @@ export default function GestaoCategorias() {
                   {editingCat ? "Salvar alterações" : "Criar categoria"}
                 </Text>
               )}
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         </View>
       </Modal>

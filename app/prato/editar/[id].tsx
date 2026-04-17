@@ -7,20 +7,20 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Prato, Categoria } from "@/types";
 import { apiGet, apiPut, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { ChevronDown, Camera, Image as ImageIcon, UtensilsCrossed } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -48,7 +48,6 @@ export default function EditarPratoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -95,11 +94,11 @@ export default function EditarPratoScreen() {
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
@@ -113,18 +112,21 @@ export default function EditarPratoScreen() {
 
   const uploadFoto = async (): Promise<void> => {
     if (!localImageUri || !id) return;
-    console.log("[EditarPrato] POST /api/pratos/" + id + "/foto");
+    console.log("[EditarPrato] POST /api/pratos/" + id + "/foto (base64)");
     setUploading(true);
     try {
       const token = await getBearerToken();
-      const formData = new FormData();
       const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-      formData.append("file", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      const base64 = await FileSystem.readAsStringAsync(localImageUri, { encoding: "base64" as any });
+      const imagem_base64 = `data:${mimeType};base64,${base64}`;
       const res = await fetch(`${BACKEND_URL}/api/pratos/${id}/foto`, {
         method: "POST",
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ imagem_base64 }),
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -142,11 +144,16 @@ export default function EditarPratoScreen() {
 
   const handleSave = async () => {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
-    console.log("[EditarPrato] Salvar pressionado:", id, "nome:", nome);
+    console.log("[EditarPrato] Salvar alterações pressionado:", id, "nome:", nome);
     setSubmitting(true);
     setError("");
     try {
-      const payload: any = { nome: nome.trim(), descricao: descricao.trim() || undefined, preco: Number(preco), disponivel };
+      const payload: any = {
+        nome: nome.trim(),
+        descricao: descricao.trim() || undefined,
+        preco: Number(preco.replace(",", ".")),
+        disponivel,
+      };
       if (categoriaId) payload.categoria_id = categoriaId;
       console.log("[EditarPrato] PUT /api/pratos/" + id);
       await apiPut(`/api/pratos/${id}`, payload);
@@ -179,51 +186,60 @@ export default function EditarPratoScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 56 + insets.top, paddingTop: insets.top, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
-          <TouchableOpacity onPress={() => { console.log("[EditarPrato] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
+          <AnimatedPressable onPress={() => { console.log("[EditarPrato] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingRight: 8 }}>
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </TouchableOpacity>
-          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>Editar Prato</Text>
+          </AnimatedPressable>
+          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: COLORS.text, height: 56, lineHeight: 56 }}>Editar Prato</Text>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={COLORS.primary} />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
-      }}>
-        <TouchableOpacity
-          onPress={() => { console.log("[EditarPrato] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
-          Editar Prato
-        </Text>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Nav bar */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}>
+          <AnimatedPressable
+            onPress={() => { console.log("[EditarPrato] Botão voltar pressionado"); router.back(); }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </AnimatedPressable>
+          <Text style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}>
+            Editar Prato
+          </Text>
+        </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
             <TextInput value={nome} onChangeText={setNome} placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
           </FormField>
@@ -266,12 +282,12 @@ export default function EditarPratoScreen() {
               {displayImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
                   <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                  <TouchableOpacity
+                  <AnimatedPressable
                     onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); setImagemUrl(""); }}
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="close" size={16} color="#fff" />
-                  </TouchableOpacity>
+                  </AnimatedPressable>
                   {localImageUri && (
                     <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
@@ -329,6 +345,7 @@ export default function EditarPratoScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

@@ -5,18 +5,17 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { UserRole } from "@/types";
-import { apiGet, apiPut } from "@/utils/api";
+import { apiGet, apiPut, apiDelete } from "@/utils/api";
 import { getRoleLabel } from "@/utils/helpers";
 import { ChevronDown } from "lucide-react-native";
 
@@ -36,7 +35,6 @@ export default function EditarUsuarioScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -48,17 +46,22 @@ export default function EditarUsuarioScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    console.log("[EditarUsuario] GET /api/usuarios/" + id);
-    apiGet<any>(`/api/usuarios/${id}`)
+    console.log("[EditarUsuario] GET /api/usuarios — buscando id:", id);
+    apiGet<any>("/api/usuarios")
       .then((res) => {
-        const u = res.usuario || res.user || res;
-        console.log("[EditarUsuario] Usuário carregado:", u.name ?? u.nome);
-        setNome(u.name ?? u.nome ?? "");
-        setEmail(u.email ?? "");
-        setRole(u.role ?? "garcom");
+        const list: any[] = Array.isArray(res) ? res : (res.usuarios || res.users || []);
+        const u = list.find((x: any) => x.id === id) || list[0];
+        if (u) {
+          console.log("[EditarUsuario] Usuário encontrado:", u.name ?? u.nome);
+          setNome(u.name ?? u.nome ?? "");
+          setEmail(u.email ?? "");
+          setRole(u.role ?? "garcom");
+        } else {
+          setError("Usuário não encontrado.");
+        }
       })
       .catch((e) => {
-        console.error("[EditarUsuario] Erro:", e);
+        console.error("[EditarUsuario] Erro ao carregar:", e);
         setError("Não foi possível carregar o usuário.");
       })
       .finally(() => setLoading(false));
@@ -66,29 +69,43 @@ export default function EditarUsuarioScreen() {
 
   const handleSave = async () => {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
-    console.log("[EditarUsuario] Confirmar salvar pressionado:", id, "role:", role);
+    console.log("[EditarUsuario] Salvar alterações pressionado:", id, "role:", role);
+    setSubmitting(true);
+    setError("");
+    try {
+      const payload: any = { name: nome.trim(), nome: nome.trim(), email: email.trim(), role };
+      if (senha.trim()) payload.password = senha;
+      console.log("[EditarUsuario] PUT /api/usuarios/" + id);
+      await apiPut(`/api/usuarios/${id}`, payload);
+      console.log("[EditarUsuario] Usuário atualizado com sucesso");
+      router.back();
+    } catch (e: any) {
+      console.error("[EditarUsuario] Erro ao salvar:", e);
+      setError(e instanceof Error ? e.message : "Não foi possível salvar as alterações.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = () => {
+    console.log("[EditarUsuario] Excluir usuário pressionado:", id);
     Alert.alert(
-      "Confirmar",
-      "Deseja salvar as alterações?",
+      "Excluir usuário?",
+      `Deseja realmente excluir "${nome || "este usuário"}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Confirmar",
+          text: "Excluir",
+          style: "destructive",
           onPress: async () => {
-            setSubmitting(true);
-            setError("");
+            console.log("[EditarUsuario] DELETE /api/usuarios/" + id);
             try {
-              const payload: any = { name: nome.trim(), nome: nome.trim(), email: email.trim(), role };
-              if (senha.trim()) payload.password = senha;
-              console.log("[EditarUsuario] PUT /api/usuarios/" + id);
-              await apiPut(`/api/usuarios/${id}`, payload);
-              console.log("[EditarUsuario] Usuário atualizado com sucesso");
+              await apiDelete(`/api/usuarios/${id}`);
+              console.log("[EditarUsuario] Usuário excluído:", id);
               router.back();
             } catch (e: any) {
-              console.error("[EditarUsuario] Erro ao salvar:", e);
-              setError("Não foi possível salvar as alterações.");
-            } finally {
-              setSubmitting(false);
+              console.error("[EditarUsuario] Erro ao excluir:", e);
+              Alert.alert("Erro", "Não foi possível excluir o usuário.");
             }
           },
         },
@@ -107,63 +124,98 @@ export default function EditarUsuarioScreen() {
     borderColor: COLORS.border,
   };
 
+  const roleLabel = getRoleLabel(role);
+
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 56 + insets.top, paddingTop: insets.top, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
-          <TouchableOpacity onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
+          <AnimatedPressable onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingRight: 8 }}>
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </TouchableOpacity>
-          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>Detalhes do Usuário</Text>
+          </AnimatedPressable>
+          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: COLORS.text, height: 56, lineHeight: 56 }}>Editar Usuário</Text>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={COLORS.primary} />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
-      }}>
-        <TouchableOpacity
-          onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
-          Detalhes do Usuário
-        </Text>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Nav bar */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}>
+          <AnimatedPressable
+            onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado"); router.back(); }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </AnimatedPressable>
+          <Text style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}>
+            Editar Usuário
+          </Text>
+        </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <FormField label="Nome *">
-            <TextInput value={nome} onChangeText={setNome} placeholder="Nome completo" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+            <TextInput
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Nome completo"
+              placeholderTextColor={COLORS.textTertiary}
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="E-mail">
-            <TextInput value={email} onChangeText={setEmail} placeholder="email@exemplo.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" style={inputStyle} />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="email@exemplo.com"
+              placeholderTextColor={COLORS.textTertiary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="Nova senha (opcional)">
-            <TextInput value={senha} onChangeText={setSenha} placeholder="Deixe em branco para manter" placeholderTextColor={COLORS.textTertiary} secureTextEntry style={inputStyle} />
+            <TextInput
+              value={senha}
+              onChangeText={setSenha}
+              placeholder="Deixe em branco para manter"
+              placeholderTextColor={COLORS.textTertiary}
+              secureTextEntry
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="Função">
@@ -171,7 +223,7 @@ export default function EditarUsuarioScreen() {
               onPress={() => { console.log("[EditarUsuario] Seletor de função alternado"); setShowRolePicker((v) => !v); }}
               style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
             >
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text }}>{getRoleLabel(role)}</Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text }}>{roleLabel}</Text>
               <ChevronDown size={16} color={COLORS.textSecondary} />
             </AnimatedPressable>
             {showRolePicker && (
@@ -204,7 +256,15 @@ export default function EditarUsuarioScreen() {
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar alterações</Text>
             )}
           </AnimatedPressable>
+
+          <AnimatedPressable
+            onPress={() => { console.log("[EditarUsuario] Excluir usuário pressionado"); handleDelete(); }}
+            style={{ backgroundColor: "transparent", borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.danger }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.danger }}>Excluir usuário</Text>
+          </AnimatedPressable>
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

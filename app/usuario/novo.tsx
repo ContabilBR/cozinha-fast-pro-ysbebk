@@ -5,14 +5,12 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { UserRole } from "@/types";
@@ -35,7 +33,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 export default function NovoUsuarioScreen() {
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -49,32 +46,27 @@ export default function NovoUsuarioScreen() {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
     if (!email.trim()) { setError("E-mail é obrigatório."); return; }
     if (!senha.trim()) { setError("Senha é obrigatória."); return; }
-    console.log("[NovoUsuario] Confirmar criação pressionado, email:", email, "role:", role);
-    Alert.alert(
-      "Confirmar",
-      "Deseja salvar as alterações?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Confirmar",
-          onPress: async () => {
-            setSubmitting(true);
-            setError("");
-            try {
-              console.log("[NovoUsuario] POST /api/usuarios");
-              await apiPost("/api/usuarios", { name: nome.trim(), nome: nome.trim(), email: email.trim(), password: senha, senha, role });
-              console.log("[NovoUsuario] Usuário criado com sucesso");
-              router.back();
-            } catch (e: any) {
-              console.error("[NovoUsuario] Erro ao salvar:", e);
-              setError("Não foi possível criar o usuário.");
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+    console.log("[NovoUsuario] Criar usuário pressionado, email:", email, "role:", role);
+    setSubmitting(true);
+    setError("");
+    try {
+      console.log("[NovoUsuario] POST /api/usuarios");
+      await apiPost("/api/usuarios", {
+        name: nome.trim(),
+        nome: nome.trim(),
+        email: email.trim(),
+        password: senha,
+        senha,
+        role,
+      });
+      console.log("[NovoUsuario] Usuário criado com sucesso");
+      router.back();
+    } catch (e: any) {
+      console.error("[NovoUsuario] Erro ao salvar:", e);
+      setError(e instanceof Error ? e.message : "Não foi possível criar o usuário.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputStyle = {
@@ -88,46 +80,82 @@ export default function NovoUsuarioScreen() {
     borderColor: COLORS.border,
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
-      }}>
-        <TouchableOpacity
-          onPress={() => { console.log("[NovoUsuario] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
-          Novo Usuário
-        </Text>
-      </View>
+  const roleLabel = getRoleLabel(role);
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Nav bar */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}>
+          <AnimatedPressable
+            onPress={() => { console.log("[NovoUsuario] Botão voltar pressionado"); router.back(); }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </AnimatedPressable>
+          <Text style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}>
+            Novo Usuário
+          </Text>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <FormField label="Nome *">
-            <TextInput value={nome} onChangeText={setNome} placeholder="Nome completo" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+            <TextInput
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Nome completo"
+              placeholderTextColor={COLORS.textTertiary}
+              style={inputStyle}
+              autoFocus
+            />
           </FormField>
 
           <FormField label="E-mail *">
-            <TextInput value={email} onChangeText={setEmail} placeholder="email@exemplo.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" style={inputStyle} />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="email@exemplo.com"
+              placeholderTextColor={COLORS.textTertiary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="Senha *">
-            <TextInput value={senha} onChangeText={setSenha} placeholder="Senha" placeholderTextColor={COLORS.textTertiary} secureTextEntry style={inputStyle} />
+            <TextInput
+              value={senha}
+              onChangeText={setSenha}
+              placeholder="Senha"
+              placeholderTextColor={COLORS.textTertiary}
+              secureTextEntry
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="Função">
@@ -135,7 +163,7 @@ export default function NovoUsuarioScreen() {
               onPress={() => { console.log("[NovoUsuario] Seletor de função alternado"); setShowRolePicker((v) => !v); }}
               style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
             >
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text }}>{getRoleLabel(role)}</Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text }}>{roleLabel}</Text>
               <ChevronDown size={16} color={COLORS.textSecondary} />
             </AnimatedPressable>
             {showRolePicker && (
@@ -158,7 +186,7 @@ export default function NovoUsuarioScreen() {
           ) : null}
 
           <AnimatedPressable
-            onPress={() => { console.log("[NovoUsuario] Criar usuário pressionado"); handleSave(); }}
+            onPress={() => { console.log("[NovoUsuario] Salvar pressionado"); handleSave(); }}
             disabled={submitting}
             style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
           >
@@ -169,6 +197,7 @@ export default function NovoUsuarioScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

@@ -7,20 +7,20 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Categoria } from "@/types";
 import { apiGet, apiPost, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { ChevronDown, Camera, Image as ImageIcon, UtensilsCrossed } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -47,7 +47,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 export default function NovoPratoScreen() {
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -81,11 +80,11 @@ export default function NovoPratoScreen() {
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
@@ -99,18 +98,21 @@ export default function NovoPratoScreen() {
 
   const uploadFoto = async (pratoId: string): Promise<void> => {
     if (!localImageUri) return;
-    console.log("[NovoPrato] POST /api/pratos/" + pratoId + "/foto");
+    console.log("[NovoPrato] POST /api/pratos/" + pratoId + "/foto (base64)");
     setUploading(true);
     try {
       const token = await getBearerToken();
-      const formData = new FormData();
       const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-      formData.append("file", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      const base64 = await FileSystem.readAsStringAsync(localImageUri, { encoding: "base64" as any });
+      const imagem_base64 = `data:${mimeType};base64,${base64}`;
       const res = await fetch(`${BACKEND_URL}/api/pratos/${pratoId}/foto`, {
         method: "POST",
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ imagem_base64 }),
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -128,12 +130,17 @@ export default function NovoPratoScreen() {
 
   const handleSave = async () => {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
-    if (!preco || isNaN(Number(preco))) { setError("Preço inválido."); return; }
-    console.log("[NovoPrato] Salvar pressionado, nome:", nome, "categoria:", categoriaId);
+    if (!preco || isNaN(Number(preco.replace(",", ".")))) { setError("Preço inválido."); return; }
+    console.log("[NovoPrato] Salvar prato pressionado, nome:", nome, "categoria:", categoriaId);
     setSubmitting(true);
     setError("");
     try {
-      const payload: any = { nome: nome.trim(), descricao: descricao.trim() || undefined, preco: Number(preco), disponivel };
+      const payload: any = {
+        nome: nome.trim(),
+        descricao: descricao.trim() || undefined,
+        preco: Number(preco.replace(",", ".")),
+        disponivel,
+      };
       if (categoriaId) payload.categoria_id = categoriaId;
       console.log("[NovoPrato] POST /api/pratos");
       const res = await apiPost<any>("/api/pratos", payload);
@@ -165,37 +172,46 @@ export default function NovoPratoScreen() {
   const imageSource = resolveImageSource(localImageUri ?? undefined);
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
-      }}>
-        <TouchableOpacity
-          onPress={() => { console.log("[NovoPrato] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
-          Novo Prato
-        </Text>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Nav bar */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}>
+          <AnimatedPressable
+            onPress={() => { console.log("[NovoPrato] Botão voltar pressionado"); router.back(); }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </AnimatedPressable>
+          <Text style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}>
+            Novo Prato
+          </Text>
+        </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
-            <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Frango Grelhado" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+            <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Frango Grelhado" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
           </FormField>
 
           <FormField label="Descrição">
@@ -242,12 +258,12 @@ export default function NovoPratoScreen() {
               {localImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
                   <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                  <TouchableOpacity
+                  <AnimatedPressable
                     onPress={() => { console.log("[NovoPrato] Remover foto pressionado"); setLocalImageUri(null); }}
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="close" size={16} color="#fff" />
-                  </TouchableOpacity>
+                  </AnimatedPressable>
                 </View>
               ) : (
                 <View style={{ height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -300,6 +316,7 @@ export default function NovoPratoScreen() {
             )}
           </AnimatedPressable>
         </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
