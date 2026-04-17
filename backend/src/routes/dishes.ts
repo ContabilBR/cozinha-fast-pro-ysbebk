@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreatePratoBody {
   nome: string;
@@ -23,7 +23,6 @@ interface UpdatePratoBody {
 }
 
 export function registerDishRoutes(app: App) {
-  const requireAuth = app.requireAuth();
   // GET /api/pratos - List all pratos
   app.fastify.get(
     "/api/pratos",
@@ -65,7 +64,7 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -154,7 +153,7 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -241,7 +240,7 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -343,7 +342,7 @@ export function registerDishRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdatePratoBody }>,
       reply: FastifyReply
     ) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -414,7 +413,7 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
@@ -448,7 +447,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id/foto",
     {
       schema: {
-        description: "Upload a photo for a prato (requires authentication)",
+        description: "Upload a photo for a prato (requires authentication and admin/gerente/cozinheiro role)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -465,14 +464,17 @@ export function registerDishRoutes(app: App) {
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
           413: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
+
+      if (!requireRole(session.user, ["administrador", "gerente", "cozinheiro"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Uploading prato photo");

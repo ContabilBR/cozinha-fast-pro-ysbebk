@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
+import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 // MIME type to file extension mapping
 const mimeTypeExtensions: Record<string, string> = {
@@ -18,7 +19,6 @@ const mimeTypeExtensions: Record<string, string> = {
 };
 
 export function registerUploadRoutes(app: App) {
-  const requireAuth = app.requireAuth();
 
   // POST /api/upload/imagem - Upload an image file
   app.fastify.post(
@@ -41,7 +41,7 @@ export function registerUploadRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {

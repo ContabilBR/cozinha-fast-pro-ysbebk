@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateCategoriaBody {
   nome: string;
@@ -15,7 +15,6 @@ interface UpdateCategoriaBody {
 }
 
 export function registerCategoriasRoutes(app: App) {
-  const requireAuth = app.requireAuth();
   // GET /api/categorias - List all categories
   app.fastify.get(
     "/api/categorias",
@@ -46,8 +45,8 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(request, reply);
-      if (!auth) return;
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({}, "Listing categorias");
@@ -107,8 +106,8 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateCategoriaBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(request, reply);
-      if (!auth) return;
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
 
       try {
         if (!request.body.nome) {
@@ -184,8 +183,8 @@ export function registerCategoriasRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoriaBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(request, reply);
-      if (!auth) return;
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({ categoriaId: request.params.id }, "Updating categoria");
@@ -247,7 +246,7 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;

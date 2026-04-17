@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, ne, and, inArray } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateMesaBody {
   numero: number;
@@ -17,7 +17,6 @@ interface UpdateMesaBody {
 }
 
 export function registerTableRoutes(app: App) {
-  const requireAuth = app.requireAuth();
   // GET /api/mesas - List all mesas
   app.fastify.get(
     "/api/mesas",
@@ -49,7 +48,7 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -111,7 +110,7 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateMesaBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -188,7 +187,7 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -264,7 +263,7 @@ export function registerTableRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateMesaBody }>,
       reply: FastifyReply
     ) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -321,12 +320,12 @@ export function registerTableRoutes(app: App) {
     }
   );
 
-  // DELETE /api/mesas/:id - Delete a mesa (fails if has associated comandas)
+  // DELETE /api/mesas/:id - Delete a mesa with cascading delete via transaction
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/mesas/:id",
     {
       schema: {
-        description: "Delete a mesa (requires authentication and admin/gerente role)",
+        description: "Delete a mesa and all associated comandas and pedidos (requires authentication and admin/gerente role)",
         tags: ["mesas"],
         params: {
           type: "object",
@@ -334,28 +333,22 @@ export function registerTableRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object", properties: { message: { type: "string" } } },
+          200: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
-          409: {
-            type: "object",
-            properties: {
-              error: { type: "string" },
-              comandas_count: { type: "number" },
-            },
-          },
+          400: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
 
       try {
-        app.logger.info({ mesaId: request.params.id }, "Deleting mesa");
+        app.logger.info({ mesaId: request.params.id }, "Deleting mesa with cascade");
 
         const existing = await app.db
           .select()
@@ -367,30 +360,38 @@ export function registerTableRoutes(app: App) {
           return reply.code(404).send({ error: "Mesa not found" });
         }
 
-        // Check for associated comandas
-        const comandas = await app.db
-          .select()
-          .from(schema.comandas)
-          .where(eq(schema.comandas.mesaId, request.params.id));
+        // Wrap delete operation in transaction for atomicity
+        await app.db.transaction(async (trx) => {
+          // Get all comandas for this mesa
+          const comandas = await trx
+            .select({ id: schema.comandas.id })
+            .from(schema.comandas)
+            .where(eq(schema.comandas.mesaId, request.params.id));
 
-        if (comandas.length > 0) {
-          app.logger.warn(
-            { mesaId: request.params.id, comandasCount: comandas.length },
-            "Cannot delete mesa with associated comandas"
-          );
-          return reply.code(409).send({
-            error: "Mesa possui comandas associadas e não pode ser excluída",
-            comandas_count: comandas.length,
-          });
-        }
+          const comandaIds = comandas.map((c) => c.id);
 
-        await app.db.delete(schema.mesas).where(eq(schema.mesas.id, request.params.id));
+          // Delete pedidos associated with these comandas
+          if (comandaIds.length > 0) {
+            await trx
+              .delete(schema.pedidos)
+              .where(inArray(schema.pedidos.comandaId, comandaIds));
+          }
 
-        app.logger.info({ mesaId: request.params.id }, "Mesa deleted successfully");
+          // Delete comandas
+          await trx.delete(schema.comandas).where(eq(schema.comandas.mesaId, request.params.id));
 
-        return reply.code(200).send({ message: "Mesa excluída com sucesso" });
+          // Delete mesa
+          await trx.delete(schema.mesas).where(eq(schema.mesas.id, request.params.id));
+        });
+
+        app.logger.info({ mesaId: request.params.id }, "Mesa and dependencies deleted successfully");
+
+        return reply.code(200).send({ success: true, message: "Mesa excluída com sucesso" });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete mesa");
+        if (error instanceof Error && error.message.includes("constraint")) {
+          return reply.code(400).send({ error: "Cannot delete mesa due to data constraints" });
+        }
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
@@ -417,7 +418,7 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;

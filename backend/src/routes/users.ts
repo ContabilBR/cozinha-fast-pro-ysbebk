@@ -5,6 +5,7 @@ import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateUserBody {
   name: string;
@@ -22,7 +23,6 @@ interface UpdateUserBody {
 }
 
 export function registerUserRoutes(app: App) {
-  const requireAuth = app.requireAuth();
 
   // GET /api/users - List all users
   app.fastify.get(
@@ -41,7 +41,7 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -93,7 +93,7 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateUserBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -197,7 +197,7 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateUserBody }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
@@ -259,8 +259,10 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
+
+      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Deleting user");

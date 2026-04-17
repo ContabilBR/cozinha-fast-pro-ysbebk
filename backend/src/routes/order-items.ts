@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 interface CreatePedidoBody {
   comandaId: string;
@@ -50,6 +51,9 @@ export function registerOrderItemRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({}, "Listing pedidos");
 
@@ -125,6 +129,9 @@ export function registerOrderItemRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreatePedidoBody }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         if (!request.body.comandaId || !request.body.pratoId || !request.body.precoUnitario) {
           return reply.code(400).send({ error: "comandaId, pratoId, and precoUnitario are required" });
@@ -200,6 +207,9 @@ export function registerOrderItemRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ pedidoId: request.params.id }, "Getting pedido");
 
@@ -339,6 +349,9 @@ export function registerOrderItemRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ pedidoId: request.params.id }, "Deleting pedido");
 

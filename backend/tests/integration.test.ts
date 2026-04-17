@@ -39,7 +39,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: "administrador" }),
     });
-    expect(updateRes.status).toBe(200);
+    await expectStatus(updateRes, 200);
   });
 
   // ==================== Auth Endpoints ====================
@@ -132,6 +132,32 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(dupRes, 409);
+  });
+
+  test("Update user", async () => {
+    // Create a user to update
+    const createRes = await authenticatedApi("/api/users", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `update-test-${Date.now()}@example.com`,
+        password: "pass123456",
+        name: "Original Name",
+        role: "garcom",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const userData = await createRes.json();
+
+    // Update the user
+    const res = await authenticatedApi(`/api/users/${userData.id}`, authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated Name",
+      }),
+    });
+    await expectStatus(res, 200);
   });
 
   test("Update non-existent user returns 404", async () => {

@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 interface CreateComandaBody {
   mesaId: string;
@@ -45,6 +46,9 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({}, "Listing comandas");
 
@@ -111,6 +115,9 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateComandaBody }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         if (!request.body.mesaId) {
           return reply.code(400).send({ error: "mesaId is required" });
@@ -170,6 +177,9 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
@@ -236,6 +246,9 @@ export function registerOrderRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: FecharComandaBody }>,
       reply: FastifyReply
     ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ comandaId: request.params.id }, "Closing comanda");
 
@@ -315,6 +328,9 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ comandaId: request.params.id }, "Canceling comanda");
 

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateUsuarioBody {
   nome: string;
@@ -20,7 +20,6 @@ interface UpdateUsuarioBody {
 }
 
 export function registerUsuariosRoutes(app: App) {
-  const requireAuth = app.requireAuth();
 
   // GET /api/usuarios - List all usuarios
   app.fastify.get(
@@ -253,7 +252,7 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await requireAuth(request, reply);
+      const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
