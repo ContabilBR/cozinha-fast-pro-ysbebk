@@ -305,27 +305,17 @@ export function registerAuthRoutes(app: App) {
     "/api/auth/me",
     {
       schema: {
-        description: "Get current authenticated user",
+        description: "Get current authenticated user with role and active status",
         tags: ["auth"],
         response: {
           200: {
             type: "object",
             properties: {
-              user: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  email: { type: "string" },
-                  name: { type: "string" },
-                },
-              },
-              profile: {
-                type: "object",
-                properties: {
-                  role: { type: "string" },
-                  name: { type: "string" },
-                },
-              },
+              id: { type: "string" },
+              email: { type: "string" },
+              name: { type: "string" },
+              role: { type: "string" },
+              active: { type: "boolean" },
             },
           },
           401: {
@@ -365,7 +355,7 @@ export function registerAuthRoutes(app: App) {
           return reply.status(401).send({ error: "Não autorizado" });
         }
 
-        // Get user
+        // Get user with role and active status from user table
         const users = await app.db
           .select()
           .from(userTable)
@@ -378,26 +368,14 @@ export function registerAuthRoutes(app: App) {
 
         const user = users[0];
 
-        // Get profile
-        const profiles = await app.db
-          .select()
-          .from(schema.profiles)
-          .where(eq(schema.profiles.userId, user.id))
-          .limit(1);
-
-        const profile = profiles && profiles.length > 0
-          ? { role: profiles[0].role, name: profiles[0].name }
-          : { role: user.role || "usuario", name: user.name };
-
         app.logger.info({ userId: user.id }, "Get current user");
 
         return {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-          },
-          profile,
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          active: user.active,
         };
       } catch (error) {
         app.logger.error({ err: error }, "Get current user failed");

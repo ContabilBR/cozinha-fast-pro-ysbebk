@@ -34,7 +34,20 @@ export function registerUserRoutes(app: App) {
         response: {
           200: {
             type: "array",
-            items: { type: "object" },
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                email: { type: "string" },
+                email_verified: { type: "boolean" },
+                image: { type: ["string", "null"] },
+                role: { type: "string" },
+                active: { type: "boolean" },
+                created_at: { type: "string" },
+                updated_at: { type: "string" },
+              },
+            },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
         },
@@ -85,7 +98,17 @@ export function registerUserRoutes(app: App) {
           },
         },
         response: {
-          201: { type: "object" },
+          201: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+              email: { type: "string" },
+              role: { type: "string" },
+              active: { type: "boolean" },
+              created_at: { type: "string" },
+            },
+          },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           409: { type: "object", properties: { error: { type: "string" } } },
@@ -154,16 +177,14 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId }, "User created successfully");
 
-        const responseData = {
+        return reply.code(201).send({
           id: userId,
           name: request.body.name,
           email: request.body.email,
           role: role,
           active: true,
           created_at: now.toISOString(),
-        };
-
-        return reply.code(201).send(responseData);
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
         return reply.status(500).send({ error: "Internal server error" });
@@ -194,7 +215,18 @@ export function registerUserRoutes(app: App) {
           },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+              email: { type: "string" },
+              role: { type: "string" },
+              active: { type: "boolean" },
+              created_at: { type: "string" },
+              updated_at: { type: "string" },
+            },
+          },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
@@ -242,7 +274,8 @@ export function registerUserRoutes(app: App) {
           email: updated.email,
           role: updated.role,
           active: updated.active,
-          created_at: updated.createdAt,
+          created_at: updated.createdAt.toISOString(),
+          updated_at: updated.updatedAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update user");

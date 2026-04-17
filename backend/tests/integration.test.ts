@@ -55,9 +55,11 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/auth/me", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.user).toBeDefined();
-    expect(data.user.id).toBeDefined();
-    expect(data.user.email).toBeDefined();
+    expect(data.id).toBeDefined();
+    expect(data.email).toBeDefined();
+    expect(data.name).toBeDefined();
+    expect(data.role).toBeDefined();
+    expect(data.active).toBeDefined();
   });
 
   test("Get current user without authentication returns 401", async () => {
@@ -139,10 +141,11 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(createRes, 201);
-    const userData = await createRes.json();
+    const responseData = await createRes.json();
+    const userId = responseData.id;
 
     // Update the user
-    const res = await authenticatedApi(`/api/users/${userData.id}`, adminToken, {
+    const res = await authenticatedApi(`/api/users/${userId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -163,6 +166,29 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete user as admin", async () => {
+    // Create a user for deletion
+    const createRes = await authenticatedApi("/api/users", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `user-delete-${Date.now()}@example.com`,
+        password: "pass123456",
+        name: "User to Delete",
+        role: "garcom",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const responseData = await createRes.json();
+    const userId = responseData.id;
+
+    // Delete it
+    const res = await authenticatedApi(`/api/users/${userId}`, adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 204);
   });
 
   test("Delete non-existent user returns 404", async () => {
