@@ -1,28 +1,31 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth } from "../utils/auth.js";
+import { randomUUID } from "crypto";
 
-interface UploadImageBody {
-  base64?: string;
-  filename: string;
-}
+// MIME type to file extension mapping
+const mimeTypeExtensions: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/svg+xml": ".svg",
+  "image/bmp": ".bmp",
+  "image/tiff": ".tiff",
+  "application/pdf": ".pdf",
+  "text/plain": ".txt",
+  "application/json": ".json",
+};
 
 export function registerUploadRoutes(app: App) {
-  // POST /api/upload/imagem - Upload image
-  app.fastify.post<{ Body: UploadImageBody }>(
+  // POST /api/upload/imagem - Upload an image file
+  app.fastify.post(
     "/api/upload/imagem",
     {
       schema: {
-        description: "Upload an image (requires authentication)",
+        description: "Upload an image file (requires authentication)",
         tags: ["upload"],
-        body: {
-          type: "object",
-          required: ["filename"],
-          properties: {
-            base64: { type: "string" },
-            filename: { type: "string" },
-          },
-        },
         response: {
           200: {
             type: "object",
@@ -32,31 +35,53 @@ export function registerUploadRoutes(app: App) {
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          413: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Body: UploadImageBody }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const auth = await requireAuth(app, request, reply);
       if (!auth) return;
 
       try {
-        if (!request.body.filename) {
-          return reply.code(400).send({ error: "filename is required" });
+        // Get the file from multipart form data
+        const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+
+        if (!data) {
+          app.logger.warn({}, "No file provided in upload request");
+          return reply.code(400).send({ error: "No file provided" });
         }
 
-        app.logger.info({ filename: request.body.filename }, "Uploading image");
+        let buffer: Buffer;
+        try {
+          buffer = await data.toBuffer();
+        } catch (error) {
+          app.logger.warn({ err: error }, "File too large");
+          return reply.code(413).send({ error: "File too large" });
+        }
 
-        // Generate deterministic URL based on filename
-        const url = `https://picsum.photos/seed/${request.body.filename}/400/300`;
+        const mimeType = data.mimetype || "application/octet-stream";
+        const extension = mimeTypeExtensions[mimeType] || ".bin";
+        const filename = `${randomUUID()}${extension}`;
+        const key = `uploads/${filename}`;
 
-        app.logger.info({ filename: request.body.filename, url }, "Image upload successful");
+        app.logger.info(
+          { filename, mimeType, size: buffer.length },
+          "Uploading file to storage"
+        );
+
+        // Upload to storage
+        const uploadedKey = await app.storage.upload(key, buffer);
+
+        // Get signed URL for client access
+        const { url } = await app.storage.getSignedUrl(uploadedKey);
+
+        app.logger.info({ filename, url }, "File uploaded successfully");
 
         return reply.code(200).send({ url });
       } catch (error) {
-        app.logger.error({ err: error, body: request.body }, "Failed to upload image");
-        // Always return a URL to avoid errors - fallback to picsum URL
-        const fallbackUrl = `https://picsum.photos/seed/${request.body?.filename || 'default'}/400/300`;
-        return reply.code(200).send({ url: fallbackUrl });
+        app.logger.error({ err: error }, "Failed to upload file");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

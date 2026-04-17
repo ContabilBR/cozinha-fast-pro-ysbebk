@@ -28,7 +28,7 @@ export function registerTableRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              data: {
+              mesas: {
                 type: "array",
                 items: {
                   type: "object",
@@ -56,7 +56,7 @@ export function registerTableRoutes(app: App) {
         const mesas = await app.db.select().from(schema.mesas).orderBy(schema.mesas.numero);
 
         return reply.code(200).send({
-          data: mesas.map((m) => ({
+          mesas: mesas.map((m) => ({
             id: m.id,
             numero: m.numero,
             status: m.status,
@@ -91,11 +91,16 @@ export function registerTableRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              numero: { type: "number" },
-              status: { type: "string", enum: ["livre", "ocupada"] },
-              capacidade: { type: "number" },
-              createdAt: { type: "string", format: "date-time" },
+              mesa: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  numero: { type: "number" },
+                  status: { type: "string", enum: ["livre", "ocupada"] },
+                  capacidade: { type: "number" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
@@ -138,11 +143,13 @@ export function registerTableRoutes(app: App) {
         app.logger.info({ mesaId: mesa.id }, "Mesa created successfully");
 
         return reply.code(201).send({
-          id: mesa.id,
-          numero: mesa.numero,
-          status: mesa.status,
-          capacidade: mesa.capacidade,
-          createdAt: mesa.createdAt.toISOString(),
+          mesa: {
+            id: mesa.id,
+            numero: mesa.numero,
+            status: mesa.status,
+            capacidade: mesa.capacidade,
+            createdAt: mesa.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create mesa");
@@ -234,11 +241,16 @@ export function registerTableRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              numero: { type: "number" },
-              status: { type: "string", enum: ["livre", "ocupada"] },
-              capacidade: { type: "number" },
-              createdAt: { type: "string", format: "date-time" },
+              mesa: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  numero: { type: "number" },
+                  status: { type: "string", enum: ["livre", "ocupada"] },
+                  capacidade: { type: "number" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -293,11 +305,13 @@ export function registerTableRoutes(app: App) {
         app.logger.info({ mesaId: updated.id }, "Mesa updated successfully");
 
         return reply.code(200).send({
-          id: updated.id,
-          numero: updated.numero,
-          status: updated.status,
-          capacidade: updated.capacidade,
-          createdAt: updated.createdAt.toISOString(),
+          mesa: {
+            id: updated.id,
+            numero: updated.numero,
+            status: updated.status,
+            capacidade: updated.capacidade,
+            createdAt: updated.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update mesa");
@@ -321,7 +335,7 @@ export function registerTableRoutes(app: App) {
         response: {
           200: {
             type: "object",
-            properties: { message: { type: "string" } },
+            properties: { success: { type: "boolean" } },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -355,7 +369,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ mesaId: request.params.id }, "Mesa deleted successfully");
 
-        return reply.code(200).send({ message: "Mesa excluída com sucesso" });
+        return reply.code(200).send({ success: true });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete mesa");
         return reply.code(500).send({ error: "Internal server error" });

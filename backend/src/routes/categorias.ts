@@ -26,7 +26,7 @@ export function registerCategoriasRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              data: {
+              categorias: {
                 type: "array",
                 items: {
                   type: "object",
@@ -57,7 +57,7 @@ export function registerCategoriasRoutes(app: App) {
           .orderBy(schema.categorias.nome);
 
         return reply.code(200).send({
-          data: result.map((c) => ({
+          categorias: result.map((c) => ({
             id: c.id,
             nome: c.nome,
             descricao: c.descricao,
@@ -90,10 +90,15 @@ export function registerCategoriasRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              id: { type: "string" },
-              nome: { type: "string" },
-              descricao: { type: ["string", "null"] },
-              createdAt: { type: "string" },
+              categoria: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  nome: { type: "string" },
+                  descricao: { type: ["string", "null"] },
+                  createdAt: { type: "string" },
+                },
+              },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
@@ -122,10 +127,12 @@ export function registerCategoriasRoutes(app: App) {
         app.logger.info({ categoriaId: categoria.id }, "Categoria created successfully");
 
         return reply.code(201).send({
-          id: categoria.id,
-          nome: categoria.nome,
-          descricao: categoria.descricao,
-          createdAt: categoria.createdAt.toISOString(),
+          categoria: {
+            id: categoria.id,
+            nome: categoria.nome,
+            descricao: categoria.descricao,
+            createdAt: categoria.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create categoria");
@@ -157,10 +164,15 @@ export function registerCategoriasRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              id: { type: "string" },
-              nome: { type: "string" },
-              descricao: { type: ["string", "null"] },
-              createdAt: { type: "string" },
+              categoria: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  nome: { type: "string" },
+                  descricao: { type: ["string", "null"] },
+                  createdAt: { type: "string" },
+                },
+              },
             },
           },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -199,10 +211,12 @@ export function registerCategoriasRoutes(app: App) {
         app.logger.info({ categoriaId: updated.id }, "Categoria updated successfully");
 
         return reply.code(200).send({
-          id: updated.id,
-          nome: updated.nome,
-          descricao: updated.descricao,
-          createdAt: updated.createdAt.toISOString(),
+          categoria: {
+            id: updated.id,
+            nome: updated.nome,
+            descricao: updated.descricao,
+            createdAt: updated.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update categoria");
@@ -224,7 +238,10 @@ export function registerCategoriasRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Categoria deleted" },
+          200: {
+            type: "object",
+            properties: { success: { type: "boolean" } },
+          },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -249,7 +266,7 @@ export function registerCategoriasRoutes(app: App) {
 
         app.logger.info({ categoriaId: request.params.id }, "Categoria deleted successfully");
 
-        return reply.code(204).send();
+        return reply.code(200).send({ success: true });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete categoria");
         return reply.code(500).send({ error: "Internal server error" });

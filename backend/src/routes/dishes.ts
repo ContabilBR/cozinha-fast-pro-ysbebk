@@ -34,7 +34,7 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              data: {
+              pratos: {
                 type: "array",
                 items: {
                   type: "object",
@@ -43,7 +43,14 @@ export function registerDishRoutes(app: App) {
                     nome: { type: "string" },
                     descricao: { type: "string" },
                     preco: { type: "string" },
-                    categoriaId: { type: "string" },
+                    categoriaId: { type: ["string", "null"] },
+                    categoria: {
+                      type: ["object", "null"],
+                      properties: {
+                        id: { type: "string", format: "uuid" },
+                        nome: { type: "string" },
+                      },
+                    },
                     imagemUrl: { type: "string" },
                     disponivel: { type: "boolean" },
                     createdAt: { type: "string", format: "date-time" },
@@ -70,6 +77,7 @@ export function registerDishRoutes(app: App) {
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
+            categoriaIdFromJoin: schema.categorias.id,
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
@@ -79,13 +87,16 @@ export function registerDishRoutes(app: App) {
           .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
 
         return reply.code(200).send({
-          data: pratos.map((p) => ({
+          pratos: pratos.map((p) => ({
             id: p.id,
             nome: p.nome,
             descricao: p.descricao,
             preco: p.preco,
             categoriaId: p.categoriaId,
-            categoriaNome: p.categoriaNome || "Sem categoria",
+            categoria: p.categoriaIdFromJoin ? {
+              id: p.categoriaIdFromJoin,
+              nome: p.categoriaNome,
+            } : null,
             imagemUrl: p.imagemUrl,
             disponivel: p.disponivel,
             createdAt: p.createdAt.toISOString(),
@@ -121,14 +132,19 @@ export function registerDishRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              nome: { type: "string" },
-              descricao: { type: ["string", "null"] },
-              preco: { type: "string" },
-              categoriaId: { type: ["string", "null"] },
-              imagemUrl: { type: ["string", "null"] },
-              disponivel: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
+              prato: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  nome: { type: "string" },
+                  descricao: { type: ["string", "null"] },
+                  preco: { type: "string" },
+                  categoriaId: { type: ["string", "null"] },
+                  imagemUrl: { type: ["string", "null"] },
+                  disponivel: { type: "boolean" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
@@ -162,14 +178,16 @@ export function registerDishRoutes(app: App) {
         app.logger.info({ pratoId: prato.id }, "Prato created successfully");
 
         return reply.code(201).send({
-          id: prato.id,
-          nome: prato.nome,
-          descricao: prato.descricao,
-          preco: prato.preco,
-          categoriaId: prato.categoriaId,
-          imagemUrl: prato.imagemUrl,
-          disponivel: prato.disponivel,
-          createdAt: prato.createdAt.toISOString(),
+          prato: {
+            id: prato.id,
+            nome: prato.nome,
+            descricao: prato.descricao,
+            preco: prato.preco,
+            categoriaId: prato.categoriaId,
+            imagemUrl: prato.imagemUrl,
+            disponivel: prato.disponivel,
+            createdAt: prato.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create prato");
@@ -194,14 +212,26 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              nome: { type: "string" },
-              descricao: { type: ["string", "null"] },
-              preco: { type: "string" },
-              categoriaId: { type: ["string", "null"] },
-              imagemUrl: { type: ["string", "null"] },
-              disponivel: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
+              prato: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  nome: { type: "string" },
+                  descricao: { type: ["string", "null"] },
+                  preco: { type: "string" },
+                  categoriaId: { type: ["string", "null"] },
+                  categoria: {
+                    type: ["object", "null"],
+                    properties: {
+                      id: { type: "string", format: "uuid" },
+                      nome: { type: "string" },
+                    },
+                  },
+                  imagemUrl: { type: ["string", "null"] },
+                  disponivel: { type: "boolean" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -223,6 +253,7 @@ export function registerDishRoutes(app: App) {
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
+            categoriaIdFromJoin: schema.categorias.id,
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
@@ -238,15 +269,20 @@ export function registerDishRoutes(app: App) {
 
         const p = pratos[0];
         return reply.code(200).send({
-          id: p.id,
-          nome: p.nome,
-          descricao: p.descricao,
-          preco: p.preco,
-          categoriaId: p.categoriaId,
-          categoriaNome: p.categoriaNome || "Sem categoria",
-          imagemUrl: p.imagemUrl,
-          disponivel: p.disponivel,
-          createdAt: p.createdAt.toISOString(),
+          prato: {
+            id: p.id,
+            nome: p.nome,
+            descricao: p.descricao,
+            preco: p.preco,
+            categoriaId: p.categoriaId,
+            categoria: p.categoriaIdFromJoin ? {
+              id: p.categoriaIdFromJoin,
+              nome: p.categoriaNome,
+            } : null,
+            imagemUrl: p.imagemUrl,
+            disponivel: p.disponivel,
+            createdAt: p.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get prato");
@@ -282,14 +318,19 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              nome: { type: "string" },
-              descricao: { type: ["string", "null"] },
-              preco: { type: "string" },
-              categoriaId: { type: ["string", "null"] },
-              imagemUrl: { type: ["string", "null"] },
-              disponivel: { type: "boolean" },
-              createdAt: { type: "string", format: "date-time" },
+              prato: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  nome: { type: "string" },
+                  descricao: { type: ["string", "null"] },
+                  preco: { type: "string" },
+                  categoriaId: { type: ["string", "null"] },
+                  imagemUrl: { type: ["string", "null"] },
+                  disponivel: { type: "boolean" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -333,14 +374,16 @@ export function registerDishRoutes(app: App) {
         app.logger.info({ pratoId: updated.id }, "Prato updated successfully");
 
         return reply.code(200).send({
-          id: updated.id,
-          nome: updated.nome,
-          descricao: updated.descricao,
-          preco: updated.preco,
-          categoriaId: updated.categoriaId,
-          imagemUrl: updated.imagemUrl,
-          disponivel: updated.disponivel,
-          createdAt: updated.createdAt.toISOString(),
+          prato: {
+            id: updated.id,
+            nome: updated.nome,
+            descricao: updated.descricao,
+            preco: updated.preco,
+            categoriaId: updated.categoriaId,
+            imagemUrl: updated.imagemUrl,
+            disponivel: updated.disponivel,
+            createdAt: updated.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update prato");
@@ -364,7 +407,7 @@ export function registerDishRoutes(app: App) {
         response: {
           200: {
             type: "object",
-            properties: { message: { type: "string" } },
+            properties: { success: { type: "boolean" } },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -391,7 +434,7 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ pratoId: request.params.id }, "Prato deleted successfully");
 
-        return reply.code(200).send({ message: "Prato excluído com sucesso" });
+        return reply.code(200).send({ success: true });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete prato");
         return reply.code(500).send({ error: "Internal server error" });
