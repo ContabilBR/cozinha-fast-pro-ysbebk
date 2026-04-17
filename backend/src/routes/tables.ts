@@ -113,6 +113,8 @@ export function registerTableRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         if (!request.body.numero) {
           return reply.code(400).send({ error: "numero is required" });
@@ -267,6 +269,8 @@ export function registerTableRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         app.logger.info({ mesaId: request.params.id, body: request.body }, "Updating mesa");
 
@@ -334,7 +338,7 @@ export function registerTableRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" } } },
+          204: {},
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -387,7 +391,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ mesaId: request.params.id }, "Mesa and dependencies deleted successfully");
 
-        return reply.code(200).send({ success: true, message: "Mesa excluída com sucesso" });
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete mesa");
         if (error instanceof Error && error.message.includes("constraint")) {
@@ -411,7 +415,7 @@ export function registerTableRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object", properties: { message: { type: "string" } } },
+          204: {},
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -463,7 +467,7 @@ export function registerTableRoutes(app: App) {
           "Mesa and dependencies force deleted successfully"
         );
 
-        return reply.code(200).send({ message: "Mesa e todas as dependências excluídas com sucesso" });
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to force delete mesa");
         return reply.code(500).send({ error: "Internal server error" });

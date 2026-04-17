@@ -67,7 +67,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create new user", async () => {
-    const res = await authenticatedApi("/api/users", authToken, {
+    const res = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -94,7 +94,7 @@ describe("API Integration Tests", () => {
 
   test("Create user with duplicate email returns 409", async () => {
     // Create first user
-    const firstRes = await authenticatedApi("/api/users", authToken, {
+    const firstRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -107,7 +107,7 @@ describe("API Integration Tests", () => {
     await expectStatus(firstRes, 201);
 
     // Try to create with same email
-    const dupRes = await authenticatedApi("/api/users", authToken, {
+    const dupRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -179,7 +179,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create categoria", async () => {
-    const res = await authenticatedApi("/api/categorias", authToken, {
+    const res = await authenticatedApi("/api/categorias", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -204,7 +204,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update categoria", async () => {
-    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, authToken, {
+    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -217,7 +217,7 @@ describe("API Integration Tests", () => {
   test("Update non-existent categoria returns 404", async () => {
     const res = await authenticatedApi(
       "/api/categorias/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -249,7 +249,7 @@ describe("API Integration Tests", () => {
   let pratoCategoryId: string;
 
   test("Create categoria for pratos", async () => {
-    const res = await authenticatedApi("/api/categorias", authToken, {
+    const res = await authenticatedApi("/api/categorias", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -265,12 +265,11 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/pratos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("Create prato", async () => {
-    const res = await authenticatedApi("/api/pratos", authToken, {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -311,8 +310,38 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("List pratos filtered by categoria", async () => {
+    const res = await authenticatedApi(
+      `/api/pratos?categoria_id=${pratoCategoryId}`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List pratos filtered by disponivel=true", async () => {
+    const res = await authenticatedApi(
+      "/api/pratos?disponivel=true",
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List pratos filtered by disponivel=false", async () => {
+    const res = await authenticatedApi(
+      "/api/pratos?disponivel=false",
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
   test("Update prato", async () => {
-    const res = await authenticatedApi(`/api/pratos/${testDishId}`, authToken, {
+    const res = await authenticatedApi(`/api/pratos/${testDishId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -326,7 +355,7 @@ describe("API Integration Tests", () => {
   test("Update non-existent prato returns 404", async () => {
     const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -370,7 +399,7 @@ describe("API Integration Tests", () => {
   let fotoPratoId: string;
 
   test("Create prato for photo upload", async () => {
-    const res = await authenticatedApi("/api/pratos", authToken, {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -389,7 +418,7 @@ describe("API Integration Tests", () => {
     const testFile = createTestFile("prato.jpg", "test image content", "image/jpeg");
     formData.append("file", testFile);
 
-    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, authToken, {
+    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, adminToken, {
       method: "POST",
       body: formData,
     });
@@ -405,7 +434,7 @@ describe("API Integration Tests", () => {
 
     const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000/foto",
-      authToken,
+      adminToken,
       {
         method: "POST",
         body: formData,
@@ -417,7 +446,7 @@ describe("API Integration Tests", () => {
   test("Upload photo without file returns 400", async () => {
     const formData = new FormData();
 
-    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, authToken, {
+    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, adminToken, {
       method: "POST",
       body: formData,
     });
@@ -434,7 +463,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create mesa", async () => {
-    const res = await authenticatedApi("/api/mesas", authToken, {
+    const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -472,7 +501,7 @@ describe("API Integration Tests", () => {
     const duplicateNumber = Math.floor(Math.random() * 900000) + 100000;
 
     // Create first mesa
-    const firstRes = await authenticatedApi("/api/mesas", authToken, {
+    const firstRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -482,7 +511,7 @@ describe("API Integration Tests", () => {
     await expectStatus(firstRes, 201);
 
     // Try to create with same numero
-    const dupRes = await authenticatedApi("/api/mesas", authToken, {
+    const dupRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -493,7 +522,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update mesa status", async () => {
-    const res = await authenticatedApi(`/api/mesas/${testTableId}`, authToken, {
+    const res = await authenticatedApi(`/api/mesas/${testTableId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -506,7 +535,7 @@ describe("API Integration Tests", () => {
   test("Update non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -536,7 +565,7 @@ describe("API Integration Tests", () => {
         method: "DELETE",
       }
     );
-    await expectStatus(res, 200);
+    await expectStatus(res, 204);
   });
 
   test("Delete non-existent mesa returns 404", async () => {
@@ -571,9 +600,7 @@ describe("API Integration Tests", () => {
         method: "DELETE",
       }
     );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.message).toBeDefined();
+    await expectStatus(res, 204);
   });
 
   test("Force delete non-existent mesa returns 404", async () => {
@@ -591,7 +618,7 @@ describe("API Integration Tests", () => {
   let comandaMesaId: string;
 
   test("Create mesa for comanda", async () => {
-    const res = await authenticatedApi("/api/mesas", authToken, {
+    const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -604,7 +631,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List all comandas", async () => {
-    const res = await api("/api/comandas");
+    const res = await authenticatedApi("/api/comandas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
@@ -612,7 +639,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create comanda", async () => {
-    const res = await api("/api/comandas", {
+    const res = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -626,7 +653,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create comanda missing required field returns 400", async () => {
-    const res = await api("/api/comandas", {
+    const res = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -638,19 +665,20 @@ describe("API Integration Tests", () => {
   });
 
   test("Get comanda by ID", async () => {
-    const res = await api(`/api/comandas/${testCommandaId}`);
+    const res = await authenticatedApi(`/api/comandas/${testCommandaId}`, authToken);
     await expectStatus(res, 200);
   });
 
   test("Get non-existent comanda returns 404", async () => {
-    const res = await api(
-      "/api/comandas/00000000-0000-0000-0000-000000000000"
+    const res = await authenticatedApi(
+      "/api/comandas/00000000-0000-0000-0000-000000000000",
+      authToken
     );
     await expectStatus(res, 404);
   });
 
   test("Close comanda", async () => {
-    const res = await api(`/api/comandas/${testCommandaId}/fechar`, {
+    const res = await authenticatedApi(`/api/comandas/${testCommandaId}/fechar`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -661,8 +689,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Close non-existent comanda returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/comandas/00000000-0000-0000-0000-000000000000/fechar",
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -674,7 +703,7 @@ describe("API Integration Tests", () => {
 
   test("Cancel comanda", async () => {
     // Create a new comanda to cancel
-    const createRes = await api("/api/comandas", {
+    const createRes = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -684,15 +713,16 @@ describe("API Integration Tests", () => {
     await expectStatus(createRes, 201);
     const createData = await createRes.json();
 
-    const res = await api(`/api/comandas/${createData.id}/cancelar`, {
+    const res = await authenticatedApi(`/api/comandas/${createData.id}/cancelar`, authToken, {
       method: "PUT",
     });
     await expectStatus(res, 200);
   });
 
   test("Cancel non-existent comanda returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/comandas/00000000-0000-0000-0000-000000000000/cancelar",
+      authToken,
       {
         method: "PUT",
       }
@@ -705,7 +735,7 @@ describe("API Integration Tests", () => {
   let pedidoPratoId: string;
 
   test("Create prato for pedidos", async () => {
-    const res = await authenticatedApi("/api/pratos", authToken, {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -720,7 +750,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create comanda for pedidos", async () => {
-    const res = await api("/api/comandas", {
+    const res = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -733,7 +763,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List all pedidos", async () => {
-    const res = await api("/api/pedidos");
+    const res = await authenticatedApi("/api/pedidos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
@@ -741,7 +771,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create pedido", async () => {
-    const res = await api("/api/pedidos", {
+    const res = await authenticatedApi("/api/pedidos", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -758,7 +788,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create pedido missing required field returns 400", async () => {
-    const res = await api("/api/pedidos", {
+    const res = await authenticatedApi("/api/pedidos", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -771,19 +801,20 @@ describe("API Integration Tests", () => {
   });
 
   test("Get pedido by ID", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}`);
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken);
     await expectStatus(res, 200);
   });
 
   test("Get non-existent pedido returns 404", async () => {
-    const res = await api(
-      "/api/pedidos/00000000-0000-0000-0000-000000000000"
+    const res = await authenticatedApi(
+      "/api/pedidos/00000000-0000-0000-0000-000000000000",
+      authToken
     );
     await expectStatus(res, 404);
   });
 
   test("Update pedido status", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -794,8 +825,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent pedido status returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/pedidos/00000000-0000-0000-0000-000000000000/status",
+      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -806,7 +838,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update pedido status to pronto", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -817,7 +849,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update pedido status to entregue", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -828,20 +860,21 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete pedido", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}`, {
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken, {
       method: "DELETE",
     });
     await expectStatus(res, 204);
   });
 
   test("Get deleted pedido returns 404", async () => {
-    const res = await api(`/api/pedidos/${testPedidoId}`);
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken);
     await expectStatus(res, 404);
   });
 
   test("Delete non-existent pedido returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/pedidos/00000000-0000-0000-0000-000000000000",
+      authToken,
       {
         method: "DELETE",
       }
@@ -861,7 +894,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create usuario", async () => {
-    const res = await api("/api/usuarios", {
+    const res = await authenticatedApi("/api/usuarios", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -877,7 +910,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create usuario missing required field returns 400", async () => {
-    const res = await api("/api/usuarios", {
+    const res = await authenticatedApi("/api/usuarios", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -889,7 +922,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update usuario", async () => {
-    const res = await api(`/api/usuarios/${testUsuarioId}`, {
+    const res = await authenticatedApi(`/api/usuarios/${testUsuarioId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -900,8 +933,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent usuario returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/usuarios/00000000-0000-0000-0000-000000000000",
+      adminToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -940,7 +974,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create garcon", async () => {
-    const res = await authenticatedApi("/api/garcons", authToken, {
+    const res = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -955,7 +989,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create garcon missing required field returns 400", async () => {
-    const res = await authenticatedApi("/api/garcons", authToken, {
+    const res = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -970,7 +1004,7 @@ describe("API Integration Tests", () => {
     const dupEmail = `garcom-dup-${Date.now()}@example.com`;
 
     // Create first garcon
-    const firstRes = await authenticatedApi("/api/garcons", authToken, {
+    const firstRes = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -982,7 +1016,7 @@ describe("API Integration Tests", () => {
     await expectStatus(firstRes, 201);
 
     // Try to create with same email
-    const dupRes = await authenticatedApi("/api/garcons", authToken, {
+    const dupRes = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -995,7 +1029,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update garcon", async () => {
-    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, authToken, {
+    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1008,7 +1042,7 @@ describe("API Integration Tests", () => {
   test("Update non-existent garcon returns 404", async () => {
     const res = await authenticatedApi(
       "/api/garcons/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1019,16 +1053,16 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete garcon", async () => {
-    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, authToken, {
+    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, adminToken, {
       method: "DELETE",
     });
-    await expectStatus(res, 200);
+    await expectStatus(res, 204);
   });
 
   test("Delete non-existent garcon returns 404", async () => {
     const res = await authenticatedApi(
       "/api/garcons/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }

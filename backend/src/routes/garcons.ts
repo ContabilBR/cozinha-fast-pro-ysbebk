@@ -51,8 +51,6 @@ export function registerGarconRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
-
       try {
         app.logger.info({}, "Listing all garcons");
 
@@ -302,12 +300,7 @@ export function registerGarconRoutes(app: App) {
           properties: { id: { type: "string" } },
         },
         response: {
-          200: {
-            type: "object",
-            properties: {
-              success: { type: "boolean" },
-            },
-          },
+          204: {},
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -336,7 +329,7 @@ export function registerGarconRoutes(app: App) {
 
         app.logger.info({ userId: request.params.id }, "Garcon deleted successfully");
 
-        return reply.code(200).send({ success: true });
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete garcon");
         return reply.code(500).send({ error: "Internal server error" });

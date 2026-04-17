@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
@@ -31,32 +31,27 @@ export function registerDishRoutes(app: App) {
       schema: {
         description: "List all pratos (requires authentication)",
         tags: ["pratos"],
+        querystring: {
+          type: "object",
+          properties: {
+            categoria_id: { type: "string", format: "uuid", description: "Filter by categoria ID" },
+            disponivel: { type: "string", enum: ["true", "false"], description: "Filter by disponivel status" },
+          },
+        },
         response: {
           200: {
-            type: "object",
-            properties: {
-              pratos: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string", format: "uuid" },
-                    nome: { type: "string" },
-                    descricao: { type: "string" },
-                    preco: { type: "string" },
-                    categoriaId: { type: ["string", "null"] },
-                    categoria: {
-                      type: ["object", "null"],
-                      properties: {
-                        id: { type: "string", format: "uuid" },
-                        nome: { type: "string" },
-                      },
-                    },
-                    imagemUrl: { type: "string" },
-                    disponivel: { type: "boolean" },
-                    createdAt: { type: "string", format: "date-time" },
-                  },
-                },
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nome: { type: "string" },
+                descricao: { type: ["string", "null"] },
+                preco: { type: "string" },
+                categoria_id: { type: ["string", "null"] },
+                imagem_url: { type: ["string", "null"] },
+                disponivel: { type: "boolean" },
+                created_at: { type: "string", format: "date-time" },
               },
             },
           },
@@ -64,45 +59,53 @@ export function registerDishRoutes(app: App) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{ Querystring: { categoria_id?: string; disponivel?: string } }>,
+      reply: FastifyReply
+    ) => {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
       try {
-        app.logger.info({}, "Listing pratos");
+        app.logger.info({ filters: { categoria_id: request.query.categoria_id, disponivel: request.query.disponivel } }, "Listing pratos");
 
-        const pratos = await app.db
+        // Build base query
+        let baseQuery = app.db
           .select({
             id: schema.pratos.id,
             nome: schema.pratos.nome,
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
-            categoriaIdFromJoin: schema.categorias.id,
-            categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
             createdAt: schema.pratos.createdAt,
           })
-          .from(schema.pratos)
-          .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
+          .from(schema.pratos) as any;
 
-        return reply.code(200).send({
-          pratos: pratos.map((p) => ({
+        // Apply filters
+        if (request.query.categoria_id) {
+          baseQuery = baseQuery.where(eq(schema.pratos.categoriaId, request.query.categoria_id));
+        }
+        if (request.query.disponivel !== undefined) {
+          const disponivel = request.query.disponivel === "true";
+          baseQuery = baseQuery.where(eq(schema.pratos.disponivel, disponivel));
+        }
+
+        const pratos = await baseQuery;
+
+        return reply.code(200).send(
+          pratos.map((p) => ({
             id: p.id,
             nome: p.nome,
             descricao: p.descricao,
             preco: p.preco,
-            categoriaId: p.categoriaId,
-            categoria: p.categoriaIdFromJoin ? {
-              id: p.categoriaIdFromJoin,
-              nome: p.categoriaNome,
-            } : null,
-            imagemUrl: p.imagemUrl,
+            categoria_id: p.categoriaId,
+            imagem_url: p.imagemUrl,
             disponivel: p.disponivel,
-            createdAt: p.createdAt.toISOString(),
-          })),
-        });
+            created_at: p.createdAt.toISOString(),
+          }))
+        );
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list pratos");
         return reply.code(500).send({ error: "Internal server error" });
@@ -156,6 +159,8 @@ export function registerDishRoutes(app: App) {
     async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
+
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.preco) {
@@ -346,6 +351,8 @@ export function registerDishRoutes(app: App) {
     ) => {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
+
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Updating prato");

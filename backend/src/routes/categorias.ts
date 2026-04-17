@@ -109,6 +109,8 @@ export function registerCategoriasRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+
       try {
         if (!request.body.nome) {
           return reply.code(400).send({ error: "nome is required" });
