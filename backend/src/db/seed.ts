@@ -10,7 +10,7 @@ const seedAuthUsers = [
   {
     name: "Administrador",
     email: "admin@cozinhafast.com",
-    password: "admin123",
+    password: "123456",
     role: "administrador",
   },
   {
@@ -164,7 +164,7 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
-    // Seed auth users
+    // Seed auth users - ALWAYS do this to ensure admin and other users exist
     app.logger.info("Seeding auth users");
     const userIds: Record<string, string> = {};
     let garcomUserId = "";
@@ -204,6 +204,28 @@ export async function seedDatabase(app: App) {
           });
 
           app.logger.info({ email: seedUser.email, userId }, "Auth user created");
+        } else {
+          // User exists, but verify password is correct by checking account
+          const existingAccounts = await app.db
+            .select()
+            .from(accountTable)
+            .where(eq(accountTable.userId, existing[0].id))
+            .limit(1);
+
+          if (existingAccounts.length === 0) {
+            // No account found, create it
+            const hashedPassword = await bcrypt.hash(seedUser.password, 10);
+            await app.db.insert(accountTable).values({
+              id: randomUUID(),
+              accountId: userId,
+              providerId: "credential",
+              userId: userId,
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
+            app.logger.info({ email: seedUser.email, userId }, "Auth user account created");
+          }
         }
 
         userIds[seedUser.email] = userId;
@@ -215,7 +237,7 @@ export async function seedDatabase(app: App) {
       }
     }
 
-    // Check if already seeded
+    // Check if already seeded (by checking mesas)
     const existingMesas = await app.db.select().from(schema.mesas).limit(1);
     if (existingMesas.length > 0) {
       app.logger.info("Database already seeded");
