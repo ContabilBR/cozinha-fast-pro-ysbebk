@@ -132,17 +132,35 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ comandaId: request.body.comandaId }, "Creating pedido");
 
+        const quantidade = request.body.quantidade || 1;
+        const itemTotal = parseFloat(request.body.precoUnitario) * quantidade;
+
         const [pedido] = await app.db
           .insert(schema.pedidos)
           .values({
             comandaId: request.body.comandaId,
             pratoId: request.body.pratoId,
-            quantidade: request.body.quantidade || 1,
+            quantidade: quantidade,
             precoUnitario: request.body.precoUnitario,
             observacao: request.body.observacao,
             status: "pendente",
           })
           .returning();
+
+        // Update comanda total
+        const comanda = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, request.body.comandaId))
+          .limit(1);
+
+        if (comanda.length > 0) {
+          const newTotal = (parseFloat(comanda[0].total) + itemTotal).toFixed(2);
+          await app.db
+            .update(schema.comandas)
+            .set({ total: newTotal })
+            .where(eq(schema.comandas.id, request.body.comandaId));
+        }
 
         app.logger.info({ pedidoId: pedido.id }, "Pedido created successfully");
 

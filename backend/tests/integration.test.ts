@@ -622,4 +622,123 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 404);
   });
+
+  // ==================== Usuarios CRUD ====================
+  let testUsuarioId: string;
+  const usuarioEmail = `usuario-${Date.now()}@example.com`;
+
+  test("List all usuarios", async () => {
+    const res = await api("/api/usuarios");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
+  });
+
+  test("Create usuario", async () => {
+    const res = await api("/api/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Usuario",
+        email: usuarioEmail,
+        senha: "senha123456",
+        role: "garcom",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    testUsuarioId = data.id;
+  });
+
+  test("Create usuario missing required field returns 400", async () => {
+    const res = await api("/api/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `usuario2-${Date.now()}@example.com`,
+        // missing required nome and senha
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Update usuario", async () => {
+    const res = await api(`/api/usuarios/${testUsuarioId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Updated Usuario",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update non-existent usuario returns 404", async () => {
+    const res = await api(
+      "/api/usuarios/00000000-0000-0000-0000-000000000000",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: "Test" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete usuario", async () => {
+    const res = await api(`/api/usuarios/${testUsuarioId}`, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 204);
+  });
+
+  test("Delete non-existent usuario returns 404", async () => {
+    const res = await api(
+      "/api/usuarios/00000000-0000-0000-0000-000000000000",
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  // ==================== Relatorios ====================
+  test("Get relatorio resumo", async () => {
+    const res = await api("/api/relatorios/resumo");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.total_mesas).toBeDefined();
+    expect(data.mesas_ocupadas).toBeDefined();
+    expect(data.comandas_abertas).toBeDefined();
+    expect(data.pedidos_pendentes).toBeDefined();
+    expect(data.receita_hoje).toBeDefined();
+    expect(data.receita_semana).toBeDefined();
+  });
+
+  // ==================== Upload ====================
+  test("Upload image", async () => {
+    const res = await api("/api/upload/imagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: "test-image.png",
+        base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.url).toBeDefined();
+  });
+
+  test("Upload image missing filename returns 400", async () => {
+    const res = await api("/api/upload/imagem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
 });

@@ -13,13 +13,13 @@ interface UpdateCategoriaBody {
   descricao?: string;
 }
 
-export function registerCategoryRoutes(app: App) {
+export function registerCategoriasRoutes(app: App) {
   // GET /api/categorias - List all categories
   app.fastify.get(
     "/api/categorias",
     {
       schema: {
-        description: "List all categories",
+        description: "List all categorias",
         tags: ["categorias"],
         response: {
           200: {
@@ -32,7 +32,7 @@ export function registerCategoryRoutes(app: App) {
                   properties: {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
-                    descricao: { type: "string" },
+                    descricao: { type: ["string", "null"] },
                     createdAt: { type: "string", format: "date-time" },
                   },
                 },
@@ -46,13 +46,13 @@ export function registerCategoryRoutes(app: App) {
       try {
         app.logger.info({}, "Listing categorias");
 
-        const categorias = await app.db
+        const result = await app.db
           .select()
-          .from(schema.categoriaPratos)
-          .orderBy(schema.categoriaPratos.nome);
+          .from(schema.categorias)
+          .orderBy(schema.categorias.nome);
 
         return reply.code(200).send({
-          data: categorias.map((c) => ({
+          data: result.map((c) => ({
             id: c.id,
             nome: c.nome,
             descricao: c.descricao,
@@ -71,7 +71,7 @@ export function registerCategoryRoutes(app: App) {
     "/api/categorias",
     {
       schema: {
-        description: "Create a new category",
+        description: "Create a new categoria",
         tags: ["categorias"],
         body: {
           type: "object",
@@ -104,7 +104,7 @@ export function registerCategoryRoutes(app: App) {
         app.logger.info({ nome: request.body.nome }, "Creating categoria");
 
         const [categoria] = await app.db
-          .insert(schema.categoriaPratos)
+          .insert(schema.categorias)
           .values({
             nome: request.body.nome,
             descricao: request.body.descricao,
@@ -131,7 +131,7 @@ export function registerCategoryRoutes(app: App) {
     "/api/categorias/:id",
     {
       schema: {
-        description: "Update a category",
+        description: "Update a categoria",
         tags: ["categorias"],
         params: {
           type: "object",
@@ -168,8 +168,8 @@ export function registerCategoryRoutes(app: App) {
 
         const existing = await app.db
           .select()
-          .from(schema.categoriaPratos)
-          .where(eq(schema.categoriaPratos.id, request.params.id));
+          .from(schema.categorias)
+          .where(eq(schema.categorias.id, request.params.id));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Categoria not found" });
@@ -180,9 +180,9 @@ export function registerCategoryRoutes(app: App) {
         if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
 
         const [updated] = await app.db
-          .update(schema.categoriaPratos)
+          .update(schema.categorias)
           .set(updates)
-          .where(eq(schema.categoriaPratos.id, request.params.id))
+          .where(eq(schema.categorias.id, request.params.id))
           .returning();
 
         app.logger.info({ categoriaId: updated.id }, "Categoria updated successfully");
@@ -205,7 +205,7 @@ export function registerCategoryRoutes(app: App) {
     "/api/categorias/:id",
     {
       schema: {
-        description: "Delete a category",
+        description: "Delete a categoria",
         tags: ["categorias"],
         params: {
           type: "object",
@@ -213,7 +213,7 @@ export function registerCategoryRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Category deleted" },
+          204: { description: "Categoria deleted" },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -224,16 +224,14 @@ export function registerCategoryRoutes(app: App) {
 
         const existing = await app.db
           .select()
-          .from(schema.categoriaPratos)
-          .where(eq(schema.categoriaPratos.id, request.params.id));
+          .from(schema.categorias)
+          .where(eq(schema.categorias.id, request.params.id));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Categoria not found" });
         }
 
-        await app.db
-          .delete(schema.categoriaPratos)
-          .where(eq(schema.categoriaPratos.id, request.params.id));
+        await app.db.delete(schema.categorias).where(eq(schema.categorias.id, request.params.id));
 
         app.logger.info({ categoriaId: request.params.id }, "Categoria deleted successfully");
 

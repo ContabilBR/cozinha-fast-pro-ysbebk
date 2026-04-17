@@ -11,7 +11,7 @@ import {
 import { user } from "./auth-schema.js";
 
 // Enums
-export const mesaStatusEnum = pgEnum("mesa_status", ["disponivel", "ocupada", "reservada"]);
+export const mesaStatusEnum = pgEnum("mesa_status", ["livre", "ocupada"]);
 export const comandaStatusEnum = pgEnum("comanda_status", ["aberta", "fechada", "cancelada"]);
 export const pedidoStatusEnum = pgEnum("pedido_status", [
   "pendente",
@@ -25,7 +25,16 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
 export const mesas = pgTable("mesas", {
   id: uuid("id").primaryKey().defaultRandom(),
   numero: integer("numero").notNull().unique(),
-  status: mesaStatusEnum("status").default("disponivel").notNull(),
+  status: mesaStatusEnum("status").default("livre").notNull(),
+  capacidade: integer("capacidade").default(4).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Categorias
+export const categorias = pgTable("categorias", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -43,7 +52,7 @@ export const pratos = pgTable("pratos", {
   nome: text("nome").notNull(),
   descricao: text("descricao"),
   preco: numeric("preco", { precision: 10, scale: 2 }).notNull(),
-  categoriaId: uuid("categoria_id").references(() => categoriaPratos.id, { onDelete: "set null" }),
+  categoriaId: uuid("categoria_id").references(() => categorias.id, { onDelete: "set null" }),
   imagemUrl: text("imagem_url"),
   disponivel: boolean("disponivel").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -78,5 +87,15 @@ export const profiles = pgTable("profiles", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("garcom"),
   name: text("name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Usuarios (App-level user management, separate from auth users)
+export const usuarios = pgTable("usuarios", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  email: text("email").notNull().unique(),
+  senhaHash: text("senha_hash"),
+  role: text("role").notNull().default("garcom"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

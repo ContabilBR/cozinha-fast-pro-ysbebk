@@ -66,13 +66,13 @@ export function registerDishRoutes(app: App) {
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
-            categoriaNome: schema.categoriaPratos.nome,
+            categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
             createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
-          .leftJoin(schema.categoriaPratos, eq(schema.pratos.categoriaId, schema.categoriaPratos.id));
+          .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
 
         return reply.code(200).send({
           data: pratos.map((p) => ({
@@ -199,13 +199,13 @@ export function registerDishRoutes(app: App) {
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
-            categoriaNome: schema.categoriaPratos.nome,
+            categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
             createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
-          .leftJoin(schema.categoriaPratos, eq(schema.pratos.categoriaId, schema.categoriaPratos.id))
+          .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id))
           .where(eq(schema.pratos.id, request.params.id));
 
         if (!pratos.length) {

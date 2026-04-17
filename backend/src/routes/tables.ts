@@ -5,11 +5,13 @@ import type { App } from "../index.js";
 
 interface CreateMesaBody {
   numero: number;
+  capacidade?: number;
 }
 
 interface UpdateMesaBody {
   numero?: number;
   status?: string;
+  capacidade?: number;
 }
 
 export function registerTableRoutes(app: App) {
@@ -101,7 +103,8 @@ export function registerTableRoutes(app: App) {
           .insert(schema.mesas)
           .values({
             numero: request.body.numero,
-            status: "disponivel",
+            status: "livre",
+            capacidade: request.body.capacidade || 4,
           })
           .returning();
 

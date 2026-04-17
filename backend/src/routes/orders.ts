@@ -128,6 +128,12 @@ export function registerOrderRoutes(app: App) {
           })
           .returning();
 
+        // Update mesa status to ocupada
+        await app.db
+          .update(schema.mesas)
+          .set({ status: "ocupada" })
+          .where(eq(schema.mesas.id, request.body.mesaId));
+
         app.logger.info({ comandaId: comanda.id }, "Comanda created successfully");
 
         return reply.code(201).send({
@@ -266,6 +272,12 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
+        // Update mesa status back to livre
+        await app.db
+          .update(schema.mesas)
+          .set({ status: "livre" })
+          .where(eq(schema.mesas.id, updated.mesaId));
+
         app.logger.info({ comandaId: updated.id }, "Comanda closed successfully");
 
         return reply.code(200).send({
@@ -323,6 +335,12 @@ export function registerOrderRoutes(app: App) {
           })
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
+
+        // Update mesa status back to livre
+        await app.db
+          .update(schema.mesas)
+          .set({ status: "livre" })
+          .where(eq(schema.mesas.id, updated.mesaId));
 
         app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
 
