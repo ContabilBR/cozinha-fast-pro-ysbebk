@@ -131,8 +131,7 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: category.id }, "Category created");
 
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: category.id,
           name: category.name,
           description: category.description,
@@ -140,7 +139,7 @@ export function registerCategoryRoutes(app: App) {
           icon: category.icon,
           active: category.active,
           created_at: category.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create category");
         return reply.status(500).send({ error: "Internal server error" });

@@ -106,8 +106,7 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ itemId: created.id }, "Item added to order");
 
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: created.id,
           order_id: created.orderId,
           dish_id: created.dishId,
@@ -121,7 +120,7 @@ export function registerOrderItemRoutes(app: App) {
           ready_at: created.readyAt,
           delivered_at: created.deliveredAt,
           created_at: created.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to add item to order");
         return reply.status(500).send({ error: "Internal server error" });

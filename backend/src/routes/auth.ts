@@ -73,8 +73,7 @@ export function registerAuthRoutes(app: App) {
         const { name, email, password } = request.body;
 
         if (!name || !email || !password) {
-          reply.status(400);
-          return { error: "Name, email e senha são obrigatórios" };
+          return reply.status(400).send({ error: "Name, email e senha são obrigatórios" });
         }
 
         // Check if user already exists
@@ -86,8 +85,7 @@ export function registerAuthRoutes(app: App) {
 
         if (existing && existing.length > 0) {
           app.logger.info({ email }, "Sign up failed: email already exists");
-          reply.status(409);
-          return { error: "Email já cadastrado" };
+          return reply.status(409).send({ error: "Email já cadastrado" });
         }
 
         // Create user
@@ -142,8 +140,7 @@ export function registerAuthRoutes(app: App) {
 
         app.logger.info({ userId, email }, "Sign up successful");
 
-        reply.status(201);
-        return {
+        return reply.status(201).send({
           token,
           user: {
             id: userId,
@@ -155,11 +152,10 @@ export function registerAuthRoutes(app: App) {
             role: "garcom",
             name,
           },
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Sign up failed with error");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -218,8 +214,7 @@ export function registerAuthRoutes(app: App) {
         const { email, password } = request.body;
 
         if (!email || !password) {
-          reply.status(401);
-          return { error: "Credenciais inválidas" };
+          return reply.status(401).send({ error: "Credenciais inválidas" });
         }
 
         // Look up user by email
@@ -231,8 +226,7 @@ export function registerAuthRoutes(app: App) {
 
         if (!users || users.length === 0) {
           app.logger.info({ email }, "Sign in failed: user not found");
-          reply.status(401);
-          return { error: "Credenciais inválidas" };
+          return reply.status(401).send({ error: "Credenciais inválidas" });
         }
 
         const user = users[0];
@@ -246,8 +240,7 @@ export function registerAuthRoutes(app: App) {
 
         if (!accounts || accounts.length === 0 || !accounts[0].password) {
           app.logger.info({ userId: user.id }, "Sign in failed: no password set");
-          reply.status(401);
-          return { error: "Credenciais inválidas" };
+          return reply.status(401).send({ error: "Credenciais inválidas" });
         }
 
         const account = accounts[0];
@@ -257,8 +250,7 @@ export function registerAuthRoutes(app: App) {
 
         if (!isPasswordValid) {
           app.logger.info({ email }, "Sign in failed: invalid password");
-          reply.status(401);
-          return { error: "Credenciais inválidas" };
+          return reply.status(401).send({ error: "Credenciais inválidas" });
         }
 
         // Get profile
@@ -288,8 +280,7 @@ export function registerAuthRoutes(app: App) {
 
         app.logger.info({ userId: user.id, email }, "Sign in successful");
 
-        reply.status(200);
-        return {
+        return reply.status(200).send({
           token,
           user: {
             id: user.id,
@@ -298,11 +289,10 @@ export function registerAuthRoutes(app: App) {
             role: user.role || "usuario",
           },
           profile,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Sign in failed with error");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -349,8 +339,7 @@ export function registerAuthRoutes(app: App) {
         const authHeader = request.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          reply.status(401);
-          return { error: "Não autorizado" };
+          return reply.status(401).send({ error: "Não autorizado" });
         }
 
         const token = authHeader.slice(7).trim();
@@ -363,16 +352,14 @@ export function registerAuthRoutes(app: App) {
           .limit(1);
 
         if (!sessions || sessions.length === 0) {
-          reply.status(401);
-          return { error: "Não autorizado" };
+          return reply.status(401).send({ error: "Não autorizado" });
         }
 
         const session = sessions[0];
 
         // Check if session expired
         if (new Date(session.expiresAt) < new Date()) {
-          reply.status(401);
-          return { error: "Não autorizado" };
+          return reply.status(401).send({ error: "Não autorizado" });
         }
 
         // Get user
@@ -383,8 +370,7 @@ export function registerAuthRoutes(app: App) {
           .limit(1);
 
         if (!users || users.length === 0) {
-          reply.status(401);
-          return { error: "Não autorizado" };
+          return reply.status(401).send({ error: "Não autorizado" });
         }
 
         const user = users[0];
@@ -412,8 +398,7 @@ export function registerAuthRoutes(app: App) {
         };
       } catch (error) {
         app.logger.error({ err: error }, "Get current user failed");
-        reply.status(401);
-        return { error: "Não autorizado" };
+        return reply.status(401).send({ error: "Não autorizado" });
       }
     }
   );
@@ -446,8 +431,7 @@ export function registerAuthRoutes(app: App) {
         const authHeader = request.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          reply.status(401);
-          return { error: "Não autorizado" };
+          return reply.status(401).send({ error: "Não autorizado" });
         }
 
         const token = authHeader.slice(7).trim();
@@ -459,12 +443,10 @@ export function registerAuthRoutes(app: App) {
 
         app.logger.info({}, "Sign out successful");
 
-        reply.status(200);
-        return { success: true };
+        return reply.status(200).send({ success: true });
       } catch (error) {
         app.logger.error({ err: error }, "Sign out failed");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );

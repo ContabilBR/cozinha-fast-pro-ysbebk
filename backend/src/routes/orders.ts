@@ -201,8 +201,7 @@ export function registerOrderRoutes(app: App) {
         const row = rows[0];
         app.logger.info({ orderId: order.id }, "Order created");
 
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: row.orders.id,
           status: row.orders.status,
           customer_count: row.orders.customerCount,
@@ -225,7 +224,7 @@ export function registerOrderRoutes(app: App) {
                 email: row.user.email,
               }
             : null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create order");
         return reply.status(500).send({ error: "Internal server error" });
@@ -260,22 +259,7 @@ export function registerOrderRoutes(app: App) {
         app.logger.info({ orderId: request.params.id }, "Getting order");
 
         const rows = await app.db
-          .select({
-            id: schema.orders.id,
-            status: schema.orders.status,
-            customer_count: schema.orders.customerCount,
-            notes: schema.orders.notes,
-            opened_at: schema.orders.openedAt,
-            closed_at: schema.orders.closedAt,
-            total_amount: schema.orders.totalAmount,
-            created_at: schema.orders.createdAt,
-            table_id: schema.tables.id,
-            table_number: schema.tables.number,
-            table_capacity: schema.tables.capacity,
-            waiter_id: user.id,
-            waiter_name: user.name,
-            waiter_email: user.email,
-          })
+          .select()
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
@@ -289,41 +273,27 @@ export function registerOrderRoutes(app: App) {
 
         // Fetch order items
         const items = await app.db
-          .select({
-            item_id: schema.orderItems.id,
-            dish_id: schema.orderItems.dishId,
-            quantity: schema.orderItems.quantity,
-            unit_price: schema.orderItems.unitPrice,
-            notes: schema.orderItems.notes,
-            status: schema.orderItems.status,
-            requested_at: schema.orderItems.requestedAt,
-            received_at: schema.orderItems.receivedAt,
-            started_at: schema.orderItems.startedAt,
-            ready_at: schema.orderItems.readyAt,
-            delivered_at: schema.orderItems.deliveredAt,
-            dish_name: schema.dishes.name,
-            dish_price: schema.dishes.price,
-          })
+          .select()
           .from(schema.orderItems)
           .leftJoin(schema.dishes, eq(schema.orderItems.dishId, schema.dishes.id))
           .where(eq(schema.orderItems.orderId, request.params.id));
 
         const mappedItems = items.map((item) => ({
-          id: item.item_id,
-          dish_id: item.dish_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          notes: item.notes,
-          status: item.status,
-          requested_at: item.requested_at,
-          received_at: item.received_at,
-          started_at: item.started_at,
-          ready_at: item.ready_at,
-          delivered_at: item.delivered_at,
-          dish: item.dish_name
+          id: item.order_items.id,
+          dish_id: item.order_items.dishId,
+          quantity: item.order_items.quantity,
+          unit_price: item.order_items.unitPrice,
+          notes: item.order_items.notes,
+          status: item.order_items.status,
+          requested_at: item.order_items.requestedAt,
+          received_at: item.order_items.receivedAt,
+          started_at: item.order_items.startedAt,
+          ready_at: item.order_items.readyAt,
+          delivered_at: item.order_items.deliveredAt,
+          dish: item.dishes
             ? {
-                name: item.dish_name,
-                price: item.dish_price,
+                name: item.dishes.name,
+                price: item.dishes.price,
               }
             : null,
         }));
@@ -331,26 +301,26 @@ export function registerOrderRoutes(app: App) {
         app.logger.info({ orderId: request.params.id, itemCount: mappedItems.length }, "Order retrieved");
 
         return {
-          id: row.id,
-          status: row.status,
-          customer_count: row.customer_count,
-          notes: row.notes,
-          opened_at: row.opened_at,
-          closed_at: row.closed_at,
-          total_amount: row.total_amount,
-          created_at: row.created_at,
-          table: row.table_id
+          id: row.orders.id,
+          status: row.orders.status,
+          customer_count: row.orders.customerCount,
+          notes: row.orders.notes,
+          opened_at: row.orders.openedAt,
+          closed_at: row.orders.closedAt,
+          total_amount: row.orders.totalAmount,
+          created_at: row.orders.createdAt,
+          table: row.tables
             ? {
-                id: row.table_id,
-                number: row.table_number,
-                capacity: row.table_capacity,
+                id: row.tables.id,
+                number: row.tables.number,
+                capacity: row.tables.capacity,
               }
             : null,
-          waiter: row.waiter_id
+          waiter: row.user
             ? {
-                id: row.waiter_id,
-                name: row.waiter_name,
-                email: row.waiter_email,
+                id: row.user.id,
+                name: row.user.name,
+                email: row.user.email,
               }
             : null,
           items: mappedItems,

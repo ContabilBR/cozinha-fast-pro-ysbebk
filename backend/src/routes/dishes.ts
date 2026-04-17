@@ -171,8 +171,7 @@ export function registerDishRoutes(app: App) {
         }
 
         const row = rows[0];
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: row.dishes.id,
           name: row.dishes.name,
           description: row.dishes.description,
@@ -189,7 +188,7 @@ export function registerDishRoutes(app: App) {
                 icon: row.categories.icon,
               }
             : null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create dish");
         return reply.status(500).send({ error: "Internal server error" });

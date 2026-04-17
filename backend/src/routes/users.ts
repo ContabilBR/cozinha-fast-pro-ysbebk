@@ -151,15 +151,14 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId }, "User created successfully");
 
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: userId,
           name: request.body.name,
           email: request.body.email,
           role: role,
           active: true,
           created_at: now,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
         return reply.status(500).send({ error: "Internal server error" });

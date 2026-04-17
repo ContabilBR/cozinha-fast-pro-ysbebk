@@ -131,8 +131,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: table.id }, "Table created");
 
-        reply.code(201);
-        return {
+        return reply.status(201).send({
           id: table.id,
           number: table.number,
           capacity: table.capacity,
@@ -140,7 +139,7 @@ export function registerTableRoutes(app: App) {
           status: table.status,
           active: table.active,
           created_at: table.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create table");
         return reply.status(500).send({ error: "Internal server error" });
