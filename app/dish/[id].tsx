@@ -6,9 +6,12 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
+  TouchableOpacity,
+  SafeAreaView,
 } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -25,26 +28,15 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline,
-  keyboardType,
+  label, value, onChangeText, placeholder, multiline, keyboardType,
 }: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  keyboardType?: any;
+  label: string; value: string; onChangeText: (t: string) => void;
+  placeholder?: string; multiline?: boolean; keyboardType?: any;
 }) {
   const COLORS = useColors();
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-        {label}
-      </Text>
+      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -52,18 +44,7 @@ function FormField({
         placeholderTextColor={COLORS.textTertiary}
         multiline={multiline}
         keyboardType={keyboardType}
-        style={{
-          backgroundColor: COLORS.surfaceSecondary,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 14,
-          fontFamily: "Outfit_400Regular",
-          fontSize: 15,
-          color: COLORS.text,
-          minHeight: multiline ? 80 : 52,
-          textAlignVertical: multiline ? "top" : "center",
-        }}
+        style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 14, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, minHeight: multiline ? 80 : 52, textAlignVertical: multiline ? "top" : "center" }}
       />
     </View>
   );
@@ -84,7 +65,6 @@ export default function DishDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -95,7 +75,7 @@ export default function DishDetailScreen() {
 
   const fetchData = useCallback(async () => {
     if (!id) return;
-    console.log("[DishDetail] Fetching dish:", id);
+    console.log("[DishDetail] GET /api/dishes/" + id + " e /api/categories");
     try {
       const [dishRes, catRes] = await Promise.all([
         apiGet<any>(`/api/dishes/${id}`),
@@ -103,6 +83,7 @@ export default function DishDetailScreen() {
       ]);
       const dishData: Dish = dishRes?.dish || dishRes;
       const catList: Category[] = Array.isArray(catRes) ? catRes : (catRes.categories || []);
+      console.log("[DishDetail] Prato carregado:", dishData.name);
       setDish(dishData);
       setCategories(catList);
       setName(dishData.name);
@@ -113,7 +94,7 @@ export default function DishDetailScreen() {
       setCategoryId(dishData.category_id);
       setActive(dishData.active);
     } catch (e) {
-      console.error("[DishDetail] Error:", e);
+      console.error("[DishDetail] Erro:", e);
       setError("Não foi possível carregar o prato.");
     } finally {
       setLoading(false);
@@ -121,9 +102,8 @@ export default function DishDetailScreen() {
   }, [id]);
 
   useEffect(() => {
-    // Redirect non-editors away
     if (!canEdit) {
-      console.log("[DishDetail] Non-editor role, redirecting back");
+      console.log("[DishDetail] Sem permissão, voltando");
       router.back();
       return;
     }
@@ -133,10 +113,11 @@ export default function DishDetailScreen() {
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!price.trim() || isNaN(Number(price))) { setError("Preço inválido."); return; }
-    console.log("[DishDetail] Save button pressed for dish:", id);
+    console.log("[DishDetail] Salvar pressionado para prato:", id);
     setError("");
     setSubmitting(true);
     try {
+      console.log("[DishDetail] PUT /api/dishes/" + id);
       await apiPut(`/api/dishes/${id}`, {
         name: name.trim(),
         description: description.trim() || undefined,
@@ -146,10 +127,10 @@ export default function DishDetailScreen() {
         category_id: categoryId || undefined,
         active,
       });
-      console.log("[DishDetail] Dish saved successfully");
+      console.log("[DishDetail] Prato salvo com sucesso");
       router.back();
     } catch (e: any) {
-      console.error("[DishDetail] Save error:", e);
+      console.error("[DishDetail] Erro ao salvar:", e);
       setError("Não foi possível salvar o prato.");
     } finally {
       setSubmitting(false);
@@ -158,155 +139,104 @@ export default function DishDetailScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background, padding: 20, gap: 16 }}>
-        <SkeletonLine width="60%" height={20} />
-        <SkeletonLine width="100%" height={160} borderRadius={16} />
-        <SkeletonLine width="100%" height={52} borderRadius={12} />
-        <SkeletonLine width="100%" height={52} borderRadius={12} />
-        <SkeletonLine width="100%" height={80} borderRadius={12} />
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
+          <TouchableOpacity onPress={() => { console.log("[DishDetail] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </TouchableOpacity>
+          <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>Dish Details</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: COLORS.background, padding: 20, gap: 16 }}>
+          <SkeletonLine width="60%" height={20} />
+          <SkeletonLine width="100%" height={160} borderRadius={16} />
+          <SkeletonLine width="100%" height={52} borderRadius={12} />
+          <SkeletonLine width="100%" height={52} borderRadius={12} />
+          <SkeletonLine width="100%" height={80} borderRadius={12} />
+        </View>
+      </SafeAreaView>
     );
   }
 
   const imageSource = resolveImageSource(imageUrl);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: COLORS.background }}
-      contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Image preview */}
-      <View
-        style={{
-          height: 160,
-          borderRadius: 16,
-          backgroundColor: COLORS.surfaceSecondary,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: COLORS.border,
-        }}
-      >
-        {imageUrl ? (
-          <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" transition={200} />
-        ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <UtensilsCrossed size={32} color={COLORS.textTertiary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>
-              Sem imagem
-            </Text>
-          </View>
-        )}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Nav bar */}
+      <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
+        <TouchableOpacity
+          onPress={() => { console.log("[DishDetail] Botão voltar pressionado"); router.back(); }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+        >
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </TouchableOpacity>
+        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
+          Dish Details
+        </Text>
       </View>
 
-      {/* Image URL */}
-      <FormField label="URL da Imagem" value={imageUrl} onChangeText={setImageUrl} placeholder="https://..." />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <View style={{ height: 160, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, overflow: "hidden", borderWidth: 1, borderColor: COLORS.border }}>
+          {imageUrl ? (
+            <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" transition={200} />
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <UtensilsCrossed size={32} color={COLORS.textTertiary} />
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>Sem imagem</Text>
+            </View>
+          )}
+        </View>
 
-      {/* Name */}
-      <FormField label="Nome *" value={name} onChangeText={setName} placeholder="Ex: Frango Grelhado" />
+        <FormField label="URL da Imagem" value={imageUrl} onChangeText={setImageUrl} placeholder="https://..." />
+        <FormField label="Nome *" value={name} onChangeText={setName} placeholder="Ex: Frango Grelhado" />
+        <FormField label="Descrição" value={description} onChangeText={setDescription} placeholder="Descrição do prato..." multiline />
 
-      {/* Description */}
-      <FormField label="Descrição" value={description} onChangeText={setDescription} placeholder="Descrição do prato..." multiline />
-
-      {/* Category */}
-      <View style={{ gap: 8 }}>
-        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-          Categoria
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {categories.map((cat) => (
-            <AnimatedPressable
-              key={cat.id}
-              onPress={() => {
-                console.log("[DishDetail] Category selected:", cat.name);
-                setCategoryId(cat.id);
-              }}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: categoryId === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Outfit_600SemiBold",
-                  fontSize: 13,
-                  color: categoryId === cat.id ? "#fff" : COLORS.textSecondary,
-                }}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Categoria</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {categories.map((cat) => (
+              <AnimatedPressable
+                key={cat.id}
+                onPress={() => { console.log("[DishDetail] Categoria selecionada:", cat.name); setCategoryId(cat.id); }}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: categoryId === cat.id ? COLORS.primary : COLORS.surfaceSecondary }}
               >
-                {cat.name}
-              </Text>
-            </AnimatedPressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Price + Prep time */}
-      <View style={{ flexDirection: "row", gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <FormField label="Preço (R$) *" value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad" />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: categoryId === cat.id ? "#fff" : COLORS.textSecondary }}>{cat.name}</Text>
+              </AnimatedPressable>
+            ))}
+          </ScrollView>
         </View>
-        <View style={{ flex: 1 }}>
-          <FormField label="Preparo (min)" value={prepTime} onChangeText={setPrepTime} placeholder="15" keyboardType="number-pad" />
+
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <FormField label="Preço (R$) *" value={price} onChangeText={setPrice} placeholder="0.00" keyboardType="decimal-pad" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormField label="Preparo (min)" value={prepTime} onChangeText={setPrepTime} placeholder="15" keyboardType="number-pad" />
+          </View>
         </View>
-      </View>
 
-      {/* Active toggle */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          backgroundColor: COLORS.surface,
-          borderRadius: 12,
-          padding: 16,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-        }}
-      >
-        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
-          Prato ativo
-        </Text>
-        <Switch
-          value={active}
-          onValueChange={(v) => {
-            console.log("[DishDetail] Active toggle:", v);
-            setActive(v);
-          }}
-          trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
-          thumbColor={active ? COLORS.primary : COLORS.textTertiary}
-        />
-      </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: COLORS.border }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Prato ativo</Text>
+          <Switch
+            value={active}
+            onValueChange={(v) => { console.log("[DishDetail] Toggle ativo:", v); setActive(v); }}
+            trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
+            thumbColor={active ? COLORS.primary : COLORS.textTertiary}
+          />
+        </View>
 
-      {/* Error */}
-      {!!error && (
-        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
-          {error}
-        </Text>
-      )}
+        {!!error && <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{error}</Text>}
 
-      {/* Save */}
-      <AnimatedPressable
-        onPress={handleSave}
-        disabled={submitting}
-        style={{
-          backgroundColor: COLORS.primary,
-          borderRadius: 14,
-          height: 52,
-          alignItems: "center",
-          justifyContent: "center",
-          marginTop: 8,
-        }}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-            Salvar alterações
-          </Text>
-        )}
-      </AnimatedPressable>
-    </ScrollView>
+        <AnimatedPressable
+          onPress={() => { console.log("[DishDetail] Salvar alterações pressionado"); handleSave(); }}
+          disabled={submitting}
+          style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginTop: 8 }}
+        >
+          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar alterações</Text>}
+        </AnimatedPressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

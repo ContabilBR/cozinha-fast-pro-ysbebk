@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,17 +10,20 @@ import {
   TextInput,
   Switch,
   ScrollView,
-  Animated,
   Platform,
+  TouchableOpacity,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
-import { Stack } from "expo-router";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { Plus, Pencil, Trash2, X, UtensilsCrossed, Camera, Image as ImageIcon, ChevronDown } from "lucide-react-native";
+import { X, UtensilsCrossed, Camera, Image as ImageIcon, ChevronDown } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import type { ImageSourcePropType } from "react-native";
 
@@ -46,87 +49,9 @@ interface ApiCategoria {
   nome: string;
 }
 
-function PratoCard({ prato, index, onEdit, onDelete }: {
-  prato: ApiPrato;
-  index: number;
-  onEdit: (p: ApiPrato) => void;
-  onDelete: (id: string) => void;
-}) {
-  const COLORS = useColors();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 50, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 50, useNativeDriver: true }),
-    ]).start();
-  }, [index, opacity, translateY]);
-
-  const price = formatCurrency(prato.preco);
-  const imageSource = resolveImageSource(prato.imagem_url);
-  const disponivel = prato.disponivel !== false;
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <View style={{
-        backgroundColor: COLORS.surface,
-        borderRadius: 16,
-        marginHorizontal: 16,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        flexDirection: "row",
-        overflow: "hidden",
-      }}>
-        <View style={{ width: 80, height: 80, backgroundColor: COLORS.surfaceSecondary }}>
-          {prato.imagem_url ? (
-            <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-          ) : (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <UtensilsCrossed size={22} color={COLORS.textTertiary} />
-            </View>
-          )}
-        </View>
-        <View style={{ flex: 1, padding: 12, gap: 3 }}>
-          <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
-            {prato.nome}
-          </Text>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
-            {price}
-          </Text>
-          {prato.categoria && (
-            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {prato.categoria.nome}
-            </Text>
-          )}
-          {!disponivel && (
-            <View style={{ backgroundColor: COLORS.danger + "20", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: COLORS.danger }}>Indisponível</Text>
-            </View>
-          )}
-        </View>
-        <View style={{ flexDirection: "column", justifyContent: "center", gap: 8, paddingRight: 12 }}>
-          <AnimatedPressable
-            onPress={() => { console.log("[GestaoPratos] Edit pressed:", prato.id); onEdit(prato); }}
-            style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-          >
-            <Pencil size={16} color={COLORS.textSecondary} />
-          </AnimatedPressable>
-          <AnimatedPressable
-            onPress={() => { console.log("[GestaoPratos] Delete pressed:", prato.id); onDelete(prato.id); }}
-            style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.danger + "15", alignItems: "center", justifyContent: "center" }}
-          >
-            <Trash2 size={16} color={COLORS.danger} />
-          </AnimatedPressable>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
 export default function GestaoPratos() {
   const COLORS = useColors();
+  const router = useRouter();
 
   const [pratos, setPratos] = useState<ApiPrato[]>([]);
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
@@ -134,7 +59,6 @@ export default function GestaoPratos() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingPrato, setEditingPrato] = useState<ApiPrato | null>(null);
   const [nome, setNome] = useState("");
@@ -150,7 +74,7 @@ export default function GestaoPratos() {
   const [showCatPicker, setShowCatPicker] = useState(false);
 
   const fetchData = useCallback(async () => {
-    console.log("[GestaoPratos] Fetching pratos and categorias");
+    console.log("[GestaoPratos] GET /api/pratos e /api/categorias");
     try {
       const [pratosRes, catRes] = await Promise.all([
         apiGet<any>("/api/pratos"),
@@ -158,12 +82,12 @@ export default function GestaoPratos() {
       ]);
       const pratoList: ApiPrato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
       const catList: ApiCategoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
-      console.log("[GestaoPratos] Loaded", pratoList.length, "pratos,", catList.length, "categorias");
+      console.log("[GestaoPratos] Carregados", pratoList.length, "pratos,", catList.length, "categorias");
       setPratos(pratoList);
       setCategorias(catList);
       setError("");
-    } catch (e: any) {
-      console.error("[GestaoPratos] Error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoPratos] Erro ao carregar:", e);
       setError("Não foi possível carregar os pratos.");
     } finally {
       setLoading(false);
@@ -174,13 +98,13 @@ export default function GestaoPratos() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleRefresh = () => {
-    console.log("[GestaoPratos] Manual refresh");
+    console.log("[GestaoPratos] Refresh manual");
     setRefreshing(true);
     fetchData();
   };
 
   const openCreate = () => {
-    console.log("[GestaoPratos] Open create modal");
+    console.log("[GestaoPratos] Abrir modal de criação");
     setEditingPrato(null);
     setNome(""); setDescricao(""); setPreco(""); setCategoriaId("");
     setDisponivel(true); setLocalImageUri(null); setImagemUrl("");
@@ -189,7 +113,7 @@ export default function GestaoPratos() {
   };
 
   const openEdit = (p: ApiPrato) => {
-    console.log("[GestaoPratos] Open edit modal:", p.id);
+    console.log("[GestaoPratos] Abrir modal de edição:", p.id);
     setEditingPrato(p);
     setNome(p.nome ?? "");
     setDescricao(p.descricao ?? "");
@@ -203,34 +127,26 @@ export default function GestaoPratos() {
   };
 
   const pickImage = async (source: "camera" | "gallery") => {
-    console.log("[GestaoPratos] pickImage pressed, source:", source);
+    console.log("[GestaoPratos] Selecionar imagem, fonte:", source);
     try {
       let result: ImagePicker.ImagePickerResult;
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
-          return;
-        }
+        if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
         result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
-          return;
-        }
+        if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
         result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
       }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        console.log("[GestaoPratos] Image selected:", asset.uri);
+        console.log("[GestaoPratos] Imagem selecionada:", asset.uri);
         setLocalImageUri(asset.uri);
-        if (asset.base64) {
-          await uploadImageBase64(asset.base64, asset.uri);
-        }
+        if (asset.base64) await uploadImageBase64(asset.base64, asset.uri);
       }
     } catch (e) {
-      console.error("[GestaoPratos] Image picker error:", e);
+      console.error("[GestaoPratos] Erro no seletor de imagem:", e);
     }
   };
 
@@ -243,10 +159,7 @@ export default function GestaoPratos() {
       const token = await getBearerToken();
       const res = await fetch(`${BACKEND_URL}/api/upload/imagem`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ imagem: `data:${mimeType};base64,${base64}` }),
       });
       if (res.ok) {
@@ -256,11 +169,10 @@ export default function GestaoPratos() {
         if (url) setImagemUrl(url);
       } else {
         const text = await res.text().catch(() => "");
-        console.warn("[GestaoPratos] Upload failed:", res.status, text.slice(0, 100));
-        // Keep local URI as fallback — will send as imagem_url
+        console.warn("[GestaoPratos] Upload falhou:", res.status, text.slice(0, 100));
       }
     } catch (e) {
-      console.error("[GestaoPratos] Upload error:", e);
+      console.error("[GestaoPratos] Erro no upload:", e);
     } finally {
       setUploading(false);
     }
@@ -270,11 +182,10 @@ export default function GestaoPratos() {
     if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
     const precoNum = parseFloat(preco.replace(",", "."));
     if (isNaN(precoNum) || precoNum < 0) { setModalError("Preço inválido."); return; }
-    console.log("[GestaoPratos] Save pressed, editingPrato:", editingPrato?.id ?? "new");
-    setSaving(true);
-    setModalError("");
+    console.log("[GestaoPratos] Salvar pressionado, editando:", editingPrato?.id ?? "novo");
+    setSaving(true); setModalError("");
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
         preco: precoNum,
@@ -295,19 +206,19 @@ export default function GestaoPratos() {
       }
       setShowModal(false);
       await fetchData();
-    } catch (e: any) {
-      console.error("[GestaoPratos] Save error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoPratos] Erro ao salvar:", e);
       setModalError(e instanceof Error ? e.message : "Não foi possível salvar o prato.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    console.log("[GestaoPratos] Delete confirm for:", id);
+  const handleDelete = (id: string, nomePrato: string) => {
+    console.log("[GestaoPratos] Confirmar exclusão:", id, nomePrato);
     Alert.alert(
-      "Excluir prato?",
-      "Esta ação não pode ser desfeita.",
+      "Confirmar Exclusão",
+      `Deseja realmente excluir "${nomePrato}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -319,8 +230,9 @@ export default function GestaoPratos() {
               await apiDelete(`/api/pratos/${id}`);
               console.log("[GestaoPratos] Prato excluído:", id);
               setPratos((prev) => prev.filter((p) => p.id !== id));
-            } catch (e: any) {
-              console.error("[GestaoPratos] Delete error:", e);
+              Alert.alert("Sucesso", `"${nomePrato}" excluído com sucesso.`);
+            } catch (e: unknown) {
+              console.error("[GestaoPratos] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir o prato.");
             }
           },
@@ -345,95 +257,144 @@ export default function GestaoPratos() {
   const imageSource = resolveImageSource(displayImageUri ?? undefined);
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: "Pratos",
-          headerTintColor: COLORS.primary,
-          headerBackButtonDisplayMode: "minimal",
-          headerStyle: { backgroundColor: COLORS.surface },
-          headerTitleStyle: { fontFamily: "Outfit_700Bold", color: COLORS.text },
-        }}
-      />
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {loading ? (
-          <View style={{ paddingTop: 16 }}>
-            {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
-          </View>
-        ) : error ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar pratos</Text>
-            <AnimatedPressable onPress={fetchData} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <FlatList
-            data={pratos}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
-            contentInsetAdjustmentBehavior="automatic"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
-            renderItem={({ item, index }) => (
-              <PratoCard prato={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
-            )}
-            ListEmptyComponent={
-              <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-                <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-                  <UtensilsCrossed size={32} color={COLORS.primary} />
-                </View>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhum prato cadastrado</Text>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                  Adicione pratos para montar o cardápio
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        <AnimatedPressable
-          onPress={openCreate}
-          style={{
-            position: "absolute",
-            bottom: 20,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: COLORS.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
-          }}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Nav bar */}
+      <View style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: 56,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e0e0e0",
+        backgroundColor: "#fff",
+      }}>
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoPratos] Botão voltar pressionado"); router.back(); }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
         >
-          <Plus size={24} color="#fff" />
-        </AnimatedPressable>
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </TouchableOpacity>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: "#111",
+        }}>
+          Pratos
+        </Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoPratos] Botão incluir pressionado"); openCreate(); }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#34C759", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+        >
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
+        </TouchableOpacity>
+      </View>
 
-        <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "92%" }}>
-              {/* Header */}
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
-                  {editingPrato ? "Editar Prato" : "Novo Prato"}
-                </Text>
-                <AnimatedPressable
-                  onPress={() => { console.log("[GestaoPratos] Modal closed"); setShowModal(false); }}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color={COLORS.textSecondary} />
-                </AnimatedPressable>
+      {loading ? (
+        <View style={{ paddingTop: 16 }}>
+          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar pratos</Text>
+          <TouchableOpacity onPress={fetchData} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={pratos}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          renderItem={({ item }) => {
+            const price = formatCurrency(item.preco);
+            const imgSrc = resolveImageSource(item.imagem_url);
+            const disponibilidade = item.disponivel !== false;
+            return (
+              <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, marginRight: 12, overflow: "hidden" }}>
+                  {item.imagem_url ? (
+                    <Image source={imgSrc} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  ) : (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <UtensilsCrossed size={20} color={COLORS.textTertiary} />
+                    </View>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#111" }}>{item.nome}</Text>
+                  <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>{price}</Text>
+                  {item.categoria && (
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.categoria.nome}</Text>
+                  )}
+                  {!disponibilidade && (
+                    <Text style={{ fontSize: 11, color: COLORS.danger, marginTop: 2 }}>Indisponível</Text>
+                  )}
+                </View>
+                <View style={{ gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => { console.log("[GestaoPratos] Editar pressionado:", item.id); openEdit(item); }}
+                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                  >
+                    <Ionicons name="pencil" size={14} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { console.log("[GestaoPratos] Excluir pressionado:", item.id); handleDelete(item.id, item.nome); }}
+                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                  >
+                    <Ionicons name="trash" size={14} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+              <UtensilsCrossed size={32} color={COLORS.textTertiary} />
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhum prato cadastrado</Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                Toque em "Incluir" para adicionar pratos
+              </Text>
+            </View>
+          }
+        />
+      )}
 
+      <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "92%" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
+                {editingPrato ? "Editar Prato" : "Novo Prato"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log("[GestaoPratos] Modal fechado"); setShowModal(false); }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
               <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
-                {/* Image picker */}
+                {/* Foto */}
                 <View style={{ gap: 8 }}>
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Foto do prato</Text>
                   {displayImageUri ? (
                     <View style={{ height: 140, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
                       <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                       {uploading && (
-                        <View style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
+                        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
                           <ActivityIndicator color="#fff" />
                           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>Enviando...</Text>
                         </View>
@@ -446,20 +407,20 @@ export default function GestaoPratos() {
                     </View>
                   )}
                   <View style={{ flexDirection: "row", gap: 10 }}>
-                    <AnimatedPressable
-                      onPress={() => pickImage("camera")}
+                    <TouchableOpacity
+                      onPress={() => { console.log("[GestaoPratos] Câmera pressionada"); pickImage("camera"); }}
                       style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border }}
                     >
                       <Camera size={16} color={COLORS.primary} />
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Câmera</Text>
-                    </AnimatedPressable>
-                    <AnimatedPressable
-                      onPress={() => pickImage("gallery")}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => { console.log("[GestaoPratos] Galeria pressionada"); pickImage("gallery"); }}
                       style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border }}
                     >
                       <ImageIcon size={16} color={COLORS.primary} />
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Galeria</Text>
-                    </AnimatedPressable>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -484,15 +445,15 @@ export default function GestaoPratos() {
                 {/* Categoria */}
                 <View style={{ gap: 6 }}>
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Categoria</Text>
-                  <AnimatedPressable
-                    onPress={() => { console.log("[GestaoPratos] Categoria picker toggled"); setShowCatPicker((v) => !v); }}
+                  <TouchableOpacity
+                    onPress={() => { console.log("[GestaoPratos] Seletor de categoria alternado"); setShowCatPicker((v) => !v); }}
                     style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
                   >
                     <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
                       {selectedCat?.nome ?? "Selecionar categoria"}
                     </Text>
                     <ChevronDown size={16} color={COLORS.textSecondary} />
-                  </AnimatedPressable>
+                  </TouchableOpacity>
                   {showCatPicker && (
                     <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
                       {categorias.length === 0 ? (
@@ -501,13 +462,13 @@ export default function GestaoPratos() {
                         </View>
                       ) : (
                         categorias.map((cat) => (
-                          <AnimatedPressable
+                          <TouchableOpacity
                             key={cat.id}
                             onPress={() => { console.log("[GestaoPratos] Categoria selecionada:", cat.nome); setCategoriaId(cat.id); setShowCatPicker(false); }}
-                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
+                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
                           >
                             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>{cat.nome}</Text>
-                          </AnimatedPressable>
+                          </TouchableOpacity>
                         ))
                       )}
                     </View>
@@ -519,7 +480,7 @@ export default function GestaoPratos() {
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Disponível</Text>
                   <Switch
                     value={disponivel}
-                    onValueChange={(v) => { console.log("[GestaoPratos] Disponivel toggled:", v); setDisponivel(v); }}
+                    onValueChange={(v) => { console.log("[GestaoPratos] Disponível alternado:", v); setDisponivel(v); }}
                     trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
                     thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
                   />
@@ -527,8 +488,8 @@ export default function GestaoPratos() {
 
                 {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
 
-                <AnimatedPressable
-                  onPress={handleSave}
+                <TouchableOpacity
+                  onPress={() => { console.log("[GestaoPratos] Salvar prato pressionado"); handleSave(); }}
                   disabled={saving || uploading}
                   style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: saving || uploading ? 0.7 : 1, marginBottom: 20 }}
                 >
@@ -539,12 +500,16 @@ export default function GestaoPratos() {
                       {uploading ? "Aguardando upload..." : editingPrato ? "Salvar alterações" : "Adicionar prato"}
                     </Text>
                   )}
-                </AnimatedPressable>
+                </TouchableOpacity>
               </ScrollView>
-            </View>
+            </KeyboardAvoidingView>
           </View>
-        </Modal>
-      </View>
-    </>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  hidden: { display: "none" },
+});

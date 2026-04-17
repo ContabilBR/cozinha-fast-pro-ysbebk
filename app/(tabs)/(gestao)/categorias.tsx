@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,15 @@ import {
   Alert,
   Modal,
   TextInput,
-  Animated,
+  TouchableOpacity,
+  SafeAreaView,
 } from "react-native";
-import { Stack } from "expo-router";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { Plus, Pencil, Trash2, X, Tag } from "lucide-react-native";
+import { X, Tag } from "lucide-react-native";
 
 interface ApiCategoria {
   id: string;
@@ -23,65 +24,9 @@ interface ApiCategoria {
   descricao?: string;
 }
 
-function CategoriaCard({ cat, index, onEdit, onDelete }: {
-  cat: ApiCategoria;
-  index: number;
-  onEdit: (c: ApiCategoria) => void;
-  onDelete: (id: string) => void;
-}) {
-  const COLORS = useColors();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
-    ]).start();
-  }, [index, opacity, translateY]);
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <View style={{
-        backgroundColor: COLORS.surface,
-        borderRadius: 14,
-        padding: 14,
-        marginHorizontal: 16,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-      }}>
-        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-          <Tag size={18} color={COLORS.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>{cat.nome}</Text>
-          {cat.descricao ? (
-            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{cat.descricao}</Text>
-          ) : null}
-        </View>
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoCategorias] Edit pressed:", cat.id); onEdit(cat); }}
-          style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-        >
-          <Pencil size={16} color={COLORS.textSecondary} />
-        </AnimatedPressable>
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoCategorias] Delete pressed:", cat.id); onDelete(cat.id); }}
-          style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.danger + "15", alignItems: "center", justifyContent: "center" }}
-        >
-          <Trash2 size={16} color={COLORS.danger} />
-        </AnimatedPressable>
-      </View>
-    </Animated.View>
-  );
-}
-
 export default function GestaoCategorias() {
   const COLORS = useColors();
+  const router = useRouter();
 
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,11 +45,11 @@ export default function GestaoCategorias() {
     try {
       const res = await apiGet<any>("/api/categorias");
       const list: ApiCategoria[] = Array.isArray(res) ? res : (res.categorias || []);
-      console.log("[GestaoCategorias] Loaded", list.length, "categorias");
+      console.log("[GestaoCategorias] Carregadas", list.length, "categorias");
       setCategorias(list);
       setError("");
-    } catch (e: any) {
-      console.error("[GestaoCategorias] Error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoCategorias] Erro:", e);
       setError("Não foi possível carregar as categorias.");
     } finally {
       setLoading(false);
@@ -115,20 +60,20 @@ export default function GestaoCategorias() {
   useEffect(() => { fetchCategorias(); }, [fetchCategorias]);
 
   const handleRefresh = () => {
-    console.log("[GestaoCategorias] Manual refresh");
+    console.log("[GestaoCategorias] Refresh manual");
     setRefreshing(true);
     fetchCategorias();
   };
 
   const openCreate = () => {
-    console.log("[GestaoCategorias] Open create modal");
+    console.log("[GestaoCategorias] Abrir modal de criação");
     setEditingCat(null);
     setNome(""); setDescricao(""); setModalError("");
     setShowModal(true);
   };
 
   const openEdit = (c: ApiCategoria) => {
-    console.log("[GestaoCategorias] Open edit modal:", c.id);
+    console.log("[GestaoCategorias] Abrir modal de edição:", c.id);
     setEditingCat(c);
     setNome(c.nome); setDescricao(c.descricao ?? ""); setModalError("");
     setShowModal(true);
@@ -136,7 +81,7 @@ export default function GestaoCategorias() {
 
   const handleSave = async () => {
     if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
-    console.log("[GestaoCategorias] Save pressed, editingCat:", editingCat?.id ?? "new");
+    console.log("[GestaoCategorias] Salvar pressionado, editando:", editingCat?.id ?? "novo");
     setSaving(true); setModalError("");
     try {
       if (editingCat) {
@@ -150,19 +95,19 @@ export default function GestaoCategorias() {
       }
       setShowModal(false);
       await fetchCategorias();
-    } catch (e: any) {
-      console.error("[GestaoCategorias] Save error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoCategorias] Erro ao salvar:", e);
       setModalError(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    console.log("[GestaoCategorias] Delete confirm for:", id);
+  const handleDelete = (id: string, nomeCategoria: string) => {
+    console.log("[GestaoCategorias] Confirmar exclusão:", id, nomeCategoria);
     Alert.alert(
-      "Excluir categoria?",
-      "Esta ação não pode ser desfeita.",
+      "Confirmar Exclusão",
+      `Deseja realmente excluir "${nomeCategoria}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -174,8 +119,9 @@ export default function GestaoCategorias() {
               await apiDelete(`/api/categorias/${id}`);
               console.log("[GestaoCategorias] Categoria excluída:", id);
               setCategorias((prev) => prev.filter((c) => c.id !== id));
-            } catch (e: any) {
-              console.error("[GestaoCategorias] Delete error:", e);
+              Alert.alert("Sucesso", `"${nomeCategoria}" excluída com sucesso.`);
+            } catch (e: unknown) {
+              console.error("[GestaoCategorias] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir a categoria.");
             }
           },
@@ -196,114 +142,147 @@ export default function GestaoCategorias() {
   };
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: "Categorias",
-          headerTintColor: COLORS.primary,
-          headerBackButtonDisplayMode: "minimal",
-          headerStyle: { backgroundColor: COLORS.surface },
-          headerTitleStyle: { fontFamily: "Outfit_700Bold", color: COLORS.text },
-        }}
-      />
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {loading ? (
-          <View style={{ paddingTop: 16 }}>
-            {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
-          </View>
-        ) : error ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar categorias</Text>
-            <AnimatedPressable onPress={fetchCategorias} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <FlatList
-            data={categorias}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
-            contentInsetAdjustmentBehavior="automatic"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
-            renderItem={({ item, index }) => (
-              <CategoriaCard cat={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
-            )}
-            ListEmptyComponent={
-              <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-                <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-                  <Tag size={32} color={COLORS.primary} />
-                </View>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma categoria</Text>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                  Crie categorias para organizar o cardápio
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        <AnimatedPressable
-          onPress={openCreate}
-          style={{
-            position: "absolute",
-            bottom: 20,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: COLORS.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
-          }}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Nav bar */}
+      <View style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: 56,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e0e0e0",
+        backgroundColor: "#fff",
+      }}>
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoCategorias] Botão voltar pressionado"); router.back(); }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
         >
-          <Plus size={24} color="#fff" />
-        </AnimatedPressable>
-
-        <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
-                  {editingCat ? "Editar Categoria" : "Nova Categoria"}
-                </Text>
-                <AnimatedPressable
-                  onPress={() => { console.log("[GestaoCategorias] Modal closed"); setShowModal(false); }}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color={COLORS.textSecondary} />
-                </AnimatedPressable>
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
-                <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Entradas" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Descrição</Text>
-                <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição opcional" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
-              </View>
-
-              {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
-
-              <AnimatedPressable
-                onPress={handleSave}
-                disabled={saving}
-                style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                    {editingCat ? "Salvar alterações" : "Criar categoria"}
-                  </Text>
-                )}
-              </AnimatedPressable>
-            </View>
-          </View>
-        </Modal>
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </TouchableOpacity>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: "#111",
+        }}>
+          Categorias
+        </Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoCategorias] Botão incluir pressionado"); openCreate(); }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#34C759", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+        >
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
+        </TouchableOpacity>
       </View>
-    </>
+
+      {loading ? (
+        <View style={{ paddingTop: 16 }}>
+          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar categorias</Text>
+          <TouchableOpacity onPress={fetchCategorias} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={categorias}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          renderItem={({ item }) => (
+            <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                <Tag size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#111" }}>{item.nome}</Text>
+                {item.descricao ? (
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.descricao}</Text>
+                ) : null}
+              </View>
+              <View style={{ gap: 6 }}>
+                <TouchableOpacity
+                  onPress={() => { console.log("[GestaoCategorias] Editar pressionado:", item.id); openEdit(item); }}
+                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                >
+                  <Ionicons name="pencil" size={14} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { console.log("[GestaoCategorias] Excluir pressionado:", item.id); handleDelete(item.id, item.nome); }}
+                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                >
+                  <Ionicons name="trash" size={14} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+              <Tag size={32} color={COLORS.textTertiary} />
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma categoria</Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                Toque em "Incluir" para criar categorias
+              </Text>
+            </View>
+          }
+        />
+      )}
+
+      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
+                {editingCat ? "Editar Categoria" : "Nova Categoria"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log("[GestaoCategorias] Modal fechado"); setShowModal(false); }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
+              <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Entradas" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Descrição</Text>
+              <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição opcional" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+            </View>
+
+            {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
+
+            <TouchableOpacity
+              onPress={() => { console.log("[GestaoCategorias] Salvar categoria pressionado"); handleSave(); }}
+              disabled={saving}
+              style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
+                  {editingCat ? "Salvar alterações" : "Criar categoria"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }

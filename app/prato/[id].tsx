@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, SafeAreaView } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -32,14 +33,14 @@ export default function PratoDetailScreen() {
   const [error, setError] = useState("");
 
   const fetchPrato = useCallback(async () => {
-    console.log("[PratoDetail] Fetching prato:", id);
+    console.log("[PratoDetail] GET /api/pratos/" + id);
     try {
       const res = await apiGet<any>(`/api/pratos/${id}`);
       const p: Prato = res.prato || res;
       setPrato(p);
       setError("");
     } catch (e: any) {
-      console.error("[PratoDetail] Error:", e instanceof Error ? e.message : String(e));
+      console.error("[PratoDetail] Erro:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar o prato.");
     } finally {
       setLoading(false);
@@ -50,7 +51,7 @@ export default function PratoDetailScreen() {
   useEffect(() => { fetchPrato(); }, [fetchPrato]);
 
   const handleRefresh = () => {
-    console.log("[PratoDetail] Manual refresh");
+    console.log("[PratoDetail] Refresh manual");
     setRefreshing(true);
     fetchPrato();
   };
@@ -59,161 +60,151 @@ export default function PratoDetailScreen() {
   const imageSource = resolveImageSource(prato?.imagem_url);
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: prato?.nome ?? "Prato",
-          headerTintColor: COLORS.primary,
-          headerBackButtonDisplayMode: "minimal",
-          headerRight: canEdit
-            ? () => (
-                <AnimatedPressable
-                  onPress={() => {
-                    console.log("[PratoDetail] Edit pressed:", id);
-                    router.push(`/prato/editar/${id}`);
-                  }}
-                  style={{ padding: 8 }}
-                >
-                  <Pencil size={20} color={COLORS.primary} />
-                </AnimatedPressable>
-              )
-            : undefined,
-        }}
-      />
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {loading ? (
-          <View style={{ padding: 16, gap: 12 }}>
-            {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
-          </View>
-        ) : error ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-              Erro ao carregar prato
-            </Text>
-            <AnimatedPressable
-              onPress={fetchPrato}
-              style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Nav bar */}
+      <View style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: 56,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e0e0e0",
+        backgroundColor: "#fff",
+      }}>
+        <TouchableOpacity
+          onPress={() => { console.log("[PratoDetail] Botão voltar pressionado"); router.back(); }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+        >
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </TouchableOpacity>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: "#111",
+        }}>
+          Detalhes do Prato
+        </Text>
+        {canEdit && (
+          <View style={{ flex: 1, alignItems: "flex-end" }}>
+            <TouchableOpacity
+              onPress={() => { console.log("[PratoDetail] Editar pressionado:", id); router.push(`/prato/editar/${id}`); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
-                Tentar novamente
-              </Text>
-            </AnimatedPressable>
+              <Pencil size={20} color="#007AFF" />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <ScrollView
-            contentContainerStyle={{ paddingBottom: 40 }}
-            contentInsetAdjustmentBehavior="automatic"
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
-            }
-          >
-            {/* Hero image */}
-            <View style={{ height: 240, backgroundColor: COLORS.surfaceSecondary }}>
-              {prato?.imagem_url ? (
-                <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-              ) : (
-                <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                  <UtensilsCrossed size={48} color={COLORS.textTertiary} />
-                </View>
-              )}
-              {!prato?.disponivel && (
-                <View
-                  style={{
-                    position: "absolute",
-                    bottom: 12,
-                    right: 12,
-                    backgroundColor: COLORS.danger + "CC",
-                    borderRadius: 10,
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: "#fff" }}>
-                    Indisponível
-                  </Text>
-                </View>
-              )}
-            </View>
+        )}
+      </View>
 
-            <View style={{ padding: 20, gap: 16 }}>
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 24, color: COLORS.text, letterSpacing: -0.3 }}>
-                  {prato?.nome}
+      {loading ? (
+        <View style={{ padding: 16, gap: 12 }}>
+          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+            Erro ao carregar prato
+          </Text>
+          <AnimatedPressable
+            onPress={fetchPrato}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+              Tentar novamente
+            </Text>
+          </AnimatedPressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 40 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+          }
+        >
+          <View style={{ height: 240, backgroundColor: COLORS.surfaceSecondary }}>
+            {prato?.imagem_url ? (
+              <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+            ) : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <UtensilsCrossed size={48} color={COLORS.textTertiary} />
+              </View>
+            )}
+            {!prato?.disponivel && (
+              <View style={{ position: "absolute", bottom: 12, right: 12, backgroundColor: COLORS.danger + "CC", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: "#fff" }}>Indisponível</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={{ padding: 20, gap: 16 }}>
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 24, color: COLORS.text, letterSpacing: -0.3 }}>
+                {prato?.nome}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>
+                  {price}
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>
-                    {price}
-                  </Text>
+                {!!prato?.tempo_preparo && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Clock size={14} color={COLORS.textSecondary} />
                     <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-                      {prato?.tempo_preparo}min
-                    </Text>
-                  </View>
-                </View>
-                {prato?.categoria && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Tag size={13} color={COLORS.primary} />
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
-                      {prato.categoria.nome}
+                      {prato.tempo_preparo}min
                     </Text>
                   </View>
                 )}
               </View>
-
-              {prato?.descricao ? (
-                <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
-                    Descrição
-                  </Text>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
-                    {prato.descricao}
+              {prato?.categoria && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Tag size={13} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
+                    {prato.categoria.nome}
                   </Text>
                 </View>
-              ) : null}
-
-              {prato?.restricoes ? (
-                <View
-                  style={{
-                    backgroundColor: COLORS.warning + "15",
-                    borderRadius: 12,
-                    padding: 14,
-                    borderWidth: 1,
-                    borderColor: COLORS.warning + "30",
-                    flexDirection: "row",
-                    gap: 10,
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <AlertCircle size={16} color={COLORS.warning} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.warning }}>
-                      Restrições
-                    </Text>
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
-                      {prato.restricoes}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-
-              {prato?.adicionais ? (
-                <View style={{ gap: 6 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Plus size={14} color={COLORS.primary} />
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
-                      Adicionais
-                    </Text>
-                  </View>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
-                    {prato.adicionais}
-                  </Text>
-                </View>
-              ) : null}
+              )}
             </View>
-          </ScrollView>
-        )}
-      </View>
-    </>
+
+            {prato?.descricao ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Descrição</Text>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
+                  {prato.descricao}
+                </Text>
+              </View>
+            ) : null}
+
+            {prato?.restricoes ? (
+              <View style={{ backgroundColor: COLORS.warning + "15", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.warning + "30", flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+                <AlertCircle size={16} color={COLORS.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.warning }}>Restrições</Text>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
+                    {prato.restricoes}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {prato?.adicionais ? (
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Plus size={14} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Adicionais</Text>
+                </View>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
+                  {prato.adicionais}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }

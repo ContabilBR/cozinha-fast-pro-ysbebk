@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,15 +8,16 @@ import {
   Alert,
   Modal,
   TextInput,
-  Animated,
+  TouchableOpacity,
+  SafeAreaView,
 } from "react-native";
-import { Stack } from "expo-router";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
-import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { getMesaStatusLabel, getMesaStatusColor } from "@/utils/helpers";
-import { Plus, Pencil, Trash2, X, LayoutGrid, Users } from "lucide-react-native";
+import { X, LayoutGrid, Users } from "lucide-react-native";
 
 interface ApiMesa {
   id: string;
@@ -25,74 +26,15 @@ interface ApiMesa {
   status: string;
 }
 
-function MesaCard({ mesa, index, onEdit, onDelete }: {
-  mesa: ApiMesa;
-  index: number;
-  onEdit: (m: ApiMesa) => void;
-  onDelete: (id: string) => void;
-}) {
-  const COLORS = useColors();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 60, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
-    ]).start();
-  }, [index, opacity, translateY]);
-
-  const statusColor = getMesaStatusColor(mesa.status);
-  const statusLabel = getMesaStatusLabel(mesa.status);
-
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-      <View style={{
-        backgroundColor: COLORS.surface,
-        borderRadius: 14,
-        padding: 14,
-        marginHorizontal: 16,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-      }}>
-        <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: statusColor + "18", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: statusColor }}>{mesa.numero}</Text>
-        </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Mesa {mesa.numero}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Users size={12} color={COLORS.textSecondary} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{mesa.capacidade} lugares</Text>
-            </View>
-            <View style={{ backgroundColor: statusColor + "20", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>{statusLabel}</Text>
-            </View>
-          </View>
-        </View>
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoMesas] Edit pressed:", mesa.id); onEdit(mesa); }}
-          style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-        >
-          <Pencil size={16} color={COLORS.textSecondary} />
-        </AnimatedPressable>
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoMesas] Delete pressed:", mesa.id); onDelete(mesa.id); }}
-          style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.danger + "15", alignItems: "center", justifyContent: "center" }}
-        >
-          <Trash2 size={16} color={COLORS.danger} />
-        </AnimatedPressable>
-      </View>
-    </Animated.View>
-  );
-}
+const STATUS_OPTIONS = [
+  { value: "disponivel", label: "Disponível" },
+  { value: "ocupada", label: "Ocupada" },
+  { value: "reservada", label: "Reservada" },
+];
 
 export default function GestaoMesasScreen() {
   const COLORS = useColors();
+  const router = useRouter();
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +45,7 @@ export default function GestaoMesasScreen() {
   const [editingMesa, setEditingMesa] = useState<ApiMesa | null>(null);
   const [numero, setNumero] = useState("");
   const [capacidade, setCapacidade] = useState("4");
+  const [status, setStatus] = useState("disponivel");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
@@ -111,11 +54,11 @@ export default function GestaoMesasScreen() {
     try {
       const res = await apiGet<any>("/api/mesas");
       const list: ApiMesa[] = Array.isArray(res) ? res : (res.mesas || []);
-      console.log("[GestaoMesas] Loaded", list.length, "mesas");
+      console.log("[GestaoMesas] Carregadas", list.length, "mesas");
       setMesas(list);
       setError("");
-    } catch (e: any) {
-      console.error("[GestaoMesas] Error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoMesas] Erro:", e);
       setError("Não foi possível carregar as mesas.");
     } finally {
       setLoading(false);
@@ -126,22 +69,22 @@ export default function GestaoMesasScreen() {
   useEffect(() => { fetchMesas(); }, [fetchMesas]);
 
   const handleRefresh = () => {
-    console.log("[GestaoMesas] Manual refresh");
+    console.log("[GestaoMesas] Refresh manual");
     setRefreshing(true);
     fetchMesas();
   };
 
   const openCreate = () => {
-    console.log("[GestaoMesas] Open create modal");
+    console.log("[GestaoMesas] Abrir modal de criação");
     setEditingMesa(null);
-    setNumero(""); setCapacidade("4"); setModalError("");
+    setNumero(""); setCapacidade("4"); setStatus("disponivel"); setModalError("");
     setShowModal(true);
   };
 
   const openEdit = (m: ApiMesa) => {
-    console.log("[GestaoMesas] Open edit modal:", m.id);
+    console.log("[GestaoMesas] Abrir modal de edição:", m.id);
     setEditingMesa(m);
-    setNumero(String(m.numero)); setCapacidade(String(m.capacidade)); setModalError("");
+    setNumero(String(m.numero)); setCapacidade(String(m.capacidade)); setStatus(m.status || "disponivel"); setModalError("");
     setShowModal(true);
   };
 
@@ -150,33 +93,34 @@ export default function GestaoMesasScreen() {
     const capVal = parseInt(capacidade, 10);
     if (!numero || isNaN(numVal) || numVal <= 0) { setModalError("Número da mesa inválido."); return; }
     if (!capacidade || isNaN(capVal) || capVal <= 0) { setModalError("Capacidade inválida."); return; }
-    console.log("[GestaoMesas] Save pressed, editingMesa:", editingMesa?.id ?? "new");
+    console.log("[GestaoMesas] Salvar pressionado, editando:", editingMesa?.id ?? "novo");
     setSaving(true); setModalError("");
     try {
       if (editingMesa) {
         console.log("[GestaoMesas] PUT /api/mesas/" + editingMesa.id);
-        await apiPut(`/api/mesas/${editingMesa.id}`, { numero: numVal, capacidade: capVal });
+        await apiPut(`/api/mesas/${editingMesa.id}`, { numero: numVal, capacidade: capVal, status });
         console.log("[GestaoMesas] Mesa atualizada:", editingMesa.id);
       } else {
-        console.log("[GestaoMesas] POST /api/mesas", { numero: numVal, capacidade: capVal });
-        await apiPost("/api/mesas", { numero: numVal, capacidade: capVal });
+        console.log("[GestaoMesas] POST /api/mesas", { numero: numVal, capacidade: capVal, status });
+        await apiPost("/api/mesas", { numero: numVal, capacidade: capVal, status });
         console.log("[GestaoMesas] Mesa criada");
       }
       setShowModal(false);
       await fetchMesas();
-    } catch (e: any) {
-      console.error("[GestaoMesas] Save error:", e);
+    } catch (e: unknown) {
+      console.error("[GestaoMesas] Erro ao salvar:", e);
       setModalError(e instanceof Error ? e.message : "Não foi possível salvar a mesa.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    console.log("[GestaoMesas] Delete confirm for:", id);
+  const handleDelete = (id: string, numeroMesa: number) => {
+    const nomeMesa = `Mesa ${numeroMesa}`;
+    console.log("[GestaoMesas] Confirmar exclusão:", id, nomeMesa);
     Alert.alert(
-      "Excluir mesa?",
-      "Esta ação não pode ser desfeita.",
+      "Confirmar Exclusão",
+      `Deseja realmente excluir "${nomeMesa}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -188,8 +132,9 @@ export default function GestaoMesasScreen() {
               await apiDelete(`/api/mesas/${id}`);
               console.log("[GestaoMesas] Mesa excluída:", id);
               setMesas((prev) => prev.filter((m) => m.id !== id));
-            } catch (e: any) {
-              console.error("[GestaoMesas] Delete error:", e);
+              Alert.alert("Sucesso", `"${nomeMesa}" excluída com sucesso.`);
+            } catch (e: unknown) {
+              console.error("[GestaoMesas] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir a mesa.");
             }
           },
@@ -210,115 +155,185 @@ export default function GestaoMesasScreen() {
   };
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: "Mesas",
-          headerTintColor: COLORS.primary,
-          headerBackButtonDisplayMode: "minimal",
-          headerStyle: { backgroundColor: COLORS.surface },
-          headerTitleStyle: { fontFamily: "Outfit_700Bold", color: COLORS.text },
-        }}
-      />
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {loading ? (
-          <View style={{ paddingTop: 16 }}>
-            {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
-          </View>
-        ) : error ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar mesas</Text>
-            <AnimatedPressable onPress={fetchMesas} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <FlatList
-            data={mesas}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
-            contentInsetAdjustmentBehavior="automatic"
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
-            renderItem={({ item, index }) => (
-              <MesaCard mesa={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
-            )}
-            ListEmptyComponent={
-              <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-                <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-                  <LayoutGrid size={32} color={COLORS.primary} />
-                </View>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma mesa cadastrada</Text>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                  Adicione mesas para gerenciar o salão
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        <AnimatedPressable
-          onPress={openCreate}
-          style={{
-            position: "absolute",
-            bottom: 20,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: COLORS.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
-          }}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* Nav bar */}
+      <View style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: 56,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e0e0e0",
+        backgroundColor: "#fff",
+      }}>
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoMesas] Botão voltar pressionado"); router.back(); }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
         >
-          <Plus size={24} color="#fff" />
-        </AnimatedPressable>
-
-        <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
-                  {editingMesa ? "Editar Mesa" : "Nova Mesa"}
-                </Text>
-                <AnimatedPressable
-                  onPress={() => { console.log("[GestaoMesas] Modal closed"); setShowModal(false); }}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={16} color={COLORS.textSecondary} />
-                </AnimatedPressable>
-              </View>
-
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Número *</Text>
-                  <TextInput value={numero} onChangeText={(t) => { setNumero(t); setModalError(""); }} placeholder="Ex: 1" placeholderTextColor={COLORS.textTertiary} keyboardType="number-pad" style={inputStyle} autoFocus />
-                </View>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Capacidade *</Text>
-                  <TextInput value={capacidade} onChangeText={(t) => { setCapacidade(t); setModalError(""); }} placeholder="4" placeholderTextColor={COLORS.textTertiary} keyboardType="number-pad" style={inputStyle} />
-                </View>
-              </View>
-
-              {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
-
-              <AnimatedPressable
-                onPress={handleSave}
-                disabled={saving}
-                style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                    {editingMesa ? "Salvar alterações" : "Adicionar mesa"}
-                  </Text>
-                )}
-              </AnimatedPressable>
-            </View>
-          </View>
-        </Modal>
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </TouchableOpacity>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: "#111",
+        }}>
+          Mesas
+        </Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => { console.log("[GestaoMesas] Botão incluir pressionado"); openCreate(); }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#34C759", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+        >
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
+        </TouchableOpacity>
       </View>
-    </>
+
+      {loading ? (
+        <View style={{ paddingTop: 16 }}>
+          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar mesas</Text>
+          <TouchableOpacity onPress={fetchMesas} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={mesas}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          renderItem={({ item }) => {
+            const statusColor = getMesaStatusColor(item.status);
+            const statusLabel = getMesaStatusLabel(item.status);
+            const numeroStr = String(item.numero);
+            return (
+              <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+                <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: statusColor + "18", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: statusColor }}>{numeroStr}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#111" }}>Mesa {item.numero}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Users size={12} color={COLORS.textSecondary} />
+                      <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>{item.capacidade} lugares</Text>
+                    </View>
+                    <View style={{ backgroundColor: statusColor + "20", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: statusColor }}>{statusLabel}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => { console.log("[GestaoMesas] Editar pressionado:", item.id); openEdit(item); }}
+                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                  >
+                    <Ionicons name="pencil" size={14} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { console.log("[GestaoMesas] Excluir pressionado:", item.id); handleDelete(item.id, item.numero); }}
+                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                  >
+                    <Ionicons name="trash" size={14} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+              <LayoutGrid size={32} color={COLORS.textTertiary} />
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma mesa cadastrada</Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                Toque em "Incluir" para adicionar mesas
+              </Text>
+            </View>
+          }
+        />
+      )}
+
+      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
+                {editingMesa ? "Editar Mesa" : "Nova Mesa"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log("[GestaoMesas] Modal fechado"); setShowModal(false); }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Número *</Text>
+                <TextInput value={numero} onChangeText={(t) => { setNumero(t); setModalError(""); }} placeholder="Ex: 1" placeholderTextColor={COLORS.textTertiary} keyboardType="number-pad" style={inputStyle} autoFocus />
+              </View>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Capacidade *</Text>
+                <TextInput value={capacidade} onChangeText={(t) => { setCapacidade(t); setModalError(""); }} placeholder="4" placeholderTextColor={COLORS.textTertiary} keyboardType="number-pad" style={inputStyle} />
+              </View>
+            </View>
+
+            {/* Status */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Status</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {STATUS_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => { console.log("[GestaoMesas] Status selecionado:", opt.value); setStatus(opt.value); }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      backgroundColor: status === opt.value ? COLORS.primary : COLORS.surfaceSecondary,
+                      borderWidth: 1,
+                      borderColor: status === opt.value ? COLORS.primary : COLORS.border,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: status === opt.value ? "#fff" : COLORS.textSecondary }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
+
+            <TouchableOpacity
+              onPress={() => { console.log("[GestaoMesas] Salvar mesa pressionado"); handleSave(); }}
+              disabled={saving}
+              style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
+                  {editingMesa ? "Salvar alterações" : "Adicionar mesa"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
