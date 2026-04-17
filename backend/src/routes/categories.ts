@@ -179,6 +179,9 @@ export function registerCategoryRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoryBody }>,
       reply: FastifyReply
     ) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ categoryId: request.params.id }, "Updating category");
 
@@ -206,7 +209,7 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: updated.id }, "Category updated");
 
-        return {
+        return reply.status(200).send({
           id: updated.id,
           name: updated.name,
           description: updated.description,
@@ -214,7 +217,7 @@ export function registerCategoryRoutes(app: App) {
           icon: updated.icon,
           active: updated.active,
           created_at: updated.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update category");
         return reply.status(500).send({ error: "Internal server error" });
@@ -241,6 +244,9 @@ export function registerCategoryRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ categoryId: request.params.id }, "Deleting category");
 
@@ -260,8 +266,7 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: request.params.id }, "Category deleted");
 
-        reply.status(204);
-        return;
+        return reply.status(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete category");
         return reply.status(500).send({ error: "Internal server error" });

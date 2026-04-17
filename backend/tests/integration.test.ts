@@ -280,6 +280,14 @@ describe("API Integration Tests", () => {
     expect(data.id).toBe(testDishId);
   });
 
+  test("Get dish with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/dishes/invalid-uuid-format",
+      authToken
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Create dish missing required field fails", async () => {
     const res = await authenticatedApi("/api/dishes", authToken, {
       method: "POST",
@@ -380,6 +388,14 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBe(testTableId);
+  });
+
+  test("Get table with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/tables/invalid-uuid-format",
+      authToken
+    );
+    await expectStatus(res, 400);
   });
 
   test("Create table missing required field fails", async () => {
@@ -513,6 +529,14 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBe(testOrderId);
+  });
+
+  test("Get order with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/orders/invalid-uuid-format",
+      authToken
+    );
+    await expectStatus(res, 400);
   });
 
   test("Get non-existent order returns 404", async () => {

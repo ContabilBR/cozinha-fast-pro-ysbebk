@@ -234,7 +234,7 @@ export function registerDishRoutes(app: App) {
         }
 
         const row = rows[0];
-        return {
+        return reply.status(200).send({
           id: row.dishes.id,
           name: row.dishes.name,
           description: row.dishes.description,
@@ -251,7 +251,7 @@ export function registerDishRoutes(app: App) {
                 icon: row.categories.icon,
               }
             : null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get dish");
         return reply.status(500).send({ error: "Internal server error" });
@@ -331,7 +331,7 @@ export function registerDishRoutes(app: App) {
           .where(eq(schema.dishes.id, updated.id));
 
         const row = rows[0];
-        return {
+        return reply.status(200).send({
           id: row.dishes.id,
           name: row.dishes.name,
           description: row.dishes.description,
@@ -348,7 +348,7 @@ export function registerDishRoutes(app: App) {
                 icon: row.categories.icon,
               }
             : null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update dish");
         return reply.status(500).send({ error: "Internal server error" });

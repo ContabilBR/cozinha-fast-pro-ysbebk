@@ -244,7 +244,7 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ itemId: updated.id }, "Order item updated");
 
-        return {
+        return reply.status(200).send({
           id: updated.id,
           order_id: updated.orderId,
           dish_id: updated.dishId,
@@ -258,7 +258,7 @@ export function registerOrderItemRoutes(app: App) {
           ready_at: updated.readyAt,
           delivered_at: updated.deliveredAt,
           created_at: updated.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update order item");
         return reply.status(500).send({ error: "Internal server error" });
@@ -325,7 +325,7 @@ export function registerOrderItemRoutes(app: App) {
           .where(eq(schema.orders.id, existingItem.orderId));
 
         app.logger.info({ itemId: request.params.id }, "Order item cancelled");
-        return { success: true };
+        return reply.status(200).send({ success: true });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to cancel order item");
         return reply.status(500).send({ error: "Internal server error" });

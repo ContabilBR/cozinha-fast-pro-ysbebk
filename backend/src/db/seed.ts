@@ -10,24 +10,24 @@ const seedUsers = [
     name: "Administrador",
     email: "admin@cozinhafast.com",
     password: "admin123",
-    role: "admin",
+    role: "administrador",
   },
   {
-    name: "Gerente Silva",
+    name: "Gerente",
     email: "gerente@cozinhafast.com",
     password: "gerente123",
     role: "gerente",
   },
   {
-    name: "João Garçom",
+    name: "Garçom",
     email: "garcom@cozinhafast.com",
     password: "garcom123",
     role: "garcom",
   },
   {
-    name: "Chef Carlos",
+    name: "Cozinheiro",
     email: "cozinheiro@cozinhafast.com",
-    password: "cozinha123",
+    password: "cozinheiro123",
     role: "cozinheiro",
   },
 ];
@@ -66,15 +66,123 @@ const seedTables = [
 
 export async function seedDatabase(app: App) {
   try {
-    // Check if database already seeded
+    app.logger.info("Starting database seed");
+
+    // Always ensure seed users exist (upsert behavior)
+    app.logger.info("Ensuring seed users exist");
+    const userIds: Record<string, string> = {};
+    let garcomUserId = "";
+
+    for (const seedUser of seedUsers) {
+      try {
+        // Check if user already exists
+        const existing = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.email, seedUser.email))
+          .limit(1);
+
+        const userId = existing.length > 0 ? existing[0].id : randomUUID();
+        const now = new Date();
+
+        if (existing.length > 0) {
+          // Update existing user
+          await app.db
+            .update(userTable)
+            .set({
+              name: seedUser.name,
+              emailVerified: true,
+              role: seedUser.role as any,
+              active: true,
+              updatedAt: now,
+            })
+            .where(eq(userTable.id, userId));
+
+          // Update or create account with new password
+          const existingAccount = await app.db
+            .select()
+            .from(accountTable)
+            .where(eq(accountTable.userId, userId))
+            .limit(1);
+
+          const hashedPassword = await bcrypt.hash(seedUser.password, 10);
+          if (existingAccount.length > 0) {
+            await app.db
+              .update(accountTable)
+              .set({
+                password: hashedPassword,
+                updatedAt: now,
+              })
+              .where(eq(accountTable.userId, userId));
+          } else {
+            await app.db.insert(accountTable).values({
+              id: randomUUID(),
+              accountId: userId,
+              providerId: "credential",
+              userId: userId,
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+
+          app.logger.info({ email: seedUser.email, userId }, "User updated");
+        } else {
+          // Create new user
+          await app.db.insert(userTable).values({
+            id: userId,
+            name: seedUser.name,
+            email: seedUser.email,
+            emailVerified: true,
+            role: seedUser.role as any,
+            active: true,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          // Hash password and create account
+          const hashedPassword = await bcrypt.hash(seedUser.password, 10);
+          await app.db.insert(accountTable).values({
+            id: randomUUID(),
+            accountId: userId,
+            providerId: "credential",
+            userId: userId,
+            password: hashedPassword,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          // Create profile
+          await app.db.insert(schema.profiles).values({
+            id: randomUUID(),
+            userId: userId,
+            role: seedUser.role,
+            name: seedUser.name,
+            createdAt: now,
+          });
+
+          app.logger.info({ email: seedUser.email, userId }, "User created");
+        }
+
+        userIds[seedUser.email] = userId;
+        if (seedUser.role === "garcom") {
+          garcomUserId = userId;
+        }
+      } catch (err) {
+        app.logger.warn({ email: seedUser.email, err }, "Failed to upsert user");
+      }
+    }
+
+    // Check if database already seeded (categories)
     const existingCategories = await app.db.select().from(schema.categories).limit(1);
 
     if (existingCategories.length > 0) {
-      app.logger.info("Database already seeded");
+      app.logger.info("Database categories and other data already seeded");
+      app.logger.info("Database seed completed");
       return;
     }
 
-    app.logger.info("Starting database seed");
+    app.logger.info("Seeding categories, dishes, and tables");
 
     // Seed categories
     const categoryIds: Record<string, string> = {};
@@ -122,75 +230,6 @@ export async function seedDatabase(app: App) {
         })
         .returning();
       tableIds[table.number] = createdTable.id;
-    }
-
-    // Seed users with hashed passwords
-    const userIds: Record<string, string> = {};
-    let garcomUserId = "";
-
-    for (const seedUser of seedUsers) {
-      try {
-        // Check if user already exists
-        const existing = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.email, seedUser.email))
-          .limit(1);
-
-        if (existing.length > 0) {
-          app.logger.info({ email: seedUser.email }, "User already exists");
-          userIds[seedUser.email] = existing[0].id;
-          if (seedUser.role === "garcom") {
-            garcomUserId = existing[0].id;
-          }
-          continue;
-        }
-
-        // Create user
-        const userId = randomUUID();
-        const now = new Date();
-
-        await app.db.insert(userTable).values({
-          id: userId,
-          name: seedUser.name,
-          email: seedUser.email,
-          emailVerified: true,
-          role: seedUser.role as any,
-          active: true,
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        // Hash password and create account
-        const hashedPassword = await bcrypt.hash(seedUser.password, 10);
-        await app.db.insert(accountTable).values({
-          id: randomUUID(),
-          accountId: userId,
-          providerId: "credential",
-          userId: userId,
-          password: hashedPassword,
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        // Create profile
-        await app.db.insert(schema.profiles).values({
-          id: randomUUID(),
-          userId: userId,
-          role: seedUser.role,
-          name: seedUser.name,
-          createdAt: now,
-        });
-
-        userIds[seedUser.email] = userId;
-        if (seedUser.role === "garcom") {
-          garcomUserId = userId;
-        }
-
-        app.logger.info({ email: seedUser.email, userId }, "User created");
-      } catch (err) {
-        app.logger.warn({ email: seedUser.email, err }, "Failed to create user");
-      }
     }
 
     // Seed orders with items

@@ -80,7 +80,7 @@ export function registerUserRoutes(app: App) {
             name: { type: "string" },
             email: { type: "string", format: "email" },
             password: { type: "string" },
-            role: { type: "string", enum: ["admin", "gerente", "garcom", "cozinheiro"] },
+            role: { type: "string", enum: ["administrador", "gerente", "garcom", "cozinheiro"] },
           },
         },
         response: {
@@ -176,7 +176,7 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string" } },
+          properties: { id: { type: "string", format: "uuid" } },
         },
         body: {
           type: "object",
@@ -184,7 +184,7 @@ export function registerUserRoutes(app: App) {
             name: { type: "string" },
             email: { type: "string", format: "email" },
             password: { type: "string" },
-            role: { type: "string", enum: ["admin", "gerente", "garcom", "cozinheiro"] },
+            role: { type: "string", enum: ["administrador", "gerente", "garcom", "cozinheiro"] },
             active: { type: "boolean" },
           },
         },
@@ -223,14 +223,14 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId: updated.id }, "User updated");
 
-        return {
+        return reply.status(200).send({
           id: updated.id,
           name: updated.name,
           email: updated.email,
           role: updated.role,
           active: updated.active,
           created_at: updated.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update user");
         return reply.status(500).send({ error: "Internal server error" });
@@ -248,7 +248,7 @@ export function registerUserRoutes(app: App) {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string" } },
+          properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
           204: { description: "User deleted" },
@@ -277,8 +277,7 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId: request.params.id }, "User deleted");
 
-        reply.status(204);
-        return;
+        return reply.status(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete user");
         return reply.status(500).send({ error: "Internal server error" });

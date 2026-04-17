@@ -146,11 +146,10 @@ export function registerAuthRoutes(app: App) {
             id: userId,
             name,
             email,
-            role: "garcom",
-          },
-          profile: {
-            role: "garcom",
-            name,
+            emailVerified: false,
+            image: null,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
           },
         });
       } catch (error) {
@@ -284,11 +283,13 @@ export function registerAuthRoutes(app: App) {
           token,
           user: {
             id: user.id,
-            email: user.email,
             name: user.name,
-            role: user.role || "usuario",
+            email: user.email,
+            emailVerified: user.emailVerified,
+            image: user.image,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
           },
-          profile,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Sign in failed with error");

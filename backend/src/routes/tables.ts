@@ -197,7 +197,7 @@ export function registerTableRoutes(app: App) {
         }
 
         const row = rows[0];
-        return {
+        return reply.status(200).send({
           id: row.id,
           number: row.number,
           capacity: row.capacity,
@@ -206,7 +206,7 @@ export function registerTableRoutes(app: App) {
           active: row.active,
           created_at: row.created_at,
           current_order_id: row.current_order_id || null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get table");
         return reply.status(500).send({ error: "Internal server error" });
@@ -276,7 +276,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: updated.id }, "Table updated");
 
-        return {
+        return reply.status(200).send({
           id: updated.id,
           number: updated.number,
           capacity: updated.capacity,
@@ -284,7 +284,7 @@ export function registerTableRoutes(app: App) {
           status: updated.status,
           active: updated.active,
           created_at: updated.createdAt,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update table");
         return reply.status(500).send({ error: "Internal server error" });
@@ -333,8 +333,7 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: request.params.id }, "Table deleted");
 
-        reply.status(204);
-        return;
+        return reply.status(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete table");
         return reply.status(500).send({ error: "Internal server error" });

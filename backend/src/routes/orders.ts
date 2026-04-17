@@ -300,7 +300,7 @@ export function registerOrderRoutes(app: App) {
 
         app.logger.info({ orderId: request.params.id, itemCount: mappedItems.length }, "Order retrieved");
 
-        return {
+        return reply.status(200).send({
           id: row.orders.id,
           status: row.orders.status,
           customer_count: row.orders.customerCount,
@@ -324,7 +324,7 @@ export function registerOrderRoutes(app: App) {
               }
             : null,
           items: mappedItems,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get order");
         return reply.status(500).send({ error: "Internal server error" });
@@ -429,7 +429,7 @@ export function registerOrderRoutes(app: App) {
         const row = rows[0];
         app.logger.info({ orderId: updated.id }, "Order updated");
 
-        return {
+        return reply.status(200).send({
           id: row.id,
           status: row.status,
           customer_count: row.customer_count,
@@ -452,7 +452,7 @@ export function registerOrderRoutes(app: App) {
                 email: row.waiter_email,
               }
             : null,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update order");
         return reply.status(500).send({ error: "Internal server error" });
