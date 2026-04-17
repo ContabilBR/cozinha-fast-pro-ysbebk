@@ -14,7 +14,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   KeyboardAvoidingView,
-  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -23,7 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { X, UtensilsCrossed, Camera, Image as ImageIcon, ChevronDown } from "lucide-react-native";
+import { X, UtensilsCrossed, Camera, Image as ImageIcon, ChevronDown, Search } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import type { ImageSourcePropType } from "react-native";
 
@@ -58,6 +57,7 @@ export default function GestaoPratos() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [editingPrato, setEditingPrato] = useState<ApiPrato | null>(null);
@@ -133,46 +133,45 @@ export default function GestaoPratos() {
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
       }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         console.log("[GestaoPratos] Imagem selecionada:", asset.uri);
         setLocalImageUri(asset.uri);
-        if (asset.base64) await uploadImageBase64(asset.base64, asset.uri);
       }
     } catch (e) {
       console.error("[GestaoPratos] Erro no seletor de imagem:", e);
     }
   };
 
-  const uploadImageBase64 = async (base64: string, uri: string) => {
-    console.log("[GestaoPratos] POST /api/upload/imagem");
+  const uploadFoto = async (pratoId: string): Promise<void> => {
+    if (!localImageUri) return;
+    console.log("[GestaoPratos] POST /api/pratos/" + pratoId + "/foto");
     setUploading(true);
     try {
-      const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
-      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
       const token = await getBearerToken();
-      const res = await fetch(`${BACKEND_URL}/api/upload/imagem`, {
+      const formData = new FormData();
+      const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
+      formData.append("foto", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      const res = await fetch(`${BACKEND_URL}/api/pratos/${pratoId}/foto`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ imagem: `data:${mimeType};base64,${base64}` }),
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
       });
       if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const url: string = data?.url || data?.imagem_url || "";
-        console.log("[GestaoPratos] Upload concluído:", url);
-        if (url) setImagemUrl(url);
+        console.log("[GestaoPratos] Upload de foto concluído:", pratoId);
       } else {
         const text = await res.text().catch(() => "");
-        console.warn("[GestaoPratos] Upload falhou:", res.status, text.slice(0, 100));
+        console.warn("[GestaoPratos] Upload de foto falhou:", res.status, text.slice(0, 100));
       }
     } catch (e) {
-      console.error("[GestaoPratos] Erro no upload:", e);
+      console.error("[GestaoPratos] Erro no upload de foto:", e);
     } finally {
       setUploading(false);
     }
@@ -192,17 +191,18 @@ export default function GestaoPratos() {
         disponivel,
       };
       if (categoriaId) payload.categoria_id = categoriaId;
-      const finalUrl = imagemUrl || (localImageUri ?? undefined);
-      if (finalUrl) payload.imagem_url = finalUrl;
 
       if (editingPrato) {
         console.log("[GestaoPratos] PUT /api/pratos/" + editingPrato.id);
         await apiPut(`/api/pratos/${editingPrato.id}`, payload);
         console.log("[GestaoPratos] Prato atualizado:", editingPrato.id);
+        if (localImageUri) await uploadFoto(editingPrato.id);
       } else {
         console.log("[GestaoPratos] POST /api/pratos");
-        await apiPost("/api/pratos", payload);
-        console.log("[GestaoPratos] Prato criado com sucesso");
+        const res = await apiPost<any>("/api/pratos", payload);
+        const pratoId = res?.prato?.id || res?.id;
+        console.log("[GestaoPratos] Prato criado com sucesso:", pratoId);
+        if (pratoId && localImageUri) await uploadFoto(pratoId);
       }
       setShowModal(false);
       await fetchData();
@@ -217,7 +217,7 @@ export default function GestaoPratos() {
   const handleDelete = (id: string, nomePrato: string) => {
     console.log("[GestaoPratos] Confirmar exclusão:", id, nomePrato);
     Alert.alert(
-      "Confirmar Exclusão",
+      "Excluir prato?",
       `Deseja realmente excluir "${nomePrato}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
@@ -230,7 +230,6 @@ export default function GestaoPratos() {
               await apiDelete(`/api/pratos/${id}`);
               console.log("[GestaoPratos] Prato excluído:", id);
               setPratos((prev) => prev.filter((p) => p.id !== id));
-              Alert.alert("Sucesso", `"${nomePrato}" excluído com sucesso.`);
             } catch (e: unknown) {
               console.error("[GestaoPratos] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir o prato.");
@@ -255,6 +254,11 @@ export default function GestaoPratos() {
   const selectedCat = categorias.find((c) => c.id === categoriaId);
   const displayImageUri = localImageUri ?? (imagemUrl || null);
   const imageSource = resolveImageSource(displayImageUri ?? undefined);
+
+  const searchLower = search.toLowerCase();
+  const filteredPratos = search.trim()
+    ? pratos.filter((p) => p.nome.toLowerCase().includes(searchLower) || (p.categoria?.nome ?? "").toLowerCase().includes(searchLower))
+    : pratos;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -297,6 +301,25 @@ export default function GestaoPratos() {
         </TouchableOpacity>
       </View>
 
+      {/* Search bar */}
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+          <Search size={16} color="#8E8E93" />
+          <TextInput
+            value={search}
+            onChangeText={(t) => { console.log("[GestaoPratos] Busca:", t); setSearch(t); }}
+            placeholder="Buscar..."
+            placeholderTextColor="#8E8E93"
+            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: "#111", padding: 0 }}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {loading ? (
         <View style={{ paddingTop: 16 }}>
           {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
@@ -310,7 +333,7 @@ export default function GestaoPratos() {
         </View>
       ) : (
         <FlatList
-          data={pratos}
+          data={filteredPratos}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
@@ -361,9 +384,11 @@ export default function GestaoPratos() {
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <UtensilsCrossed size={32} color={COLORS.textTertiary} />
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhum prato cadastrado</Text>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+                {search.trim() ? "Nenhum resultado encontrado" : "Nenhum prato cadastrado"}
+              </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Toque em "Incluir" para adicionar pratos
+                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar pratos"}
               </Text>
             </View>
           }
@@ -399,6 +424,12 @@ export default function GestaoPratos() {
                           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>Enviando...</Text>
                         </View>
                       )}
+                      <TouchableOpacity
+                        onPress={() => { console.log("[GestaoPratos] Remover foto pressionado"); setLocalImageUri(null); setImagemUrl(""); }}
+                        style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Ionicons name="close" size={16} color="#fff" />
+                      </TouchableOpacity>
                     </View>
                   ) : (
                     <View style={{ height: 100, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -493,11 +524,11 @@ export default function GestaoPratos() {
                   disabled={saving || uploading}
                   style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: saving || uploading ? 0.7 : 1, marginBottom: 20 }}
                 >
-                  {saving ? (
+                  {saving || uploading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                      {uploading ? "Aguardando upload..." : editingPrato ? "Salvar alterações" : "Adicionar prato"}
+                      {editingPrato ? "Salvar alterações" : "Adicionar prato"}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -509,7 +540,3 @@ export default function GestaoPratos() {
     </SafeAreaView>
   );
 }
-
-const s = StyleSheet.create({
-  hidden: { display: "none" },
-});

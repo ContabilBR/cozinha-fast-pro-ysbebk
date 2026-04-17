@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { X, Tag } from "lucide-react-native";
+import { X, Tag, Search } from "lucide-react-native";
 
 interface ApiCategoria {
   id: string;
@@ -32,6 +32,7 @@ export default function GestaoCategorias() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [editingCat, setEditingCat] = useState<ApiCategoria | null>(null);
@@ -106,7 +107,7 @@ export default function GestaoCategorias() {
   const handleDelete = (id: string, nomeCategoria: string) => {
     console.log("[GestaoCategorias] Confirmar exclusão:", id, nomeCategoria);
     Alert.alert(
-      "Confirmar Exclusão",
+      "Excluir categoria?",
       `Deseja realmente excluir "${nomeCategoria}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
@@ -119,7 +120,6 @@ export default function GestaoCategorias() {
               await apiDelete(`/api/categorias/${id}`);
               console.log("[GestaoCategorias] Categoria excluída:", id);
               setCategorias((prev) => prev.filter((c) => c.id !== id));
-              Alert.alert("Sucesso", `"${nomeCategoria}" excluída com sucesso.`);
             } catch (e: unknown) {
               console.error("[GestaoCategorias] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir a categoria.");
@@ -140,6 +140,11 @@ export default function GestaoCategorias() {
     borderWidth: 1,
     borderColor: COLORS.border,
   };
+
+  const searchLower = search.toLowerCase();
+  const filteredCategorias = search.trim()
+    ? categorias.filter((c) => c.nome.toLowerCase().includes(searchLower) || (c.descricao ?? "").toLowerCase().includes(searchLower))
+    : categorias;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -182,6 +187,25 @@ export default function GestaoCategorias() {
         </TouchableOpacity>
       </View>
 
+      {/* Search bar */}
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+          <Search size={16} color="#8E8E93" />
+          <TextInput
+            value={search}
+            onChangeText={(t) => { console.log("[GestaoCategorias] Busca:", t); setSearch(t); }}
+            placeholder="Buscar..."
+            placeholderTextColor="#8E8E93"
+            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: "#111", padding: 0 }}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {loading ? (
         <View style={{ paddingTop: 16 }}>
           {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
@@ -195,7 +219,7 @@ export default function GestaoCategorias() {
         </View>
       ) : (
         <FlatList
-          data={categorias}
+          data={filteredCategorias}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
@@ -231,9 +255,11 @@ export default function GestaoCategorias() {
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <Tag size={32} color={COLORS.textTertiary} />
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma categoria</Text>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+                {search.trim() ? "Nenhum resultado encontrado" : "Nenhuma categoria"}
+              </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Toque em "Incluir" para criar categorias
+                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para criar categorias"}
               </Text>
             </View>
           }

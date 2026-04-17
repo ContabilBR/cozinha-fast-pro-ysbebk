@@ -17,7 +17,7 @@ import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { getMesaStatusLabel, getMesaStatusColor } from "@/utils/helpers";
-import { X, LayoutGrid, Users } from "lucide-react-native";
+import { X, LayoutGrid, Users, Search } from "lucide-react-native";
 
 interface ApiMesa {
   id: string;
@@ -40,6 +40,7 @@ export default function GestaoMesasScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [editingMesa, setEditingMesa] = useState<ApiMesa | null>(null);
@@ -119,7 +120,7 @@ export default function GestaoMesasScreen() {
     const nomeMesa = `Mesa ${numeroMesa}`;
     console.log("[GestaoMesas] Confirmar exclusão:", id, nomeMesa);
     Alert.alert(
-      "Confirmar Exclusão",
+      "Excluir mesa?",
       `Deseja realmente excluir "${nomeMesa}"?\n\nEsta ação não pode ser desfeita.`,
       [
         { text: "Cancelar", style: "cancel" },
@@ -132,7 +133,6 @@ export default function GestaoMesasScreen() {
               await apiDelete(`/api/mesas/${id}`);
               console.log("[GestaoMesas] Mesa excluída:", id);
               setMesas((prev) => prev.filter((m) => m.id !== id));
-              Alert.alert("Sucesso", `"${nomeMesa}" excluída com sucesso.`);
             } catch (e: unknown) {
               console.error("[GestaoMesas] Erro ao excluir:", e);
               Alert.alert("Erro", "Não foi possível excluir a mesa.");
@@ -153,6 +153,11 @@ export default function GestaoMesasScreen() {
     borderWidth: 1,
     borderColor: COLORS.border,
   };
+
+  const searchLower = search.toLowerCase();
+  const filteredMesas = search.trim()
+    ? mesas.filter((m) => String(m.numero).includes(searchLower) || getMesaStatusLabel(m.status).toLowerCase().includes(searchLower))
+    : mesas;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -195,6 +200,25 @@ export default function GestaoMesasScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search bar */}
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+          <Search size={16} color="#8E8E93" />
+          <TextInput
+            value={search}
+            onChangeText={(t) => { console.log("[GestaoMesas] Busca:", t); setSearch(t); }}
+            placeholder="Buscar..."
+            placeholderTextColor="#8E8E93"
+            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: "#111", padding: 0 }}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons name="close-circle" size={16} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {loading ? (
         <View style={{ paddingTop: 16 }}>
           {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
@@ -208,7 +232,7 @@ export default function GestaoMesasScreen() {
         </View>
       ) : (
         <FlatList
-          data={mesas}
+          data={filteredMesas}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
@@ -255,9 +279,11 @@ export default function GestaoMesasScreen() {
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <LayoutGrid size={32} color={COLORS.textTertiary} />
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma mesa cadastrada</Text>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+                {search.trim() ? "Nenhum resultado encontrado" : "Nenhuma mesa cadastrada"}
+              </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Toque em "Incluir" para adicionar mesas
+                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar mesas"}
               </Text>
             </View>
           }
@@ -290,7 +316,6 @@ export default function GestaoMesasScreen() {
               </View>
             </View>
 
-            {/* Status */}
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Status</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>

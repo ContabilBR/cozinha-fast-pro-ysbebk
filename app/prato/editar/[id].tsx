@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Prato, Categoria } from "@/types";
@@ -41,6 +43,7 @@ export default function EditarPratoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -51,7 +54,6 @@ export default function EditarPratoScreen() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -88,51 +90,45 @@ export default function EditarPratoScreen() {
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8, base64: true });
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8, base64: true });
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
       }
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         console.log("[EditarPrato] Imagem selecionada:", asset.uri);
         setLocalImageUri(asset.uri);
-        setUploadedImageUrl(null);
-        if (asset.base64) await uploadImageBase64(asset.base64, asset.uri);
       }
     } catch (e) {
       console.error("[EditarPrato] Erro no seletor de imagem:", e);
     }
   };
 
-  const uploadImageBase64 = async (base64: string, uri: string) => {
-    console.log("[EditarPrato] POST /api/upload/imagem");
+  const uploadFoto = async (): Promise<void> => {
+    if (!localImageUri || !id) return;
+    console.log("[EditarPrato] POST /api/pratos/" + id + "/foto");
     setUploading(true);
     try {
-      const ext = uri.split(".").pop()?.toLowerCase() ?? "jpg";
-      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
       const token = await getBearerToken();
-      const res = await fetch(`${BACKEND_URL}/api/upload/imagem`, {
+      const formData = new FormData();
+      const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
+      formData.append("foto", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
+      const res = await fetch(`${BACKEND_URL}/api/pratos/${id}/foto`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ imagem: `data:${mimeType};base64,${base64}` }),
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
       });
       if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const url = data?.url || data?.imagem_url || null;
-        console.log("[EditarPrato] Upload concluído:", url);
-        setUploadedImageUrl(url);
+        console.log("[EditarPrato] Upload de foto concluído");
       } else {
         const text = await res.text().catch(() => "");
-        console.error("[EditarPrato] Upload falhou:", res.status, text.slice(0, 200));
-        const seed = Math.random().toString(36).slice(2, 10);
-        setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+        console.warn("[EditarPrato] Upload de foto falhou:", res.status, text.slice(0, 100));
       }
     } catch (e) {
-      console.error("[EditarPrato] Erro no upload:", e);
-      const seed = Math.random().toString(36).slice(2, 10);
-      setUploadedImageUrl(`https://picsum.photos/seed/${seed}/400/300`);
+      console.error("[EditarPrato] Erro no upload de foto:", e);
     } finally {
       setUploading(false);
     }
@@ -146,11 +142,12 @@ export default function EditarPratoScreen() {
     try {
       const payload: any = { nome: nome.trim(), descricao: descricao.trim() || undefined, preco: Number(preco), disponivel };
       if (categoriaId) payload.categoria_id = categoriaId;
-      const finalImageUrl = uploadedImageUrl ?? (imagemUrl || undefined);
-      if (finalImageUrl) payload.imagem_url = finalImageUrl;
       console.log("[EditarPrato] PUT /api/pratos/" + id);
       await apiPut(`/api/pratos/${id}`, payload);
       console.log("[EditarPrato] Prato atualizado com sucesso");
+      if (localImageUri) {
+        await uploadFoto();
+      }
       router.back();
     } catch (e: any) {
       console.error("[EditarPrato] Erro ao salvar:", e);
@@ -176,7 +173,7 @@ export default function EditarPratoScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
           <TouchableOpacity onPress={() => { console.log("[EditarPrato] Botão voltar pressionado (loading)"); router.back(); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}>
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
@@ -187,12 +184,12 @@ export default function EditarPratoScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={COLORS.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
@@ -216,116 +213,114 @@ export default function EditarPratoScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100, gap: 16 }}>
-        <FormField label="Nome *">
-          <TextInput value={nome} onChangeText={setNome} placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
-        </FormField>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }} keyboardShouldPersistTaps="handled">
+          <FormField label="Nome *">
+            <TextInput value={nome} onChangeText={setNome} placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+          </FormField>
 
-        <FormField label="Descrição">
-          <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição" placeholderTextColor={COLORS.textTertiary} multiline numberOfLines={3} style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]} />
-        </FormField>
+          <FormField label="Descrição">
+            <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição" placeholderTextColor={COLORS.textTertiary} multiline numberOfLines={3} style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]} />
+          </FormField>
 
-        <FormField label="Preço (R$) *">
-          <TextInput value={preco} onChangeText={setPreco} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
-        </FormField>
+          <FormField label="Preço (R$) *">
+            <TextInput value={preco} onChangeText={setPreco} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
+          </FormField>
 
-        <FormField label="Categoria">
-          <AnimatedPressable
-            onPress={() => { console.log("[EditarPrato] Seletor de categoria alternado"); setShowCatPicker((v) => !v); }}
-            style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
-          >
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
-              {selectedCat?.nome ?? "Selecionar categoria"}
-            </Text>
-            <ChevronDown size={16} color={COLORS.textSecondary} />
-          </AnimatedPressable>
-          {showCatPicker && (
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
-              {categorias.map((cat) => (
-                <AnimatedPressable
-                  key={cat.id}
-                  onPress={() => { console.log("[EditarPrato] Categoria selecionada:", cat.nome); setCategoriaId(cat.id); setShowCatPicker(false); }}
-                  style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
-                >
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>{cat.nome}</Text>
-                </AnimatedPressable>
-              ))}
-            </View>
-          )}
-        </FormField>
-
-        <FormField label="Foto do prato">
-          <View style={{ gap: 10 }}>
-            {displayImageUri ? (
-              <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                {uploading && (
-                  <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
-                    <ActivityIndicator color="#fff" />
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>Enviando...</Text>
-                  </View>
-                )}
-                {uploadedImageUrl && !uploading && (
-                  <View style={{ position: "absolute", bottom: 8, right: 8, backgroundColor: "#22C55ECC", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Enviada</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={{ height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>Nenhuma foto</Text>
+          <FormField label="Categoria">
+            <AnimatedPressable
+              onPress={() => { console.log("[EditarPrato] Seletor de categoria alternado"); setShowCatPicker((v) => !v); }}
+              style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
+            >
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
+                {selectedCat?.nome ?? "Selecionar categoria"}
+              </Text>
+              <ChevronDown size={16} color={COLORS.textSecondary} />
+            </AnimatedPressable>
+            {showCatPicker && (
+              <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
+                {categorias.map((cat) => (
+                  <AnimatedPressable
+                    key={cat.id}
+                    onPress={() => { console.log("[EditarPrato] Categoria selecionada:", cat.nome); setCategoriaId(cat.id); setShowCatPicker(false); }}
+                    style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>{cat.nome}</Text>
+                  </AnimatedPressable>
+                ))}
               </View>
             )}
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <AnimatedPressable
-                onPress={() => { console.log("[EditarPrato] Câmera pressionada"); pickImage("camera"); }}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
-              >
-                <Camera size={18} color={COLORS.primary} />
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Tirar Foto</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => { console.log("[EditarPrato] Galeria pressionada"); pickImage("gallery"); }}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
-              >
-                <ImageIcon size={18} color={COLORS.primary} />
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Galeria</Text>
-              </AnimatedPressable>
+          </FormField>
+
+          <FormField label="Foto do prato">
+            <View style={{ gap: 10 }}>
+              {displayImageUri ? (
+                <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                  <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  <TouchableOpacity
+                    onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); setImagemUrl(""); }}
+                    style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                  </TouchableOpacity>
+                  {localImageUri && (
+                    <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={{ height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>Nenhuma foto</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <AnimatedPressable
+                  onPress={() => { console.log("[EditarPrato] Câmera pressionada"); pickImage("camera"); }}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
+                >
+                  <Camera size={18} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Tirar Foto</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => { console.log("[EditarPrato] Galeria pressionada"); pickImage("gallery"); }}
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
+                >
+                  <ImageIcon size={18} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Galeria</Text>
+                </AnimatedPressable>
+              </View>
             </View>
+          </FormField>
+
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Disponível</Text>
+            <Switch
+              value={disponivel}
+              onValueChange={(val) => { console.log("[EditarPrato] Disponível alternado:", val); setDisponivel(val); }}
+              trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
+              thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
+            />
           </View>
-        </FormField>
 
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Disponível</Text>
-          <Switch
-            value={disponivel}
-            onValueChange={(val) => { console.log("[EditarPrato] Disponível alternado:", val); setDisponivel(val); }}
-            trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
-            thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
-          />
-        </View>
+          {error ? (
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
+          ) : null}
 
-        {error ? (
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
-        ) : null}
-      </ScrollView>
-
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-        <AnimatedPressable
-          onPress={() => { console.log("[EditarPrato] Salvar alterações pressionado"); handleSave(); }}
-          disabled={submitting || uploading}
-          style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1 }}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-              {uploading ? "Aguardando upload..." : "Salvar alterações"}
-            </Text>
-          )}
-        </AnimatedPressable>
-      </View>
-    </SafeAreaView>
+          <AnimatedPressable
+            onPress={() => { console.log("[EditarPrato] Salvar alterações pressionado"); handleSave(); }}
+            disabled={submitting || uploading}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1, marginBottom: insets.bottom + 8 }}
+          >
+            {submitting || uploading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar alterações</Text>
+            )}
+          </AnimatedPressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
