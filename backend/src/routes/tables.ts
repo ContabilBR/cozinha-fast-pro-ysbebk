@@ -75,7 +75,7 @@ export function registerTableRoutes(app: App) {
           location: t.location,
           status: t.status,
           active: t.active,
-          created_at: t.created_at,
+          created_at: t.created_at.toISOString(),
           current_order_id: t.current_order_id || null,
         }));
       } catch (error) {
@@ -138,7 +138,7 @@ export function registerTableRoutes(app: App) {
           location: table.location,
           status: table.status,
           active: table.active,
-          created_at: table.createdAt,
+          created_at: table.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create table");
@@ -204,7 +204,7 @@ export function registerTableRoutes(app: App) {
           location: row.location,
           status: row.status,
           active: row.active,
-          created_at: row.created_at,
+          created_at: row.created_at.toISOString(),
           current_order_id: row.current_order_id || null,
         });
       } catch (error) {
@@ -283,7 +283,7 @@ export function registerTableRoutes(app: App) {
           location: updated.location,
           status: updated.status,
           active: updated.active,
-          created_at: updated.createdAt,
+          created_at: updated.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update table");

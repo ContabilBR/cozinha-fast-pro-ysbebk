@@ -56,8 +56,8 @@ export function registerUserRoutes(app: App) {
           image: u.image,
           role: u.role,
           active: u.active,
-          created_at: u.createdAt,
-          updated_at: u.updatedAt,
+          created_at: u.createdAt.toISOString(),
+          updated_at: u.updatedAt.toISOString(),
         }));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list users");
@@ -157,7 +157,7 @@ export function registerUserRoutes(app: App) {
           email: request.body.email,
           role: role,
           active: true,
-          created_at: now,
+          created_at: now.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");

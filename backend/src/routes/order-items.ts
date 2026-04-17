@@ -114,12 +114,12 @@ export function registerOrderItemRoutes(app: App) {
           unit_price: created.unitPrice,
           notes: created.notes,
           status: created.status,
-          requested_at: created.requestedAt,
-          received_at: created.receivedAt,
-          started_at: created.startedAt,
-          ready_at: created.readyAt,
-          delivered_at: created.deliveredAt,
-          created_at: created.createdAt,
+          requested_at: created.requestedAt?.toISOString(),
+          received_at: created.receivedAt?.toISOString(),
+          started_at: created.startedAt?.toISOString(),
+          ready_at: created.readyAt?.toISOString(),
+          delivered_at: created.deliveredAt?.toISOString(),
+          created_at: created.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to add item to order");
@@ -252,12 +252,12 @@ export function registerOrderItemRoutes(app: App) {
           unit_price: updated.unitPrice,
           notes: updated.notes,
           status: updated.status,
-          requested_at: updated.requestedAt,
-          received_at: updated.receivedAt,
-          started_at: updated.startedAt,
-          ready_at: updated.readyAt,
-          delivered_at: updated.deliveredAt,
-          created_at: updated.createdAt,
+          requested_at: updated.requestedAt?.toISOString(),
+          received_at: updated.receivedAt?.toISOString(),
+          started_at: updated.startedAt?.toISOString(),
+          ready_at: updated.readyAt?.toISOString(),
+          delivered_at: updated.deliveredAt?.toISOString(),
+          created_at: updated.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update order item");

@@ -184,10 +184,10 @@ export function registerReportRoutes(app: App) {
           status: row.status,
           customer_count: row.customer_count,
           notes: row.notes,
-          opened_at: row.opened_at,
-          closed_at: row.closed_at,
+          opened_at: row.opened_at.toISOString(),
+          closed_at: row.closed_at?.toISOString(),
           total_amount: row.total_amount,
-          created_at: row.created_at,
+          created_at: row.created_at.toISOString(),
           items_count: row.items_count,
           table: row.table_id
             ? {

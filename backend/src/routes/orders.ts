@@ -100,10 +100,10 @@ export function registerOrderRoutes(app: App) {
           status: row.status,
           customer_count: row.customer_count,
           notes: row.notes,
-          opened_at: row.opened_at,
-          closed_at: row.closed_at,
+          opened_at: row.opened_at.toISOString(),
+          closed_at: row.closed_at?.toISOString(),
           total_amount: row.total_amount,
-          created_at: row.created_at,
+          created_at: row.created_at.toISOString(),
           items_count: row.items_count,
           table: row.table_id
             ? {
@@ -285,11 +285,11 @@ export function registerOrderRoutes(app: App) {
           unit_price: item.order_items.unitPrice,
           notes: item.order_items.notes,
           status: item.order_items.status,
-          requested_at: item.order_items.requestedAt,
-          received_at: item.order_items.receivedAt,
-          started_at: item.order_items.startedAt,
-          ready_at: item.order_items.readyAt,
-          delivered_at: item.order_items.deliveredAt,
+          requested_at: item.order_items.requestedAt?.toISOString(),
+          received_at: item.order_items.receivedAt?.toISOString(),
+          started_at: item.order_items.startedAt?.toISOString(),
+          ready_at: item.order_items.readyAt?.toISOString(),
+          delivered_at: item.order_items.deliveredAt?.toISOString(),
           dish: item.dishes
             ? {
                 name: item.dishes.name,
@@ -305,10 +305,10 @@ export function registerOrderRoutes(app: App) {
           status: row.orders.status,
           customer_count: row.orders.customerCount,
           notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
+          opened_at: row.orders.openedAt.toISOString(),
+          closed_at: row.orders.closedAt?.toISOString(),
           total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
+          created_at: row.orders.createdAt.toISOString(),
           table: row.tables
             ? {
                 id: row.tables.id,

@@ -45,7 +45,7 @@ export function registerApiRoutes(app: App) {
           .from(schema.tables)
           .where(eq(schema.tables.active, true));
 
-        return {
+        return reply.status(200).send({
           mesas: tables.map((t) => ({
             id: t.id,
             number: t.number,
@@ -53,9 +53,9 @@ export function registerApiRoutes(app: App) {
             location: t.location,
             status: t.status,
             active: t.active,
-            created_at: t.createdAt,
+            created_at: t.createdAt.toISOString(),
           })),
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list mesas");
         reply.status(500);
@@ -102,7 +102,7 @@ export function registerApiRoutes(app: App) {
           .from(schema.categories)
           .where(eq(schema.categories.active, true));
 
-        return {
+        return reply.status(200).send({
           categorias: categories.map((c) => ({
             id: c.id,
             name: c.name,
@@ -110,7 +110,7 @@ export function registerApiRoutes(app: App) {
             color: c.color,
             active: c.active,
           })),
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list categorias");
         reply.status(500);
@@ -169,7 +169,7 @@ export function registerApiRoutes(app: App) {
           .where(eq(schema.dishes.active, true))
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id));
 
-        return {
+        return reply.status(200).send({
           pratos: dishes.map((d) => ({
             id: d.id,
             name: d.name,
@@ -179,7 +179,7 @@ export function registerApiRoutes(app: App) {
             prep_time: d.prepTimeMinutes,
             active: d.active,
           })),
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list pratos");
         reply.status(500);
@@ -247,16 +247,15 @@ export function registerApiRoutes(app: App) {
               status: order.status,
               total: order.totalAmount,
               items_count: items.length,
-              opened_at: order.openedAt,
+              opened_at: order.openedAt.toISOString(),
             };
           })
         );
 
-        return { comandas };
+        return reply.status(200).send({ comandas });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list comandas");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -299,7 +298,7 @@ export function registerApiRoutes(app: App) {
           .from(userTable)
           .where(eq(userTable.active, true));
 
-        return {
+        return reply.status(200).send({
           usuarios: usuarios.map((u) => ({
             id: u.id,
             name: u.name,
@@ -307,11 +306,10 @@ export function registerApiRoutes(app: App) {
             role: u.role,
             active: u.active,
           })),
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list usuarios");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -365,20 +363,19 @@ export function registerApiRoutes(app: App) {
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .where(inArray(schema.orderItems.status, ["pendente", "em_preparo"]));
 
-        return {
+        return reply.status(200).send({
           itens: items.map((item) => ({
             id: item.id,
             prato: item.dishName || "Desconhecido",
             mesa: item.tableNumber || 0,
             quantidade: item.quantity,
             status: item.status,
-            solicitado_em: item.requestedAt,
+            solicitado_em: item.requestedAt?.toISOString(),
           })),
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list cozinha items");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -436,16 +433,15 @@ export function registerApiRoutes(app: App) {
           .from(schema.orderItems)
           .where(eq(schema.orderItems.status, "pendente"));
 
-        return {
+        return reply.status(200).send({
           totalPedidosHoje: todayOrders.length,
           receitaHoje: Math.round(receitaHoje * 100) / 100,
           mesasAtivas: tables.length,
           itensPendentes: pendingItems.length,
-        };
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get relatorio resumo");
-        reply.status(500);
-        return { error: "Internal server error" };
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );

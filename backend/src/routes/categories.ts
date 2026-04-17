@@ -74,7 +74,7 @@ export function registerCategoryRoutes(app: App) {
           color: c.color,
           icon: c.icon,
           active: c.active,
-          created_at: c.created_at,
+          created_at: c.created_at.toISOString(),
           dish_count: c.dish_count,
         }));
       } catch (error) {
@@ -138,7 +138,7 @@ export function registerCategoryRoutes(app: App) {
           color: category.color,
           icon: category.icon,
           active: category.active,
-          created_at: category.createdAt,
+          created_at: category.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create category");
@@ -216,7 +216,7 @@ export function registerCategoryRoutes(app: App) {
           color: updated.color,
           icon: updated.icon,
           active: updated.active,
-          created_at: updated.createdAt,
+          created_at: updated.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update category");

@@ -79,7 +79,7 @@ export function registerDishRoutes(app: App) {
           image_url: row.dishes.imageUrl,
           prep_time_minutes: row.dishes.prepTimeMinutes,
           active: row.dishes.active,
-          created_at: row.dishes.createdAt,
+          created_at: row.dishes.createdAt.toISOString(),
           category: row.categories
             ? {
                 id: row.categories.id,
@@ -242,7 +242,7 @@ export function registerDishRoutes(app: App) {
           image_url: row.dishes.imageUrl,
           prep_time_minutes: row.dishes.prepTimeMinutes,
           active: row.dishes.active,
-          created_at: row.dishes.createdAt,
+          created_at: row.dishes.createdAt.toISOString(),
           category: row.categories
             ? {
                 id: row.categories.id,
@@ -339,7 +339,7 @@ export function registerDishRoutes(app: App) {
           image_url: row.dishes.imageUrl,
           prep_time_minutes: row.dishes.prepTimeMinutes,
           active: row.dishes.active,
-          created_at: row.dishes.createdAt,
+          created_at: row.dishes.createdAt.toISOString(),
           category: row.categories
             ? {
                 id: row.categories.id,

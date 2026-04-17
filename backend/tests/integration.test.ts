@@ -137,7 +137,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Categories CRUD ====================
   test("List all categories", async () => {
-    const res = await authenticatedApi("/api/categories", authToken);
+    const res = await api("/api/categories");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -160,7 +160,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create category missing required field fails", async () => {
-    const res = await authenticatedApi("/api/categories", authToken, {
+    const res = await api("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -171,9 +171,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Update category", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       `/api/categories/${testCategoryId}`,
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -186,9 +185,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent category returns 404", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       "/api/categories/00000000-0000-0000-0000-000000000000",
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -199,9 +197,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Deactivate category", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       `/api/categories/${testCategoryId}`,
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -212,9 +209,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete category", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       `/api/categories/${testCategoryId}`,
-      authToken,
       {
         method: "DELETE",
       }
@@ -223,9 +219,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete non-existent category returns 404", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       "/api/categories/00000000-0000-0000-0000-000000000000",
-      authToken,
       {
         method: "DELETE",
       }
@@ -237,7 +232,7 @@ describe("API Integration Tests", () => {
   let dishCategoryId: string;
 
   test("Create category for dishes", async () => {
-    const res = await authenticatedApi("/api/categories", authToken, {
+    const res = await api("/api/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -250,7 +245,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List dishes", async () => {
-    const res = await authenticatedApi("/api/dishes", authToken);
+    const res = await api("/api/dishes");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -362,7 +357,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Tables CRUD ====================
   test("List all tables", async () => {
-    const res = await authenticatedApi("/api/tables", authToken);
+    const res = await api("/api/tables");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -399,7 +394,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create table missing required field fails", async () => {
-    const res = await authenticatedApi("/api/tables", authToken, {
+    const res = await api("/api/tables", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -411,7 +406,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update table", async () => {
-    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken, {
+    const res = await api(`/api/tables/${testTableId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -423,9 +418,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent table returns 404", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       "/api/tables/00000000-0000-0000-0000-000000000000",
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -436,7 +430,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Deactivate table", async () => {
-    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken, {
+    const res = await api(`/api/tables/${testTableId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: false }),
@@ -445,9 +439,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete table", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       `/api/tables/${testTableId}`,
-      authToken,
       {
         method: "DELETE",
       }
@@ -461,9 +454,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete non-existent table returns 404", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       "/api/tables/00000000-0000-0000-0000-000000000000",
-      authToken,
       {
         method: "DELETE",
       }
@@ -720,7 +712,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Kitchen ====================
   test("Get kitchen queue", async () => {
-    const res = await authenticatedApi("/api/kitchen/items", authToken);
+    const res = await api("/api/kitchen/items");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -755,9 +747,8 @@ describe("API Integration Tests", () => {
     await expectStatus(itemRes, 201);
     const itemData = await itemRes.json();
 
-    const updateRes = await authenticatedApi(
+    const updateRes = await api(
       `/api/kitchen/items/${itemData.id}`,
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -770,9 +761,8 @@ describe("API Integration Tests", () => {
   });
 
   test("Update non-existent kitchen item returns 404", async () => {
-    const res = await authenticatedApi(
+    const res = await api(
       "/api/kitchen/items/00000000-0000-0000-0000-000000000000",
-      authToken,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -784,16 +774,15 @@ describe("API Integration Tests", () => {
 
   // ==================== Reports ====================
   test("Get revenue summary report", async () => {
-    const res = await authenticatedApi("/api/reports/summary", authToken);
+    const res = await api("/api/reports/summary");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data).toBeDefined();
   });
 
   test("Get reports with date filters", async () => {
-    const res = await authenticatedApi(
-      `/api/reports/summary?date_from=2026-01-01T00:00:00Z&date_to=2026-12-31T23:59:59Z`,
-      authToken
+    const res = await api(
+      `/api/reports/summary?date_from=2026-01-01T00:00:00Z&date_to=2026-12-31T23:59:59Z`
     );
     await expectStatus(res, 200);
     const data = await res.json();

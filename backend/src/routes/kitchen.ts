@@ -57,8 +57,8 @@ export function registerKitchenRoutes(app: App) {
           quantity: row.quantity,
           notes: row.notes,
           status: row.status,
-          requested_at: row.requested_at,
-          started_at: row.started_at,
+          requested_at: row.requested_at?.toISOString(),
+          started_at: row.started_at?.toISOString(),
           table_number: row.table_number,
         }));
 
@@ -129,7 +129,7 @@ export function registerKitchenRoutes(app: App) {
 
         app.logger.info({ itemId: updated.id, status: updated.status }, "Kitchen item updated");
 
-        return {
+        return reply.status(200).send({
           id: updated.id,
           order_id: updated.orderId,
           dish_id: updated.dishId,
@@ -137,13 +137,13 @@ export function registerKitchenRoutes(app: App) {
           unit_price: updated.unitPrice,
           notes: updated.notes,
           status: updated.status,
-          requested_at: updated.requestedAt,
-          received_at: updated.receivedAt,
-          started_at: updated.startedAt,
-          ready_at: updated.readyAt,
-          delivered_at: updated.deliveredAt,
-          created_at: updated.createdAt,
-        };
+          requested_at: updated.requestedAt?.toISOString(),
+          received_at: updated.receivedAt?.toISOString(),
+          started_at: updated.startedAt?.toISOString(),
+          ready_at: updated.readyAt?.toISOString(),
+          delivered_at: updated.deliveredAt?.toISOString(),
+          created_at: updated.createdAt.toISOString(),
+        });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update kitchen item");
         return reply.status(500).send({ error: "Internal server error" });
