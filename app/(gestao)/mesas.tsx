@@ -236,8 +236,10 @@ export default function GestaoMesasScreen() {
     setFormError("");
     try {
       await apiPost("/api/mesas", { numero: numVal, capacidade: capVal });
-      console.log("[GestaoMesas] Mesa created successfully, navigating back");
-      router.back();
+      console.log("[GestaoMesas] Mesa created successfully, resetting form and refreshing list");
+      setNumero("");
+      setCapacidade("4");
+      fetchMesas();
     } catch (e: any) {
       console.error("[GestaoMesas] Create error:", e instanceof Error ? e.message : String(e));
       const msg = e instanceof Error ? e.message : "Não foi possível criar a mesa.";

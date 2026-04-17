@@ -396,8 +396,10 @@ export default function GestaoCategorias() {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
       });
-      console.log("[GestaoCategorias] Categoria created, navigating back");
-      router.back();
+      console.log("[GestaoCategorias] Categoria created, resetting form and refreshing list");
+      setNome("");
+      setDescricao("");
+      fetchCategorias();
     } catch (e: any) {
       console.error("[GestaoCategorias] Create error:", e instanceof Error ? e.message : String(e));
       setFormError(e instanceof Error ? e.message : "Não foi possível criar a categoria.");

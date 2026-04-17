@@ -777,6 +777,7 @@ export default function GestaoPratos() {
   const [error, setError] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
 
   const emptyForm: PratoFormValues = {
     nome: "",
@@ -833,8 +834,9 @@ export default function GestaoPratos() {
     };
     console.log("[GestaoPratos] POST /api/pratos", body.nome);
     await apiPost("/api/pratos", body);
-    console.log("[GestaoPratos] Prato created, navigating back");
-    router.back();
+    console.log("[GestaoPratos] Prato created, resetting form and refreshing list");
+    setFormKey((k) => k + 1);
+    fetchAll();
   };
 
   const handleSaveEdit = async (id: string, values: PratoFormValues) => {
@@ -963,6 +965,7 @@ export default function GestaoPratos() {
               </Text>
             </View>
             <PratoForm
+              key={formKey}
               initial={emptyForm}
               categorias={categorias}
               onSubmit={handleCreate}
