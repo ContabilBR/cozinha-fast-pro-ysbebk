@@ -188,22 +188,7 @@ export function registerOrderRoutes(app: App) {
 
         // Fetch full order with relations
         const rows = await app.db
-          .select({
-            id: schema.orders.id,
-            status: schema.orders.status,
-            customer_count: schema.orders.customerCount,
-            notes: schema.orders.notes,
-            opened_at: schema.orders.openedAt,
-            closed_at: schema.orders.closedAt,
-            total_amount: schema.orders.totalAmount,
-            created_at: schema.orders.createdAt,
-            table_id: schema.tables.id,
-            table_number: schema.tables.number,
-            table_capacity: schema.tables.capacity,
-            waiter_id: user.id,
-            waiter_name: user.name,
-            waiter_email: user.email,
-          })
+          .select()
           .from(schema.orders)
           .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
           .leftJoin(user, eq(schema.orders.waiterId, user.id))
@@ -218,26 +203,26 @@ export function registerOrderRoutes(app: App) {
 
         reply.code(201);
         return {
-          id: row.id,
-          status: row.status,
-          customer_count: row.customer_count,
-          notes: row.notes,
-          opened_at: row.opened_at,
-          closed_at: row.closed_at,
-          total_amount: row.total_amount,
-          created_at: row.created_at,
-          table: row.table_id
+          id: row.orders.id,
+          status: row.orders.status,
+          customer_count: row.orders.customerCount,
+          notes: row.orders.notes,
+          opened_at: row.orders.openedAt,
+          closed_at: row.orders.closedAt,
+          total_amount: row.orders.totalAmount,
+          created_at: row.orders.createdAt,
+          table: row.tables
             ? {
-                id: row.table_id,
-                number: row.table_number,
-                capacity: row.table_capacity,
+                id: row.tables.id,
+                number: row.tables.number,
+                capacity: row.tables.capacity,
               }
             : null,
-          waiter: row.waiter_id
+          waiter: row.user
             ? {
-                id: row.waiter_id,
-                name: row.waiter_name,
-                email: row.waiter_email,
+                id: row.user.id,
+                name: row.user.name,
+                email: row.user.email,
               }
             : null,
         };

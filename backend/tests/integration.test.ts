@@ -709,7 +709,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         table_id: orderTableId,
-        waiter_id: "waiter-3",
+        waiter_id: testUserId,
         customer_count: 1,
       }),
     });
@@ -800,5 +800,64 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.tablesStatus).toBeDefined();
     expect(data.openOrdersCount).toBeDefined();
+  });
+
+  // ==================== Portuguese Alternative Endpoints ====================
+  test("List all mesas (tables Portuguese endpoint)", async () => {
+    const res = await api("/api/mesas");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.mesas).toBeDefined();
+    expect(Array.isArray(data.mesas)).toBe(true);
+  });
+
+  test("List all categorias (categories Portuguese endpoint)", async () => {
+    const res = await api("/api/categorias");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.categorias).toBeDefined();
+    expect(Array.isArray(data.categorias)).toBe(true);
+  });
+
+  test("List all pratos (dishes Portuguese endpoint)", async () => {
+    const res = await api("/api/pratos");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.pratos).toBeDefined();
+    expect(Array.isArray(data.pratos)).toBe(true);
+  });
+
+  test("List all comandas (orders Portuguese endpoint)", async () => {
+    const res = await api("/api/comandas");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
+  });
+
+  test("List all usuarios (users Portuguese endpoint)", async () => {
+    const res = await api("/api/usuarios");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.usuarios).toBeDefined();
+    expect(Array.isArray(data.usuarios)).toBe(true);
+  });
+
+  test("List kitchen items via cozinha endpoint", async () => {
+    const res = await api("/api/cozinha");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.itens).toBeDefined();
+    expect(Array.isArray(data.itens)).toBe(true);
+  });
+
+  test("Get summary report via relatorios resumo endpoint", async () => {
+    const res = await api("/api/relatorios/resumo");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.totalPedidosHoje).toBeDefined();
+    expect(data.receitaHoje).toBeDefined();
+    expect(data.mesasAtivas).toBeDefined();
+    expect(data.itensPendentes).toBeDefined();
   });
 });

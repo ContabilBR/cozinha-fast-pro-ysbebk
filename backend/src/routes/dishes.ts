@@ -161,20 +161,7 @@ export function registerDishRoutes(app: App) {
 
         // Fetch with category
         const rows = await app.db
-          .select({
-            id: schema.dishes.id,
-            name: schema.dishes.name,
-            description: schema.dishes.description,
-            price: schema.dishes.price,
-            image_url: schema.dishes.imageUrl,
-            prep_time_minutes: schema.dishes.prepTimeMinutes,
-            active: schema.dishes.active,
-            created_at: schema.dishes.createdAt,
-            category_id: schema.categories.id,
-            category_name: schema.categories.name,
-            category_color: schema.categories.color,
-            category_icon: schema.categories.icon,
-          })
+          .select()
           .from(schema.dishes)
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
           .where(eq(schema.dishes.id, dish.id));
@@ -186,20 +173,20 @@ export function registerDishRoutes(app: App) {
         const row = rows[0];
         reply.code(201);
         return {
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          price: row.price,
-          image_url: row.image_url,
-          prep_time_minutes: row.prep_time_minutes,
-          active: row.active,
-          created_at: row.created_at,
-          category: row.category_id
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
             ? {
-                id: row.category_id,
-                name: row.category_name,
-                color: row.category_color,
-                icon: row.category_icon,
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
               }
             : null,
         };
@@ -237,20 +224,7 @@ export function registerDishRoutes(app: App) {
         app.logger.info({ dishId: request.params.id }, "Getting dish");
 
         const rows = await app.db
-          .select({
-            id: schema.dishes.id,
-            name: schema.dishes.name,
-            description: schema.dishes.description,
-            price: schema.dishes.price,
-            image_url: schema.dishes.imageUrl,
-            prep_time_minutes: schema.dishes.prepTimeMinutes,
-            active: schema.dishes.active,
-            created_at: schema.dishes.createdAt,
-            category_id: schema.categories.id,
-            category_name: schema.categories.name,
-            category_color: schema.categories.color,
-            category_icon: schema.categories.icon,
-          })
+          .select()
           .from(schema.dishes)
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
           .where(eq(schema.dishes.id, request.params.id))
@@ -262,20 +236,20 @@ export function registerDishRoutes(app: App) {
 
         const row = rows[0];
         return {
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          price: row.price,
-          image_url: row.image_url,
-          prep_time_minutes: row.prep_time_minutes,
-          active: row.active,
-          created_at: row.created_at,
-          category: row.category_id
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
             ? {
-                id: row.category_id,
-                name: row.category_name,
-                color: row.category_color,
-                icon: row.category_icon,
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
               }
             : null,
         };
@@ -352,40 +326,27 @@ export function registerDishRoutes(app: App) {
 
         // Fetch with category
         const rows = await app.db
-          .select({
-            id: schema.dishes.id,
-            name: schema.dishes.name,
-            description: schema.dishes.description,
-            price: schema.dishes.price,
-            image_url: schema.dishes.imageUrl,
-            prep_time_minutes: schema.dishes.prepTimeMinutes,
-            active: schema.dishes.active,
-            created_at: schema.dishes.createdAt,
-            category_id: schema.categories.id,
-            category_name: schema.categories.name,
-            category_color: schema.categories.color,
-            category_icon: schema.categories.icon,
-          })
+          .select()
           .from(schema.dishes)
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
           .where(eq(schema.dishes.id, updated.id));
 
         const row = rows[0];
         return {
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          price: row.price,
-          image_url: row.image_url,
-          prep_time_minutes: row.prep_time_minutes,
-          active: row.active,
-          created_at: row.created_at,
-          category: row.category_id
+          id: row.dishes.id,
+          name: row.dishes.name,
+          description: row.dishes.description,
+          price: row.dishes.price,
+          image_url: row.dishes.imageUrl,
+          prep_time_minutes: row.dishes.prepTimeMinutes,
+          active: row.dishes.active,
+          created_at: row.dishes.createdAt,
+          category: row.categories
             ? {
-                id: row.category_id,
-                name: row.category_name,
-                color: row.category_color,
-                icon: row.category_icon,
+                id: row.categories.id,
+                name: row.categories.name,
+                color: row.categories.color,
+                icon: row.categories.icon,
               }
             : null,
         };

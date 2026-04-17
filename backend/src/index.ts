@@ -11,6 +11,7 @@ import { registerOrderItemRoutes } from './routes/order-items.js';
 import { registerKitchenRoutes } from './routes/kitchen.js';
 import { registerReportRoutes } from './routes/reports.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
+import { registerApiRoutes } from './routes/api.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -21,9 +22,6 @@ export const app = await createApplication(schema);
 
 // Export App type for use in route files
 export type App = typeof app;
-
-// Set up authentication
-app.withAuth();
 
 // Register routes - IMPORTANT: Always use registration functions to avoid circular dependency issues
 registerAuthRoutes(app);
@@ -36,6 +34,7 @@ registerOrderItemRoutes(app);
 registerKitchenRoutes(app);
 registerReportRoutes(app);
 registerDashboardRoutes(app);
+registerApiRoutes(app);
 
 // Seed database on startup
 await seedDatabase(app);

@@ -1,8 +1,11 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
-import { user as userTable } from "../db/schema/auth-schema.js";
+import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
+import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth } from "../utils/auth.js";
+import { randomUUID } from "crypto";
+import * as bcrypt from "bcrypt";
 
 interface CreateUserBody {
   name: string;
@@ -109,44 +112,53 @@ export function registerUserRoutes(app: App) {
           return reply.status(409).send({ error: "User with this email already exists" });
         }
 
-        // Use Better Auth signup
-        const result = await app.auth.api.signUpEmail({
-          body: {
-            email: request.body.email,
-            password: request.body.password,
-            name: request.body.name,
-          },
+        // Create user
+        const userId = randomUUID();
+        const now = new Date();
+        const role = request.body.role || "garcom";
+
+        await app.db.insert(userTable).values({
+          id: userId,
+          name: request.body.name,
+          email: request.body.email,
+          emailVerified: false,
+          role: role as any,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
         });
 
-        if (!result.user) {
-          return reply.status(400).send({ error: "Failed to create user" });
-        }
+        // Hash password and create account
+        const hashedPassword = await bcrypt.hash(request.body.password, 10);
+        await app.db.insert(accountTable).values({
+          id: randomUUID(),
+          accountId: userId,
+          providerId: "credential",
+          userId: userId,
+          password: hashedPassword,
+          createdAt: now,
+          updatedAt: now,
+        });
 
-        // Update role if provided
-        if (request.body.role) {
-          await app.db
-            .update(userTable)
-            .set({ role: request.body.role as any })
-            .where(eq(userTable.id, result.user.id));
-        }
+        // Create profile
+        await app.db.insert(schema.profiles).values({
+          id: randomUUID(),
+          userId: userId,
+          role: role,
+          name: request.body.name,
+          createdAt: now,
+        });
 
-        const created = await app.db.select().from(userTable).where(eq(userTable.id, result.user.id));
-
-        if (!created.length) {
-          return reply.status(400).send({ error: "Failed to retrieve created user" });
-        }
-
-        const user = created[0];
-        app.logger.info({ userId: user.id }, "User created successfully");
+        app.logger.info({ userId }, "User created successfully");
 
         reply.code(201);
         return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          active: user.active,
-          created_at: user.createdAt,
+          id: userId,
+          name: request.body.name,
+          email: request.body.email,
+          role: role,
+          active: true,
+          created_at: now,
         };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
