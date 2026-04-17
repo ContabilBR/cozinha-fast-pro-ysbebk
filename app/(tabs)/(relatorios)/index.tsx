@@ -31,9 +31,9 @@ export default function RelatoriosScreen() {
   const [error, setError] = useState("");
 
   const fetchData = useCallback(async () => {
-    console.log("[Relatorios] Fetching reports summary from /api/reports/summary");
+    console.log("[Relatorios] Fetching reports summary from /api/relatorios/resumo");
     try {
-      const res = await apiGet<any>("/api/reports/summary");
+      const res = await apiGet<any>("/api/relatorios/resumo");
       const data: ReportSummary = res || {};
       console.log("[Relatorios] Loaded summary:", JSON.stringify(data).slice(0, 200));
       setSummary(data);

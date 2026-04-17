@@ -242,10 +242,10 @@ export default function CozinhaScreen() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const fetchFila = useCallback(async () => {
-    console.log("[Cozinha] Fetching kitchen items from /api/kitchen/items");
+    console.log("[Cozinha] Fetching kitchen queue from /api/cozinha");
     try {
-      const res = await apiGet<any>("/api/kitchen/items");
-      const list: KitchenItem[] = Array.isArray(res) ? res : (res.items || []);
+      const res = await apiGet<any>("/api/cozinha");
+      const list: KitchenItem[] = Array.isArray(res) ? res : (res.items || res.queue || []);
       const sorted = list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       console.log("[Cozinha] Loaded", sorted.length, "kitchen items");
       setItems(sorted);
@@ -278,7 +278,7 @@ export default function CozinhaScreen() {
   const handleAction = async (id: string, status: string) => {
     console.log("[Cozinha] PATCH kitchen item status:", id, "->", status);
     try {
-      await apiPatch(`/api/kitchen/items/${id}`, { status });
+      await apiPatch(`/api/cozinha/${id}`, { status });
       console.log("[Cozinha] Status updated, refreshing");
       await fetchFila();
     } catch (e) {

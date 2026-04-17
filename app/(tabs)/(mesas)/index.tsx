@@ -144,10 +144,10 @@ export default function MesasScreen() {
   const [error, setError] = useState("");
 
   const fetchTables = useCallback(async () => {
-    console.log("[Mesas] Fetching tables from /api/tables");
+    console.log("[Mesas] Fetching tables from /api/mesas");
     try {
-      const res = await apiGet<any>("/api/tables");
-      const list: ApiTable[] = Array.isArray(res) ? res : (res.tables || []);
+      const res = await apiGet<any>("/api/mesas");
+      const list: ApiTable[] = Array.isArray(res) ? res : (res.mesas || []);
       console.log("[Mesas] Loaded", list.length, "tables");
       setTables(list);
       setError("");
@@ -177,7 +177,7 @@ export default function MesasScreen() {
 
   const handleTablePress = (table: ApiTable) => {
     console.log("[Mesas] Table pressed:", table.number, "status:", table.status);
-    router.push(`/order/new?table_id=${table.id}`);
+    router.push(`/comanda/nova?mesa_id=${table.id}`);
   };
 
   const livreCount = tables.filter((t) => t.status === "livre" || t.status === "free").length;

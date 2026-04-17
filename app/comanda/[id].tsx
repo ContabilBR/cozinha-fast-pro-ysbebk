@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { Comanda, Pedido } from "@/types";
-import { apiGet, apiPatch } from "@/utils/api";
+import { apiGet, apiPut } from "@/utils/api";
 import { formatCurrency, formatDate, getPedidoStatusLabel, getPedidoStatusColor, isAdmin } from "@/utils/helpers";
 import { ChevronDown, ChevronUp, Plus, X, CheckCircle, ShoppingBag } from "lucide-react-native";
 
@@ -168,7 +168,7 @@ export default function ComandaDetailScreen() {
     console.log("[Comanda] Close comanda pressed:", id);
     setClosing(true);
     try {
-      await apiPatch(`/api/comandas/${id}/fechar`, {});
+      await apiPut(`/api/comandas/${id}`, { status: "fechada" });
       console.log("[Comanda] Comanda closed successfully");
       await fetchComanda();
     } catch (e: any) {
@@ -182,7 +182,7 @@ export default function ComandaDetailScreen() {
     console.log("[Comanda] Cancel comanda pressed:", id);
     setCancelling(true);
     try {
-      await apiPatch(`/api/comandas/${id}/cancelar`, {});
+      await apiPut(`/api/comandas/${id}`, { status: "cancelada" });
       console.log("[Comanda] Comanda cancelled");
       router.back();
     } catch (e: any) {

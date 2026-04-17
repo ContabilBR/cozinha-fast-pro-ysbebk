@@ -33,12 +33,12 @@ interface ApiTable {
 
 interface ApiOrder {
   id: string;
-  table_number: number;
-  user_name?: string;
+  mesa: number | string;
   status: string;
   total: number;
-  created_at: string;
   items_count: number;
+  opened_at: string;
+  created_at?: string;
 }
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
@@ -133,28 +133,28 @@ export default function DashboardScreen() {
     console.log("[Dashboard] Fetching dashboard data");
     try {
       const [summaryRes, tablesRes, ordersRes] = await Promise.all([
-        apiGet<any>("/api/reports/summary").catch((e) => {
-          console.error("[Dashboard] reports/summary error:", e instanceof Error ? e.message : String(e));
+        apiGet<any>("/api/relatorios/resumo").catch((e) => {
+          console.error("[Dashboard] relatorios/resumo error:", e instanceof Error ? e.message : String(e));
           return {};
         }),
-        apiGet<any>("/api/tables").catch((e) => {
-          console.error("[Dashboard] tables error:", e instanceof Error ? e.message : String(e));
+        apiGet<any>("/api/mesas").catch((e) => {
+          console.error("[Dashboard] mesas error:", e instanceof Error ? e.message : String(e));
           return [];
         }),
-        apiGet<any>("/api/orders").catch((e) => {
-          console.error("[Dashboard] orders error:", e instanceof Error ? e.message : String(e));
+        apiGet<any>("/api/comandas").catch((e) => {
+          console.error("[Dashboard] comandas error:", e instanceof Error ? e.message : String(e));
           return [];
         }),
       ]);
 
       const summaryData: ReportSummary = summaryRes || {};
-      const tableList: ApiTable[] = Array.isArray(tablesRes) ? tablesRes : (tablesRes.tables || []);
-      const orderList: ApiOrder[] = Array.isArray(ordersRes) ? ordersRes : (ordersRes.orders || []);
+      const tableList: ApiTable[] = Array.isArray(tablesRes) ? tablesRes : (tablesRes.mesas || []);
+      const orderList: ApiOrder[] = Array.isArray(ordersRes) ? ordersRes : (ordersRes.comandas || []);
 
       console.log("[Dashboard] Loaded summary, tables:", tableList.length, "orders:", orderList.length);
       setSummary(summaryData);
       setTables(tableList);
-      const sorted = orderList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const sorted = orderList.sort((a, b) => new Date(b.opened_at ?? b.created_at ?? "").getTime() - new Date(a.opened_at ?? a.created_at ?? "").getTime());
       setRecentOrders(sorted.slice(0, 5));
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (e) {
@@ -374,8 +374,8 @@ export default function DashboardScreen() {
                   <AnimatedPressable
                     key={order.id}
                     onPress={() => {
-                      console.log("[Dashboard] Recent order pressed:", order.id);
-                      router.push(`/order/${order.id}`);
+                      console.log("[Dashboard] Recent comanda pressed:", order.id);
+                      router.push(`/comanda/${order.id}`);
                     }}
                     style={{
                       backgroundColor: COLORS.surface,
@@ -390,7 +390,7 @@ export default function DashboardScreen() {
                   >
                     <View style={{ gap: 3 }}>
                       <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-                        Mesa {order.table_number}
+                        Mesa {order.mesa}
                       </Text>
                       <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
                         {order.items_count} {order.items_count === 1 ? "item" : "itens"}

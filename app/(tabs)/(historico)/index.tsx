@@ -126,13 +126,15 @@ export default function HistoricoScreen() {
   const [error, setError] = useState("");
 
   const fetchOrders = useCallback(async () => {
-    console.log("[Historico] Fetching order history");
+    console.log("[Historico] Fetching order history from /api/relatorios/historico");
     try {
-      const data = await apiGet<Order[]>("/api/orders?status=fechada");
-      setOrders(Array.isArray(data) ? data : []);
+      const res = await apiGet<any>("/api/relatorios/historico");
+      const list: Order[] = Array.isArray(res) ? res : (res.historico || res.orders || res.comandas || []);
+      console.log("[Historico] Loaded", list.length, "records");
+      setOrders(list);
       setError("");
     } catch (e: any) {
-      console.error("[Historico] Error:", e);
+      console.error("[Historico] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar o histórico.");
     } finally {
       setLoading(false);

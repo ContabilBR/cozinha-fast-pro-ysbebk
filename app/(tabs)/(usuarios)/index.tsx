@@ -112,10 +112,10 @@ export default function UsuariosScreen() {
   const [error, setError] = useState("");
 
   const fetchUsers = useCallback(async () => {
-    console.log("[Usuarios] Fetching users from /api/users");
+    console.log("[Usuarios] Fetching users from /api/usuarios");
     try {
-      const res = await apiGet<any>("/api/users");
-      const list: ApiUser[] = Array.isArray(res) ? res : (res.users || []);
+      const res = await apiGet<any>("/api/usuarios");
+      const list: ApiUser[] = Array.isArray(res) ? res : (res.usuarios || []);
       console.log("[Usuarios] Loaded", list.length, "users");
       setUsers(list);
       setError("");

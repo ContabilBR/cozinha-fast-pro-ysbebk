@@ -33,8 +33,10 @@ interface ApiDish {
   price: number;
   image_url?: string;
   category_id: string;
+  category?: { id: string; name: string };
   category_name?: string;
-  available: boolean;
+  available?: boolean;
+  active?: boolean;
 }
 
 interface ApiCategory {
@@ -71,7 +73,8 @@ function DishCard({
 
   const price = formatCurrency(dish.price);
   const imageSource = resolveImageSource(dish.image_url);
-  const available = dish.available;
+  const available = dish.available ?? dish.active ?? true;
+  const categoryName = dish.category_name ?? dish.category?.name;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
@@ -139,7 +142,7 @@ function DishCard({
           <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
             {dish.name}
           </Text>
-          {dish.category_name ? (
+          {categoryName ? (
             <View
               style={{
                 backgroundColor: COLORS.primaryMuted,
@@ -150,7 +153,7 @@ function DishCard({
               }}
             >
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: COLORS.primary }}>
-                {dish.category_name}
+                {categoryName}
               </Text>
             </View>
           ) : null}
@@ -202,11 +205,11 @@ export default function CardapioScreen() {
     console.log("[Cardapio] Fetching dishes and categories");
     try {
       const [dishesRes, catsRes] = await Promise.all([
-        apiGet<any>("/api/dishes"),
-        apiGet<any>("/api/categories"),
+        apiGet<any>("/api/pratos"),
+        apiGet<any>("/api/categorias"),
       ]);
-      const dishList: ApiDish[] = Array.isArray(dishesRes) ? dishesRes : (dishesRes.dishes ?? []);
-      const catList: ApiCategory[] = Array.isArray(catsRes) ? catsRes : (catsRes.categories ?? []);
+      const dishList: ApiDish[] = Array.isArray(dishesRes) ? dishesRes : (dishesRes.pratos ?? []);
+      const catList: ApiCategory[] = Array.isArray(catsRes) ? catsRes : (catsRes.categorias ?? []);
       console.log("[Cardapio] Loaded", dishList.length, "dishes,", catList.length, "categories");
       setDishes(dishList);
       setCategories(catList);

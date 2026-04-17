@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { BACKEND_URL, apiCall } from "@/utils/api";
+import { BEARER_TOKEN_KEY } from "@/lib/auth";
 
-const TOKEN_KEY = "cozinhafast_token";
+const TOKEN_KEY = BEARER_TOKEN_KEY;
 const USER_KEY = "cozinhafast_user";
 
 export interface AuthUser {

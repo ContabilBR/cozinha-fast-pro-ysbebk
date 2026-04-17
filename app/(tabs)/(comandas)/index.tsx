@@ -7,17 +7,25 @@ import {
   Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { StatusBadge } from "@/components/StatusBadge";
-import { Order } from "@/types";
 import { apiGet } from "@/utils/api";
 import { formatCurrency, formatRelativeTime } from "@/utils/helpers";
-import { Plus, Users, Clock, ShoppingBag } from "lucide-react-native";
+import { Plus, Clock, ShoppingBag } from "lucide-react-native";
 
-function OrderCard({ order, onPress, index }: { order: Order; onPress: () => void; index: number }) {
+interface ApiComanda {
+  id: string;
+  mesa: number | string;
+  status: string;
+  total: number;
+  items_count: number;
+  opened_at: string;
+}
+
+function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress: () => void; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -29,13 +37,23 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
     ]).start();
   }, [index, opacity, translateY]);
 
-  const tableNumber = order.table?.number ?? "?";
-  const waiterName = order.waiter?.name ?? "—";
-  const timeOpen = formatRelativeTime(order.opened_at);
-  const total = formatCurrency(order.total_amount);
-  const itemCount = order.items?.length ?? 0;
-  const readyCount = order.items?.filter((i) => i.status === "pronto").length ?? 0;
-  const readyLabel = readyCount > 0 ? `${readyCount} prontos para entregar` : "Nenhum item pronto";
+  const mesaNum = comanda.mesa ?? "?";
+  const timeOpen = formatRelativeTime(comanda.opened_at);
+  const total = formatCurrency(comanda.total);
+  const itemCount = comanda.items_count ?? 0;
+
+  const statusColors: Record<string, string> = {
+    aberta: "#22C55E",
+    fechada: "#94A3B8",
+    cancelada: "#EF4444",
+  };
+  const statusLabels: Record<string, string> = {
+    aberta: "Aberta",
+    fechada: "Fechada",
+    cancelada: "Cancelada",
+  };
+  const statusColor = statusColors[comanda.status] ?? "#94A3B8";
+  const statusLabel = statusLabels[comanda.status] ?? comanda.status;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -65,19 +83,23 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
               }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.primary }}>
-                {tableNumber}
+                {mesaNum}
               </Text>
             </View>
             <View>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
-                Mesa {tableNumber}
+                Mesa {mesaNum}
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-                {waiterName}
+                {itemCount} {itemCount === 1 ? "item" : "itens"}
               </Text>
             </View>
           </View>
-          <StatusBadge status={order.status} type="order" />
+          <View style={{ backgroundColor: statusColor + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
+              {statusLabel}
+            </Text>
+          </View>
         </View>
 
         <View style={{ flexDirection: "row", gap: 16 }}>
@@ -88,12 +110,6 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Users size={13} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {order.customer_count} pessoas
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <ShoppingBag size={13} color={COLORS.textSecondary} />
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
               {itemCount} itens
@@ -101,10 +117,7 @@ function OrderCard({ order, onPress, index }: { order: Order; onPress: () => voi
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-            {readyLabel}
-          </Text>
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
           <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
             {total}
           </Text>
@@ -119,20 +132,21 @@ export default function ComandasScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [comandas, setComandas] = useState<ApiComanda[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const fetchOrders = useCallback(async () => {
-    console.log("[Comandas] Fetching open orders");
+    console.log("[Comandas] Fetching comandas from /api/comandas");
     try {
-      const res = await apiGet<any>("/api/orders?status=aberta");
-      const list: Order[] = Array.isArray(res) ? res : (res.orders || []);
-      setOrders(list);
+      const res = await apiGet<any>("/api/comandas");
+      const list: ApiComanda[] = Array.isArray(res) ? res : (res.comandas || []);
+      console.log("[Comandas] Loaded", list.length, "comandas");
+      setComandas(list);
       setError("");
     } catch (e: any) {
-      console.error("[Comandas] Error:", e);
+      console.error("[Comandas] Error:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar as comandas.");
     } finally {
       setLoading(false);
@@ -140,15 +154,17 @@ export default function ComandasScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, [fetchOrders]));
 
   const handleRefresh = () => {
     console.log("[Comandas] Manual refresh");
     setRefreshing(true);
     fetchOrders();
   };
+
+  const abertas = comandas.filter((c) => c.status === "aberta");
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -167,7 +183,7 @@ export default function ComandasScreen() {
           Comandas
         </Text>
         <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {orders.length} abertas
+          {abertas.length} abertas
         </Text>
       </View>
 
@@ -191,13 +207,13 @@ export default function ComandasScreen() {
         </View>
       ) : (
         <FlatList
-          data={orders}
+          data={comandas}
           renderItem={({ item, index }) => (
-            <OrderCard
-              order={item}
+            <ComandaCard
+              comanda={item}
               onPress={() => {
-                console.log("[Comandas] Order pressed:", item.id);
-                router.push(`/order/${item.id}`);
+                console.log("[Comandas] Comanda pressed:", item.id);
+                router.push(`/comanda/${item.id}`);
               }}
               index={index}
             />
@@ -223,7 +239,7 @@ export default function ComandasScreen() {
                 <ShoppingBag size={32} color={COLORS.primary} />
               </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-                Nenhuma comanda aberta
+                Nenhuma comanda
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
                 Abra uma nova comanda tocando no botão abaixo
@@ -236,8 +252,8 @@ export default function ComandasScreen() {
       {/* FAB */}
       <AnimatedPressable
         onPress={() => {
-          console.log("[Comandas] FAB - new order");
-          router.push("/order/new");
+          console.log("[Comandas] FAB - nova comanda");
+          router.push("/comanda/nova");
         }}
         style={{
           position: "absolute",

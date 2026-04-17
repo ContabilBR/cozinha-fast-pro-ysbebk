@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { LogOut, User, Mail, Shield, Tag, ChevronRight } from "lucide-react-native";
 import { getRoleLabel, getInitials, isAdmin } from "@/utils/helpers";
+import { UserRole } from "@/types";
 import Constants from "expo-constants";
 
 const ROLE_COLORS: Record<UserRole, string> = {
