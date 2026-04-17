@@ -6,6 +6,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Settings, UtensilsCrossed, Tag, LayoutGrid, Lock, Users } from "lucide-react-native";
+import { isAdmin } from "@/utils/helpers";
 
 interface ManagementCard {
   icon: React.ReactNode;
@@ -49,7 +50,7 @@ export default function GestaoScreen() {
   const { user } = useAuth();
 
   const role = user?.role;
-  const canAccess = role === "admin" || role === "administrador" || role === "gerente";
+  const canAccess = isAdmin(role);
 
   const cards: ManagementCard[] = [
     { icon: <UtensilsCrossed size={26} color={COLORS.primary} />, title: "Pratos", subtitle: "Gerenciar cardápio", route: "/(tabs)/(gestao)/pratos", color: COLORS.primary },

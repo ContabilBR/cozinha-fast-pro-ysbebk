@@ -12,14 +12,14 @@ import {
   ScrollView,
   Platform,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
@@ -269,17 +269,16 @@ export default function GestaoPratos() {
     : pratos;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
+        height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
         <TouchableOpacity
           onPress={() => { console.log("[GestaoPratos] Botão voltar pressionado"); router.back(); }}
@@ -296,8 +295,7 @@ export default function GestaoPratos() {
           textAlign: "center",
           fontSize: 17,
           fontWeight: "700",
-          color: "#111",
-          top: insets.top,
+          color: COLORS.text,
           height: 56,
           lineHeight: 56,
         }}>
@@ -306,7 +304,7 @@ export default function GestaoPratos() {
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => { console.log("[GestaoPratos] Botão incluir pressionado"); openCreate(); }}
-          style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#34C759", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+          style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
         >
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
@@ -314,19 +312,19 @@ export default function GestaoPratos() {
       </View>
 
       {/* Search bar */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F2F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
-          <Search size={16} color="#8E8E93" />
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+          <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             value={search}
             onChangeText={(t) => { console.log("[GestaoPratos] Busca:", t); setSearch(t); }}
             placeholder="Buscar..."
-            placeholderTextColor="#8E8E93"
-            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: "#111", padding: 0 }}
+            placeholderTextColor={COLORS.textTertiary}
+            style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, padding: 0 }}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color="#8E8E93" />
+              <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -354,7 +352,7 @@ export default function GestaoPratos() {
             const imgSrc = resolveImageSource(item.imagem_url);
             const disponibilidade = item.disponivel !== false;
             return (
-              <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+              <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2, borderWidth: 1, borderColor: COLORS.border }}>
                 <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, marginRight: 12, overflow: "hidden" }}>
                   {item.imagem_url ? (
                     <Image source={imgSrc} style={{ width: "100%", height: "100%" }} contentFit="cover" />
@@ -365,7 +363,7 @@ export default function GestaoPratos() {
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#111" }}>{item.nome}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: COLORS.text }}>{item.nome}</Text>
                   <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>{price}</Text>
                   {item.categoria && (
                     <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.categoria.nome}</Text>

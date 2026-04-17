@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, SafeAreaView } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -16,7 +16,6 @@ export default function MesaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
@@ -66,9 +65,11 @@ export default function MesaDetailScreen() {
         router.replace(`/comanda/${comanda.id}`);
       } else {
         console.warn("[Mesa] Comanda criada mas sem ID na resposta:", JSON.stringify(res));
+        Alert.alert("Aviso", "Comanda criada, mas não foi possível navegar para ela.");
       }
     } catch (e: any) {
       console.error("[Mesa] Erro ao abrir comanda:", e instanceof Error ? e.message : String(e));
+      Alert.alert("Erro", "Não foi possível abrir a comanda. Tente novamente.");
     } finally {
       setOpeningComanda(false);
     }
@@ -79,17 +80,16 @@ export default function MesaDetailScreen() {
   const mesaTitle = mesa ? `Mesa ${mesa.numero}` : "Detalhes da Mesa";
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
+        height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
         <TouchableOpacity
           onPress={() => { console.log("[Mesa] Botão voltar pressionado"); router.back(); }}
@@ -99,7 +99,17 @@ export default function MesaDetailScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: COLORS.text,
+          height: 56,
+          lineHeight: 56,
+        }}>
           {mesaTitle}
         </Text>
       </View>
@@ -111,6 +121,7 @@ export default function MesaDetailScreen() {
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar mesa</Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
           <AnimatedPressable
             onPress={fetchMesa}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
@@ -139,18 +150,18 @@ export default function MesaDetailScreen() {
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Capacidade:</Text>
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{mesa?.capacidade} pessoas</Text>
               </View>
-              {mesa?.garcom && (
+              {(mesa as any)?.garcom && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Garçom:</Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{mesa.garcom.name}</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{(mesa as any).garcom.name}</Text>
                 </View>
               )}
             </View>
           </View>
 
-          {mesa?.comanda_id && (
+          {(mesa as any)?.comanda_id && (
             <AnimatedPressable
-              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", mesa.comanda_id); router.push(`/comanda/${mesa.comanda_id}`); }}
+              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", (mesa as any).comanda_id); router.push(`/comanda/${(mesa as any).comanda_id}`); }}
               style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary + "30" }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>Ver comanda ativa</Text>

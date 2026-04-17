@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, SafeAreaView } from "react-native";
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -60,7 +61,7 @@ export default function PratoDetailScreen() {
   const imageSource = resolveImageSource(prato?.imagem_url);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
@@ -68,8 +69,8 @@ export default function PratoDetailScreen() {
         height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
         <TouchableOpacity
           onPress={() => { console.log("[PratoDetail] Botão voltar pressionado"); router.back(); }}
@@ -86,7 +87,9 @@ export default function PratoDetailScreen() {
           textAlign: "center",
           fontSize: 17,
           fontWeight: "700",
-          color: "#111",
+          color: COLORS.text,
+          height: 56,
+          lineHeight: 56,
         }}>
           Detalhes do Prato
         </Text>
@@ -111,6 +114,7 @@ export default function PratoDetailScreen() {
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
             Erro ao carregar prato
           </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
           <AnimatedPressable
             onPress={fetchPrato}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
@@ -151,11 +155,11 @@ export default function PratoDetailScreen() {
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>
                   {price}
                 </Text>
-                {!!prato?.tempo_preparo && (
+                {!!(prato as any)?.tempo_preparo && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Clock size={14} color={COLORS.textSecondary} />
                     <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-                      {prato.tempo_preparo}min
+                      {(prato as any).tempo_preparo}min
                     </Text>
                   </View>
                 )}
@@ -179,26 +183,26 @@ export default function PratoDetailScreen() {
               </View>
             ) : null}
 
-            {prato?.restricoes ? (
+            {(prato as any)?.restricoes ? (
               <View style={{ backgroundColor: COLORS.warning + "15", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.warning + "30", flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
                 <AlertCircle size={16} color={COLORS.warning} />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.warning }}>Restrições</Text>
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
-                    {prato.restricoes}
+                    {(prato as any).restricoes}
                   </Text>
                 </View>
               </View>
             ) : null}
 
-            {prato?.adicionais ? (
+            {(prato as any)?.adicionais ? (
               <View style={{ gap: 6 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Plus size={14} color={COLORS.primary} />
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Adicionais</Text>
                 </View>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 }}>
-                  {prato.adicionais}
+                  {(prato as any).adicionais}
                 </Text>
               </View>
             ) : null}

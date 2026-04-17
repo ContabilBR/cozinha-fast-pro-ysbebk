@@ -6,11 +6,11 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
-  SafeAreaView,
+  Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -72,7 +72,6 @@ export default function ComandaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const COLORS = useColors();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
@@ -118,6 +117,7 @@ export default function ComandaDetailScreen() {
       await fetchComanda();
     } catch (e: any) {
       console.error("[Comanda] Erro ao fechar:", e);
+      Alert.alert("Erro", "Não foi possível fechar a comanda. Tente novamente.");
     } finally {
       setClosing(false);
     }
@@ -133,6 +133,7 @@ export default function ComandaDetailScreen() {
       router.back();
     } catch (e: any) {
       console.error("[Comanda] Erro ao cancelar:", e);
+      Alert.alert("Erro", "Não foi possível cancelar a comanda. Tente novamente.");
     } finally {
       setCancelling(false);
     }
@@ -154,20 +155,18 @@ export default function ComandaDetailScreen() {
 
   const pedidos = comanda?.pedidos ?? [];
   const allDone = pedidos.length > 0 && pedidos.every((p) => p.status === "pronto" || p.status === "entregue" || p.status === "cancelado");
-  const navTitle = `Detalhes da Comanda`;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 56 + insets.top,
-        paddingTop: insets.top,
+        height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
         <TouchableOpacity
           onPress={() => { console.log("[Comanda] Botão voltar pressionado"); router.back(); }}
@@ -177,8 +176,18 @@ export default function ComandaDetailScreen() {
           <Ionicons name="chevron-back" size={26} color="#007AFF" />
           <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111", top: insets.top, height: 56, lineHeight: 56 }}>
-          {navTitle}
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: COLORS.text,
+          height: 56,
+          lineHeight: 56,
+        }}>
+          Detalhes da Comanda
         </Text>
       </View>
 
@@ -189,6 +198,7 @@ export default function ComandaDetailScreen() {
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar comanda</Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
           <AnimatedPressable
             onPress={fetchComanda}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}

@@ -68,7 +68,7 @@ export default function NovaComandaScreen() {
       setMesas(livres);
 
       const allUsuarios: ApiGarcom[] = Array.isArray(usuariosRes) ? usuariosRes : (usuariosRes.usuarios || usuariosRes.users || []);
-      const garcomList = allUsuarios.filter((u) => u.role === "garcom" || !u.role);
+      const garcomList = allUsuarios.filter((u) => u.role === "garcom" || u.role === "garçom" || !u.role);
       console.log("[NovaComanda] Encontrados", garcomList.length, "garçons");
       setGarcons(garcomList);
     } catch (e) {
