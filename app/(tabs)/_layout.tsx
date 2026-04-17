@@ -17,13 +17,13 @@ function getTabsForRole(role: string): TabBarItem[] {
     case "garcom":
       return [
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
-        { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
-        { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "receipt-long", label: "Pedidos" },
+        { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
+        { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "list-alt", label: "Pedidos" },
         perfilTab,
       ];
     case "cozinheiro":
       return [
-        { name: "cozinha", route: "/(tabs)/(cozinha)", icon: "local-fire-department", label: "Fila" },
+        { name: "cozinha", route: "/(tabs)/(cozinha)", icon: "local-fire-department", label: "Cozinha" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         perfilTab,
       ];
@@ -33,9 +33,9 @@ function getTabsForRole(role: string): TabBarItem[] {
       return [
         { name: "dashboard", route: "/(tabs)/(dashboard)", icon: "bar-chart", label: "Dashboard" },
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
+        { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         { name: "usuarios", route: "/(tabs)/(usuarios)", icon: "group", label: "Usuários" },
-        { name: "relatorios", route: "/(tabs)/(relatorios)", icon: "pie-chart", label: "Relatórios" },
         perfilTab,
       ];
     default:

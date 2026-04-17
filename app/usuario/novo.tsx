@@ -48,7 +48,7 @@ export default function NovoUsuarioScreen() {
     setSubmitting(true);
     setError("");
     try {
-      await apiPost("/api/users", {
+      await apiPost("/api/usuarios", {
         name: nome.trim(),
         email: email.trim(),
         password: senha,

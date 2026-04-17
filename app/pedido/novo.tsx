@@ -12,10 +12,9 @@ import { Image } from "expo-image";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { Prato, Categoria } from "@/types";
 import { apiGet, apiPost } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { Plus, Minus, ShoppingCart, ArrowLeft, UtensilsCrossed, Clock } from "lucide-react-native";
+import { Plus, Minus, ArrowLeft, UtensilsCrossed } from "lucide-react-native";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -24,10 +23,26 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+interface ApiPrato {
+  id: string;
+  nome: string;
+  descricao?: string;
+  preco: number;
+  imagem_url?: string;
+  categoria_id?: string;
+  categoria?: { id: string; nome: string };
+  disponivel?: boolean;
+}
+
+interface ApiCategoria {
+  id: string;
+  nome: string;
+}
+
 interface CartItem {
-  prato: Prato;
+  prato: ApiPrato;
   quantidade: number;
-  observacoes: string;
+  observacao: string;
 }
 
 export default function NovoPedidoScreen() {
@@ -36,11 +51,10 @@ export default function NovoPedidoScreen() {
   const router = useRouter();
 
   const [step, setStep] = useState<"browse" | "review">("browse");
-  const [pratos, setPratos] = useState<Prato[]>([]);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [pratos, setPratos] = useState<ApiPrato[]>([]);
+  const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [observacoes, setObservacoes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -52,9 +66,9 @@ export default function NovoPedidoScreen() {
         apiGet<any>("/api/pratos"),
         apiGet<any>("/api/categorias"),
       ]);
-      const pratoList: Prato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
-      const catList: Categoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
-      setPratos(pratoList.filter((p) => p.disponivel));
+      const pratoList: ApiPrato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
+      const catList: ApiCategoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
+      setPratos(pratoList.filter((p) => p.disponivel !== false));
       setCategorias(catList);
     } catch (e: any) {
       console.error("[NovoPedido] Error:", e);
@@ -66,14 +80,14 @@ export default function NovoPedidoScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const addToCart = (prato: Prato) => {
+  const addToCart = (prato: ApiPrato) => {
     console.log("[NovoPedido] Add to cart:", prato.nome);
     setCart((prev) => {
       const existing = prev.find((c) => c.prato.id === prato.id);
       if (existing) {
         return prev.map((c) => c.prato.id === prato.id ? { ...c, quantidade: c.quantidade + 1 } : c);
       }
-      return [...prev, { prato, quantidade: 1, observacoes: "" }];
+      return [...prev, { prato, quantidade: 1, observacao: "" }];
     });
   };
 
@@ -88,27 +102,28 @@ export default function NovoPedidoScreen() {
     });
   };
 
-  const updateObservacoes = (pratoId: string, obs: string) => {
-    setCart((prev) => prev.map((c) => c.prato.id === pratoId ? { ...c, observacoes: obs } : c));
+  const updateObservacao = (pratoId: string, obs: string) => {
+    setCart((prev) => prev.map((c) => c.prato.id === pratoId ? { ...c, observacao: obs } : c));
   };
 
   const handleSubmit = async () => {
     if (cart.length === 0) return;
-    console.log("[NovoPedido] Submit pedido, comanda:", comanda_id, "mesa:", mesa_id, "items:", cart.length);
+    console.log("[NovoPedido] Submit pedidos, comanda:", comanda_id, "items:", cart.length);
     setSubmitting(true);
+    setError("");
     try {
-      const itens = cart.map((c) => ({
-        prato_id: c.prato.id,
-        quantidade: c.quantidade,
-        observacoes: c.observacoes || undefined,
-      }));
-      const res = await apiPost<any>("/api/pedidos", {
-        comanda_id,
-        mesa_id,
-        itens,
-        observacoes: observacoes || undefined,
-      });
-      console.log("[NovoPedido] Pedido created:", res.pedido?.id || res.id);
+      // POST each item as a separate pedido per the API spec
+      await Promise.all(
+        cart.map((item) =>
+          apiPost("/api/pedidos", {
+            comanda_id,
+            prato_id: item.prato.id,
+            quantidade: item.quantidade,
+            observacao: item.observacao || undefined,
+          })
+        )
+      );
+      console.log("[NovoPedido] Pedidos created successfully");
       router.back();
     } catch (e: any) {
       console.error("[NovoPedido] Submit error:", e);
@@ -124,6 +139,7 @@ export default function NovoPedidoScreen() {
 
   const cartTotal = cart.reduce((sum, c) => sum + c.prato.preco * c.quantidade, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.quantidade, 0);
+  const cartTotalStr = formatCurrency(cartTotal);
 
   if (step === "review") {
     return (
@@ -134,7 +150,10 @@ export default function NovoPedidoScreen() {
             headerTintColor: COLORS.primary,
             headerBackButtonDisplayMode: "minimal",
             headerLeft: () => (
-              <AnimatedPressable onPress={() => setStep("browse")} style={{ padding: 8 }}>
+              <AnimatedPressable onPress={() => {
+                console.log("[NovoPedido] Back to browse");
+                setStep("browse");
+              }} style={{ padding: 8 }}>
                 <ArrowLeft size={22} color={COLORS.primary} />
               </AnimatedPressable>
             ),
@@ -146,99 +165,76 @@ export default function NovoPedidoScreen() {
               Itens do pedido
             </Text>
 
-            {cart.map((item) => (
-              <View
-                key={item.prato.id}
-                style={{
-                  backgroundColor: COLORS.surface,
-                  borderRadius: 14,
-                  padding: 14,
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  gap: 10,
-                }}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text, flex: 1 }}>
-                    {item.prato.nome}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <AnimatedPressable
-                      onPress={() => removeFromCart(item.prato.id)}
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 8,
-                        backgroundColor: COLORS.surfaceSecondary,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Minus size={14} color={COLORS.text} />
-                    </AnimatedPressable>
-                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, minWidth: 20, textAlign: "center" }}>
-                      {item.quantidade}
-                    </Text>
-                    <AnimatedPressable
-                      onPress={() => addToCart(item.prato)}
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: 8,
-                        backgroundColor: COLORS.primaryMuted,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Plus size={14} color={COLORS.primary} />
-                    </AnimatedPressable>
-                  </View>
-                </View>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
-                  {formatCurrency(item.prato.preco * item.quantidade)}
-                </Text>
-                <TextInput
-                  value={item.observacoes}
-                  onChangeText={(t) => updateObservacoes(item.prato.id, t)}
-                  placeholder="Observações (opcional)"
-                  placeholderTextColor={COLORS.textTertiary}
+            {cart.map((item) => {
+              const itemTotal = formatCurrency(item.prato.preco * item.quantidade);
+              return (
+                <View
+                  key={item.prato.id}
                   style={{
-                    backgroundColor: COLORS.surfaceSecondary,
-                    borderRadius: 10,
-                    padding: 10,
-                    fontFamily: "Outfit_400Regular",
-                    fontSize: 13,
-                    color: COLORS.text,
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 14,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    gap: 10,
                   }}
-                />
-              </View>
-            ))}
-
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
-                Observações gerais
-              </Text>
-              <TextInput
-                value={observacoes}
-                onChangeText={setObservacoes}
-                placeholder="Observações para o pedido inteiro (opcional)"
-                placeholderTextColor={COLORS.textTertiary}
-                multiline
-                numberOfLines={3}
-                style={{
-                  backgroundColor: COLORS.surface,
-                  borderRadius: 12,
-                  padding: 12,
-                  fontFamily: "Outfit_400Regular",
-                  fontSize: 14,
-                  color: COLORS.text,
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  minHeight: 80,
-                  textAlignVertical: "top",
-                }}
-              />
-            </View>
+                >
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text, flex: 1 }}>
+                      {item.prato.nome}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <AnimatedPressable
+                        onPress={() => removeFromCart(item.prato.id)}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 8,
+                          backgroundColor: COLORS.surfaceSecondary,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Minus size={14} color={COLORS.text} />
+                      </AnimatedPressable>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, minWidth: 20, textAlign: "center" }}>
+                        {item.quantidade}
+                      </Text>
+                      <AnimatedPressable
+                        onPress={() => addToCart(item.prato)}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 8,
+                          backgroundColor: COLORS.primaryMuted,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Plus size={14} color={COLORS.primary} />
+                      </AnimatedPressable>
+                    </View>
+                  </View>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
+                    {itemTotal}
+                  </Text>
+                  <TextInput
+                    value={item.observacao}
+                    onChangeText={(t) => updateObservacao(item.prato.id, t)}
+                    placeholder="Observação (opcional)"
+                    placeholderTextColor={COLORS.textTertiary}
+                    style={{
+                      backgroundColor: COLORS.surfaceSecondary,
+                      borderRadius: 10,
+                      padding: 10,
+                      fontFamily: "Outfit_400Regular",
+                      fontSize: 13,
+                      color: COLORS.text,
+                    }}
+                  />
+                </View>
+              );
+            })}
 
             {error ? (
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>
@@ -265,7 +261,7 @@ export default function NovoPedidoScreen() {
                 Total estimado
               </Text>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.primary }}>
-                {formatCurrency(cartTotal)}
+                {cartTotalStr}
               </Text>
             </View>
             <AnimatedPressable
@@ -297,7 +293,7 @@ export default function NovoPedidoScreen() {
     <>
       <Stack.Screen
         options={{
-          title: "Novo Pedido",
+          title: "Adicionar Itens",
           headerTintColor: COLORS.primary,
           headerBackButtonDisplayMode: "minimal",
         }}
@@ -383,17 +379,9 @@ export default function NovoPedidoScreen() {
                       <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
                         {item.nome}
                       </Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
-                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
-                          {price}
-                        </Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                          <Clock size={11} color={COLORS.textSecondary} />
-                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-                            {item.tempo_preparo}min
-                          </Text>
-                        </View>
-                      </View>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary, marginTop: 2 }}>
+                        {price}
+                      </Text>
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       {qty > 0 ? (
@@ -488,7 +476,7 @@ export default function NovoPedidoScreen() {
                 Revisar pedido
               </Text>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "rgba(255,255,255,0.85)" }}>
-                {formatCurrency(cartTotal)}
+                {cartTotalStr}
               </Text>
             </AnimatedPressable>
           </View>

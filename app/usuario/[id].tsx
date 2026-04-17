@@ -9,7 +9,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { User, UserRole } from "@/types";
+import { UserRole } from "@/types";
 import { apiGet, apiPut } from "@/utils/api";
 import { getRoleLabel } from "@/utils/helpers";
 import { ChevronDown } from "lucide-react-native";
@@ -44,9 +44,9 @@ export default function EditarUsuarioScreen() {
 
   useEffect(() => {
     console.log("[EditarUsuario] Fetching user:", id);
-    apiGet<any>(`/api/users/${id}`)
+    apiGet<any>(`/api/usuarios/${id}`)
       .then((res) => {
-        const u: User = res.user || res;
+        const u = res.usuario || res.user || res;
         setNome(u.name ?? "");
         setEmail(u.email ?? "");
         setRole(u.role ?? "garcom");
@@ -66,7 +66,7 @@ export default function EditarUsuarioScreen() {
     try {
       const payload: any = { name: nome.trim(), email: email.trim(), role };
       if (senha.trim()) payload.password = senha;
-      await apiPut(`/api/users/${id}`, payload);
+      await apiPut(`/api/usuarios/${id}`, payload);
       console.log("[EditarUsuario] User updated successfully");
       router.back();
     } catch (e: any) {

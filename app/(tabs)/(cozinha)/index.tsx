@@ -11,53 +11,42 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { apiGet, apiPatch } from "@/utils/api";
+import { apiGet, apiPut } from "@/utils/api";
 import { formatElapsed } from "@/utils/helpers";
 import { Flame, Clock, RefreshCw, ChefHat } from "lucide-react-native";
 
-interface KitchenItem {
+interface KitchenPedido {
   id: string;
-  order_id: string;
-  dish_id: string;
-  dish_name: string;
-  table_number: number;
-  quantity: number;
+  comanda_id: string;
+  prato_id: string;
+  prato?: { id: string; nome: string };
+  quantidade: number;
   status: string;
-  notes?: string;
-  created_at: string;
+  observacao?: string;
+  created_at?: string;
+  mesa?: { numero: number };
+  comanda?: { mesa?: { numero: number } };
 }
 
 const NEXT_ACTION: Record<string, { status: string; label: string }> = {
   pendente: { status: "em_preparo", label: "Iniciar Preparo" },
-  pending: { status: "preparing", label: "Iniciar Preparo" },
   em_preparo: { status: "pronto", label: "Marcar Pronto" },
-  preparing: { status: "ready", label: "Marcar Pronto" },
 };
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: "#94A3B8",
-  pending: "#94A3B8",
   em_preparo: "#F59E0B",
-  preparing: "#F59E0B",
   pronto: "#22C55E",
-  ready: "#22C55E",
   entregue: "#0D9488",
-  delivered: "#0D9488",
   cancelado: "#EF4444",
-  cancelled: "#EF4444",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente",
-  pending: "Pendente",
   em_preparo: "Em Preparo",
-  preparing: "Em Preparo",
   pronto: "Pronto",
-  ready: "Pronto",
   entregue: "Entregue",
-  delivered: "Entregue",
   cancelado: "Cancelado",
-  cancelled: "Cancelado",
 };
 
 function KitchenItemCard({
@@ -65,7 +54,7 @@ function KitchenItemCard({
   onAction,
   index,
 }: {
-  item: KitchenItem;
+  item: KitchenPedido;
   onAction: (id: string, status: string) => Promise<void>;
   index: number;
 }) {
@@ -81,14 +70,17 @@ function KitchenItemCard({
     ]).start();
   }, [index, opacity, translateY]);
 
-  const elapsed = formatElapsed(item.created_at);
-  const diffMin = Math.floor((Date.now() - new Date(item.created_at).getTime()) / 60000);
+  const createdAt = item.created_at;
+  const elapsed = formatElapsed(createdAt);
+  const diffMin = createdAt ? Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000) : 0;
   const isUrgent = diffMin > 20;
   const isWarning = diffMin > 10 && !isUrgent;
   const borderColor = isUrgent ? "#EF444460" : isWarning ? "#F59E0B60" : COLORS.border;
   const nextAction = NEXT_ACTION[item.status];
   const statusColor = STATUS_COLORS[item.status] || "#94A3B8";
   const statusLabel = STATUS_LABELS[item.status] || item.status;
+  const mesaNum = item.comanda?.mesa?.numero ?? item.mesa?.numero ?? "?";
+  const pratoNome = item.prato?.nome ?? "Prato";
 
   const handleAction = async () => {
     if (!nextAction) return;
@@ -102,7 +94,7 @@ function KitchenItemCard({
   };
 
   const actionBgColor = nextAction
-    ? nextAction.status === "em_preparo" || nextAction.status === "preparing"
+    ? nextAction.status === "em_preparo"
       ? "#F59E0B"
       : "#22C55E"
     : COLORS.primary;
@@ -142,15 +134,15 @@ function KitchenItemCard({
                 }}
               >
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>
-                  {item.table_number}
+                  {mesaNum}
                 </Text>
               </View>
               <View>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                  Mesa {item.table_number}
+                  Mesa {mesaNum}
                 </Text>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                  Pedido #{item.order_id.slice(-6)}
+                  Pedido #{item.id.slice(-6)}
                 </Text>
               </View>
             </View>
@@ -189,16 +181,16 @@ function KitchenItemCard({
                 }}
               >
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
-                  {item.quantity}
+                  {item.quantidade}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
-                  {item.dish_name}
+                  {pratoNome}
                 </Text>
-                {item.notes ? (
+                {item.observacao ? (
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
-                    {item.notes}
+                    {item.observacao}
                   </Text>
                 ) : null}
               </View>
@@ -235,19 +227,28 @@ export default function CozinhaScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
 
-  const [items, setItems] = useState<KitchenItem[]>([]);
+  const [items, setItems] = useState<KitchenPedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const fetchFila = useCallback(async () => {
-    console.log("[Cozinha] Fetching kitchen queue from /api/cozinha");
+    console.log("[Cozinha] Fetching kitchen queue from /api/pedidos");
     try {
-      const res = await apiGet<any>("/api/cozinha");
-      const list: KitchenItem[] = Array.isArray(res) ? res : (res.items || res.queue || []);
-      const sorted = list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      console.log("[Cozinha] Loaded", sorted.length, "kitchen items");
+      const [pendentesRes, emPreparoRes] = await Promise.all([
+        apiGet<any>("/api/pedidos?status=pendente"),
+        apiGet<any>("/api/pedidos?status=em_preparo"),
+      ]);
+      const pendentes: KitchenPedido[] = Array.isArray(pendentesRes) ? pendentesRes : (pendentesRes.pedidos || []);
+      const emPreparo: KitchenPedido[] = Array.isArray(emPreparoRes) ? emPreparoRes : (emPreparoRes.pedidos || []);
+      const all = [...pendentes, ...emPreparo];
+      const sorted = all.sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return aTime - bTime;
+      });
+      console.log("[Cozinha] Loaded", sorted.length, "kitchen items (pendente + em_preparo)");
       setItems(sorted);
       setLastRefresh(new Date());
       setError("");
@@ -263,9 +264,9 @@ export default function CozinhaScreen() {
   useEffect(() => {
     fetchFila();
     const interval = setInterval(() => {
-      console.log("[Cozinha] Auto-refresh");
+      console.log("[Cozinha] Auto-refresh (30s)");
       fetchFila();
-    }, 15000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchFila]);
 
@@ -276,9 +277,9 @@ export default function CozinhaScreen() {
   };
 
   const handleAction = async (id: string, status: string) => {
-    console.log("[Cozinha] PATCH kitchen item status:", id, "->", status);
+    console.log("[Cozinha] PUT pedido status:", id, "->", status);
     try {
-      await apiPatch(`/api/cozinha/${id}`, { status });
+      await apiPut(`/api/pedidos/${id}/status`, { status });
       console.log("[Cozinha] Status updated, refreshing");
       await fetchFila();
     } catch (e) {
@@ -286,8 +287,8 @@ export default function CozinhaScreen() {
     }
   };
 
-  const pendingCount = items.filter((i) => i.status === "pendente" || i.status === "pending").length;
-  const inProgressCount = items.filter((i) => i.status === "em_preparo" || i.status === "preparing").length;
+  const pendingCount = items.filter((i) => i.status === "pendente").length;
+  const inProgressCount = items.filter((i) => i.status === "em_preparo").length;
   const lastRefreshMin = Math.floor((Date.now() - lastRefresh.getTime()) / 60000);
   const lastRefreshLabel = lastRefreshMin < 1 ? "agora" : `há ${lastRefreshMin} min`;
 
@@ -310,7 +311,7 @@ export default function CozinhaScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Flame size={22} color={COLORS.primary} />
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-              Fila da Cozinha
+              Cozinha
             </Text>
           </View>
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>

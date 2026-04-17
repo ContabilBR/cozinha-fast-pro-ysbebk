@@ -6,13 +6,23 @@ import {
   TextInput,
   Switch,
   ActivityIndicator,
+  Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { Prato, Categoria } from "@/types";
-import { apiGet, apiPut } from "@/utils/api";
-import { ChevronDown } from "lucide-react-native";
+import { apiGet, apiPut, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { ChevronDown, Camera, Image as ImageIcon, UtensilsCrossed } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import type { ImageSourcePropType } from "react-native";
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   const COLORS = useColors();
@@ -36,12 +46,10 @@ export default function EditarPratoScreen() {
   const [preco, setPreco] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [imagemUrl, setImagemUrl] = useState("");
-  const [tempoPreparo, setTempoPreparo] = useState("");
   const [disponivel, setDisponivel] = useState(true);
-  const [restricoes, setRestricoes] = useState("");
-  const [adicionais, setAdicionais] = useState("");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showCatPicker, setShowCatPicker] = useState(false);
+  const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -59,10 +67,7 @@ export default function EditarPratoScreen() {
       setPreco(String(p.preco));
       setCategoriaId(p.categoria_id ?? "");
       setImagemUrl(p.imagem_url ?? "");
-      setTempoPreparo(String(p.tempo_preparo));
       setDisponivel(p.disponivel);
-      setRestricoes(p.restricoes ?? "");
-      setAdicionais(p.adicionais ?? "");
       setCategorias(cats);
     }).catch((e) => {
       console.error("[EditarPrato] Error:", e);
@@ -71,6 +76,55 @@ export default function EditarPratoScreen() {
   }, [id]);
 
   const selectedCat = categorias.find((c) => c.id === categoriaId);
+
+  const pickImage = async (source: "camera" | "gallery") => {
+    console.log("[EditarPrato] Pick image from:", source);
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === "camera") {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert("Permissão necessária", "Permita o acesso à galeria nas configurações.");
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
+      }
+      if (!result.canceled && result.assets[0]) {
+        console.log("[EditarPrato] Image selected:", result.assets[0].uri);
+        setLocalImageUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error("[EditarPrato] Image picker error:", e);
+    }
+  };
+
+  const uploadImage = async (uri: string) => {
+    console.log("[EditarPrato] Uploading image for prato:", id);
+    const token = await getBearerToken();
+    const formData = new FormData();
+    const filename = uri.split("/").pop() ?? "image.jpg";
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+    const mimeType = ext === "png" ? "image/png" : "image/jpeg";
+    formData.append("imagem", { uri, name: filename, type: mimeType } as any);
+    const res = await fetch(`${BACKEND_URL}/api/pratos/${id}/imagem`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[EditarPrato] Image upload failed:", res.status, text.slice(0, 200));
+    } else {
+      console.log("[EditarPrato] Image uploaded successfully");
+    }
+  };
 
   const handleSave = async () => {
     if (!nome.trim()) {
@@ -86,13 +140,12 @@ export default function EditarPratoScreen() {
         descricao: descricao.trim() || undefined,
         preco: Number(preco),
         categoria_id: categoriaId || undefined,
-        imagem_url: imagemUrl.trim() || undefined,
-        tempo_preparo: Number(tempoPreparo) || 15,
         disponivel,
-        restricoes: restricoes.trim() || undefined,
-        adicionais: adicionais.trim() || undefined,
       });
       console.log("[EditarPrato] Prato updated successfully");
+      if (localImageUri) {
+        await uploadImage(localImageUri);
+      }
       router.back();
     } catch (e: any) {
       console.error("[EditarPrato] Save error:", e);
@@ -112,6 +165,9 @@ export default function EditarPratoScreen() {
     borderWidth: 1,
     borderColor: COLORS.border,
   };
+
+  const displayImageUri = localImageUri ?? (imagemUrl || null);
+  const imageSource = resolveImageSource(displayImageUri ?? undefined);
 
   if (loading) {
     return (
@@ -143,22 +199,16 @@ export default function EditarPratoScreen() {
             <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição" placeholderTextColor={COLORS.textTertiary} multiline numberOfLines={3} style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]} />
           </FormField>
 
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <FormField label="Preço (R$) *">
-                <TextInput value={preco} onChangeText={setPreco} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
-              </FormField>
-            </View>
-            <View style={{ flex: 1 }}>
-              <FormField label="Tempo (min)">
-                <TextInput value={tempoPreparo} onChangeText={setTempoPreparo} placeholder="15" placeholderTextColor={COLORS.textTertiary} keyboardType="number-pad" style={inputStyle} />
-              </FormField>
-            </View>
-          </View>
+          <FormField label="Preço (R$) *">
+            <TextInput value={preco} onChangeText={setPreco} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
+          </FormField>
 
           <FormField label="Categoria">
             <AnimatedPressable
-              onPress={() => setShowCatPicker((v) => !v)}
+              onPress={() => {
+                console.log("[EditarPrato] Category picker toggled");
+                setShowCatPicker((v) => !v);
+              }}
               style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
             >
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
@@ -187,16 +237,75 @@ export default function EditarPratoScreen() {
             )}
           </FormField>
 
-          <FormField label="URL da imagem">
-            <TextInput value={imagemUrl} onChangeText={setImagemUrl} placeholder="https://..." placeholderTextColor={COLORS.textTertiary} autoCapitalize="none" style={inputStyle} />
-          </FormField>
-
-          <FormField label="Restrições alimentares">
-            <TextInput value={restricoes} onChangeText={setRestricoes} placeholder="Ex: Contém glúten" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
-          </FormField>
-
-          <FormField label="Adicionais disponíveis">
-            <TextInput value={adicionais} onChangeText={setAdicionais} placeholder="Ex: Queijo extra" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+          {/* Image section */}
+          <FormField label="Foto do prato">
+            <View style={{ gap: 10 }}>
+              {displayImageUri ? (
+                <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                  <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                </View>
+              ) : (
+                <View
+                  style={{
+                    height: 120,
+                    borderRadius: 12,
+                    backgroundColor: COLORS.surfaceSecondary,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>
+                    Nenhuma foto
+                  </Text>
+                </View>
+              )}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <AnimatedPressable
+                  onPress={() => pickImage("camera")}
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                >
+                  <Camera size={18} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>
+                    Tirar Foto
+                  </Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => pickImage("gallery")}
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                >
+                  <ImageIcon size={18} color={COLORS.primary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>
+                    Galeria
+                  </Text>
+                </AnimatedPressable>
+              </View>
+            </View>
           </FormField>
 
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>

@@ -3,72 +3,45 @@ import {
   View,
   Text,
   ScrollView,
-  TextInput,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useLocalSearchParams, useNavigation, Stack } from "expo-router";
+import { useRouter, useLocalSearchParams, Stack } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet, apiPost } from "@/utils/api";
-import { Minus, Plus, Users, X } from "lucide-react-native";
+import { Users } from "lucide-react-native";
 
 interface ApiMesa {
   id: string;
-  number: number;
-  capacity: number;
+  numero: number;
+  capacidade: number;
   status: string;
+}
+
+function isDisponivel(status: string): boolean {
+  return status === "disponivel" || status === "livre" || status === "free";
 }
 
 export default function NovaComandaScreen() {
   const COLORS = useColors();
   const router = useRouter();
-  const navigation = useNavigation();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ mesa_id?: string }>();
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [selectedMesaId, setSelectedMesaId] = useState<string>(params.mesa_id ?? "");
-  const [customerCount, setCustomerCount] = useState(2);
-  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    navigation.setOptions({
-      title: "Nova Comanda",
-      headerTintColor: COLORS.primary,
-      headerBackButtonDisplayMode: "minimal",
-      headerRight: () => (
-        <AnimatedPressable
-          onPress={() => {
-            console.log("[NovaComanda] Close button pressed");
-            router.back();
-          }}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: COLORS.surfaceSecondary,
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 4,
-          }}
-        >
-          <X size={16} color={COLORS.textSecondary} />
-        </AnimatedPressable>
-      ),
-    });
-  }, [navigation, COLORS, router]);
 
   const fetchMesas = useCallback(async () => {
     console.log("[NovaComanda] Fetching available mesas from /api/mesas");
     try {
       const res = await apiGet<any>("/api/mesas");
       const all: ApiMesa[] = Array.isArray(res) ? res : (res.mesas || []);
-      const livres = all.filter((m) => m.status === "livre" || m.status === "free");
-      console.log("[NovaComanda] Found", livres.length, "free mesas");
+      const livres = all.filter((m) => isDisponivel(m.status));
+      console.log("[NovaComanda] Found", livres.length, "mesas disponíveis");
       setMesas(livres);
     } catch (e) {
       console.error("[NovaComanda] Error fetching mesas:", e);
@@ -84,19 +57,14 @@ export default function NovaComandaScreen() {
       setError("Selecione uma mesa.");
       return;
     }
-    if (customerCount < 1) {
-      setError("Número de pessoas deve ser pelo menos 1.");
-      return;
-    }
-    console.log("[NovaComanda] Creating comanda - mesa:", selectedMesaId, "customers:", customerCount);
+    const garcomId = user?.id;
+    console.log("[NovaComanda] Creating comanda - mesa:", selectedMesaId, "garcom:", garcomId);
     setError("");
     setSubmitting(true);
     try {
-      const res = await apiPost<any>("/api/comandas", {
-        mesa_id: selectedMesaId,
-        customer_count: customerCount,
-        notes: notes.trim() || undefined,
-      });
+      const payload: any = { mesa_id: selectedMesaId };
+      if (garcomId) payload.garcom_id = garcomId;
+      const res = await apiPost<any>("/api/comandas", payload);
       const comandaId = res?.comanda?.id || res?.id;
       console.log("[NovaComanda] Comanda created:", comandaId);
       if (comandaId) {
@@ -116,7 +84,7 @@ export default function NovaComandaScreen() {
     <>
       <Stack.Screen
         options={{
-          title: "Nova Comanda",
+          title: "Abrir Comanda",
           headerTintColor: COLORS.primary,
           headerBackButtonDisplayMode: "minimal",
         }}
@@ -145,7 +113,7 @@ export default function NovaComandaScreen() {
               }}
             >
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
-                Nenhuma mesa livre disponível
+                Nenhuma mesa disponível no momento
               </Text>
             </View>
           ) : (
@@ -156,7 +124,7 @@ export default function NovaComandaScreen() {
                   <AnimatedPressable
                     key={mesa.id}
                     onPress={() => {
-                      console.log("[NovaComanda] Mesa selected:", mesa.number);
+                      console.log("[NovaComanda] Mesa selected:", mesa.numero);
                       setSelectedMesaId(mesa.id);
                       setError("");
                     }}
@@ -179,7 +147,7 @@ export default function NovaComandaScreen() {
                         color: isSelected ? "#fff" : COLORS.text,
                       }}
                     >
-                      {mesa.number}
+                      {mesa.numero}
                     </Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
                       <Users size={10} color={isSelected ? "rgba(255,255,255,0.8)" : COLORS.textSecondary} />
@@ -190,7 +158,7 @@ export default function NovaComandaScreen() {
                           color: isSelected ? "rgba(255,255,255,0.8)" : COLORS.textSecondary,
                         }}
                       >
-                        {mesa.capacity}
+                        {mesa.capacidade}
                       </Text>
                     </View>
                   </AnimatedPressable>
@@ -200,88 +168,42 @@ export default function NovaComandaScreen() {
           )}
         </View>
 
-        {/* Customer count */}
-        <View style={{ gap: 10 }}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
-            Número de Pessoas
-          </Text>
+        {/* Garçom info */}
+        {user && (
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 20,
               backgroundColor: COLORS.surface,
               borderRadius: 14,
               padding: 16,
               borderWidth: 1,
               borderColor: COLORS.border,
-              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
             }}
           >
-            <AnimatedPressable
-              onPress={() => {
-                console.log("[NovaComanda] Decrease customer count");
-                setCustomerCount((c) => Math.max(1, c - 1));
-              }}
+            <View
               style={{
                 width: 40,
                 height: 40,
-                borderRadius: 12,
-                backgroundColor: COLORS.surfaceSecondary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Minus size={18} color={COLORS.text} />
-            </AnimatedPressable>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 28, color: COLORS.text, minWidth: 40, textAlign: "center" }}>
-              {customerCount}
-            </Text>
-            <AnimatedPressable
-              onPress={() => {
-                console.log("[NovaComanda] Increase customer count");
-                setCustomerCount((c) => c + 1);
-              }}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
+                borderRadius: 20,
                 backgroundColor: COLORS.primaryMuted,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Plus size={18} color={COLORS.primary} />
-            </AnimatedPressable>
+              <Users size={18} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                Garçom responsável
+              </Text>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                {user.name || user.email}
+              </Text>
+            </View>
           </View>
-        </View>
-
-        {/* Notes */}
-        <View style={{ gap: 8 }}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
-            Observações
-          </Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Ex: cliente alérgico a amendoim..."
-            placeholderTextColor={COLORS.textTertiary}
-            multiline
-            numberOfLines={3}
-            style={{
-              backgroundColor: COLORS.surface,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: COLORS.border,
-              padding: 14,
-              fontFamily: "Outfit_400Regular",
-              fontSize: 15,
-              color: COLORS.text,
-              minHeight: 80,
-              textAlignVertical: "top",
-            }}
-          />
-        </View>
+        )}
 
         {/* Error */}
         {!!error && (

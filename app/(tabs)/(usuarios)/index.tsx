@@ -5,14 +5,18 @@ import {
   FlatList,
   RefreshControl,
   Animated,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { getRoleLabel, getInitials } from "@/utils/helpers";
-import { Users } from "lucide-react-native";
+import { Users, Plus, Pencil, Trash2, X, ChevronDown } from "lucide-react-native";
+import { UserRole } from "@/types";
 
 interface ApiUser {
   id: string;
@@ -29,7 +33,19 @@ const ROLE_COLORS: Record<string, string> = {
   cozinheiro: "#F59E0B",
 };
 
-function UserCard({ user, index }: { user: ApiUser; index: number }) {
+const ROLES: UserRole[] = ["garcom", "cozinheiro", "gerente", "administrador"];
+
+function UserCard({
+  user,
+  index,
+  onEdit,
+  onDelete,
+}: {
+  user: ApiUser;
+  index: number;
+  onEdit: (u: ApiUser) => void;
+  onDelete: (id: string) => void;
+}) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
@@ -83,19 +99,54 @@ function UserCard({ user, index }: { user: ApiUser; index: number }) {
           <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
             {user.email}
           </Text>
+          <View
+            style={{
+              backgroundColor: roleColor + "20",
+              borderRadius: 6,
+              paddingHorizontal: 7,
+              paddingVertical: 2,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: roleColor }}>
+              {roleLabel}
+            </Text>
+          </View>
         </View>
 
-        <View
-          style={{
-            backgroundColor: roleColor + "20",
-            borderRadius: 8,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-          }}
-        >
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: roleColor }}>
-            {roleLabel}
-          </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <AnimatedPressable
+            onPress={() => {
+              console.log("[Usuarios] Edit pressed:", user.id);
+              onEdit(user);
+            }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: COLORS.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={16} color={COLORS.textSecondary} />
+          </AnimatedPressable>
+          <AnimatedPressable
+            onPress={() => {
+              console.log("[Usuarios] Delete pressed:", user.id);
+              onDelete(user.id);
+            }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: COLORS.danger + "15",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Trash2 size={16} color={COLORS.danger} />
+          </AnimatedPressable>
         </View>
       </View>
     </Animated.View>
@@ -111,11 +162,22 @@ export default function UsuariosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [role, setRole] = useState<UserRole>("garcom");
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
+
   const fetchUsers = useCallback(async () => {
     console.log("[Usuarios] Fetching users from /api/usuarios");
     try {
       const res = await apiGet<any>("/api/usuarios");
-      const list: ApiUser[] = Array.isArray(res) ? res : (res.usuarios || []);
+      const list: ApiUser[] = Array.isArray(res) ? res : (res.usuarios || res.users || []);
       console.log("[Usuarios] Loaded", list.length, "users");
       setUsers(list);
       setError("");
@@ -134,6 +196,82 @@ export default function UsuariosScreen() {
     console.log("[Usuarios] Manual refresh");
     setRefreshing(true);
     fetchUsers();
+  };
+
+  const openCreate = () => {
+    console.log("[Usuarios] Open create modal");
+    setEditingUser(null);
+    setNome("");
+    setEmail("");
+    setSenha("");
+    setRole("garcom");
+    setModalError("");
+    setShowModal(true);
+  };
+
+  const openEdit = (u: ApiUser) => {
+    console.log("[Usuarios] Open edit modal:", u.id);
+    setEditingUser(u);
+    setNome(u.name ?? "");
+    setEmail(u.email ?? "");
+    setSenha("");
+    setRole((u.role as UserRole) ?? "garcom");
+    setModalError("");
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
+    if (!editingUser && !email.trim()) { setModalError("E-mail é obrigatório."); return; }
+    if (!editingUser && !senha.trim()) { setModalError("Senha é obrigatória."); return; }
+    console.log("[Usuarios] Save pressed, editingUser:", editingUser?.id ?? "new", "role:", role);
+    setSaving(true);
+    setModalError("");
+    try {
+      if (editingUser) {
+        const payload: any = { name: nome.trim(), email: email.trim(), role };
+        if (senha.trim()) payload.password = senha;
+        await apiPut(`/api/usuarios/${editingUser.id}`, payload);
+        console.log("[Usuarios] User updated:", editingUser.id);
+      } else {
+        await apiPost("/api/usuarios", {
+          name: nome.trim(),
+          email: email.trim(),
+          password: senha,
+          role,
+        });
+        console.log("[Usuarios] User created");
+      }
+      setShowModal(false);
+      await fetchUsers();
+    } catch (e: any) {
+      console.error("[Usuarios] Save error:", e);
+      setModalError("Não foi possível salvar o usuário.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    console.log("[Usuarios] Delete user:", id);
+    try {
+      await apiDelete(`/api/usuarios/${id}`);
+      console.log("[Usuarios] User deleted:", id);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (e: any) {
+      console.error("[Usuarios] Delete error:", e);
+    }
+  };
+
+  const inputStyle = {
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: 12,
+    padding: 12,
+    fontFamily: "Outfit_400Regular" as const,
+    fontSize: 15,
+    color: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   };
 
   return (
@@ -181,7 +319,7 @@ export default function UsuariosScreen() {
         <FlatList
           data={users}
           renderItem={({ item, index }) => (
-            <UserCard user={item} index={index} />
+            <UserCard user={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
           )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
@@ -206,10 +344,145 @@ export default function UsuariosScreen() {
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
                 Nenhum usuário encontrado
               </Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                Adicione usuários para gerenciar o acesso
+              </Text>
             </View>
           }
         />
       )}
+
+      {/* FAB */}
+      <AnimatedPressable
+        onPress={openCreate}
+        style={{
+          position: "absolute",
+          bottom: insets.bottom + 90,
+          right: 20,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: COLORS.primary,
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 16px rgba(232, 82, 26, 0.4)",
+        }}
+      >
+        <Plus size={24} color="#fff" />
+      </AnimatedPressable>
+
+      {/* Modal */}
+      <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 400, gap: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
+                {editingUser ? "Editar Usuário" : "Novo Usuário"}
+              </Text>
+              <AnimatedPressable
+                onPress={() => setShowModal(false)}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={16} color={COLORS.textSecondary} />
+              </AnimatedPressable>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
+              <TextInput
+                value={nome}
+                onChangeText={setNome}
+                placeholder="Nome completo"
+                placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle}
+                autoFocus
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>E-mail {editingUser ? "" : "*"}</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="email@exemplo.com"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={inputStyle}
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                {editingUser ? "Nova senha (opcional)" : "Senha *"}
+              </Text>
+              <TextInput
+                value={senha}
+                onChangeText={setSenha}
+                placeholder={editingUser ? "Deixe em branco para manter" : "Senha"}
+                placeholderTextColor={COLORS.textTertiary}
+                secureTextEntry
+                style={inputStyle}
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Função</Text>
+              <AnimatedPressable
+                onPress={() => {
+                  console.log("[Usuarios] Role picker toggled");
+                  setShowRolePicker((v) => !v);
+                }}
+                style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
+              >
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text }}>
+                  {getRoleLabel(role)}
+                </Text>
+                <ChevronDown size={16} color={COLORS.textSecondary} />
+              </AnimatedPressable>
+              {showRolePicker && (
+                <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
+                  {ROLES.map((r) => (
+                    <AnimatedPressable
+                      key={r}
+                      onPress={() => {
+                        console.log("[Usuarios] Role selected:", r);
+                        setRole(r);
+                        setShowRolePicker(false);
+                      }}
+                      style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: role === r ? COLORS.primaryMuted : "transparent" }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>
+                        {getRoleLabel(r)}
+                      </Text>
+                    </AnimatedPressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {modalError ? (
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
+                {modalError}
+              </Text>
+            ) : null}
+
+            <AnimatedPressable
+              onPress={handleSave}
+              disabled={saving}
+              style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
+                  {editingUser ? "Salvar alterações" : "Criar usuário"}
+                </Text>
+              )}
+            </AnimatedPressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

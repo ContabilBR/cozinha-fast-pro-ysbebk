@@ -7,6 +7,7 @@ import {
   Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,17 +16,19 @@ import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
 import { Users } from "lucide-react-native";
 
-interface ApiTable {
+interface ApiMesa {
   id: string;
-  number: number;
-  capacity: number;
+  numero: number;
+  capacidade: number;
   status: string;
+  comanda_id?: string;
 }
 
-function getTableStatusLabel(status: string): string {
+function getMesaStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    livre: "Livre",
-    free: "Livre",
+    disponivel: "Disponível",
+    livre: "Disponível",
+    free: "Disponível",
     ocupada: "Ocupada",
     occupied: "Ocupada",
     reservada: "Reservada",
@@ -34,8 +37,9 @@ function getTableStatusLabel(status: string): string {
   return labels[status] || String(status);
 }
 
-function getTableStatusColor(status: string): string {
+function getMesaStatusColor(status: string): string {
   const map: Record<string, string> = {
+    disponivel: "#22C55E",
     livre: "#22C55E",
     free: "#22C55E",
     ocupada: "#E8521A",
@@ -46,7 +50,11 @@ function getTableStatusColor(status: string): string {
   return map[status] || "#94A3B8";
 }
 
-function TableCard({ table, onPress, index }: { table: ApiTable; onPress: () => void; index: number }) {
+function isDisponivel(status: string): boolean {
+  return status === "disponivel" || status === "livre" || status === "free";
+}
+
+function TableCard({ mesa, onPress, index }: { mesa: ApiMesa; onPress: () => void; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -58,9 +66,9 @@ function TableCard({ table, onPress, index }: { table: ApiTable; onPress: () => 
     ]).start();
   }, [index, opacity, translateY]);
 
-  const statusColor = getTableStatusColor(table.status);
-  const statusLabel = getTableStatusLabel(table.status);
-  const isOccupied = table.status !== "livre" && table.status !== "free";
+  const statusColor = getMesaStatusColor(mesa.status);
+  const statusLabel = getMesaStatusLabel(mesa.status);
+  const livre = isDisponivel(mesa.status);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
@@ -71,7 +79,7 @@ function TableCard({ table, onPress, index }: { table: ApiTable; onPress: () => 
           borderRadius: 16,
           padding: 16,
           borderWidth: 2,
-          borderColor: isOccupied ? statusColor + "50" : COLORS.border,
+          borderColor: livre ? COLORS.border : statusColor + "50",
           minHeight: 140,
           justifyContent: "space-between",
         }}
@@ -88,7 +96,7 @@ function TableCard({ table, onPress, index }: { table: ApiTable; onPress: () => 
             }}
           >
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: statusColor }}>
-              {table.number}
+              {mesa.numero}
             </Text>
           </View>
           <View
@@ -109,7 +117,7 @@ function TableCard({ table, onPress, index }: { table: ApiTable; onPress: () => 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Users size={13} color={COLORS.textSecondary} />
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {table.capacity} lugares
+              {mesa.capacidade} lugares
             </Text>
           </View>
         </View>
@@ -138,21 +146,21 @@ export default function MesasScreen() {
   const role = user?.role;
   const canAdmin = role === "admin" || role === "administrador" || role === "gerente";
 
-  const [tables, setTables] = useState<ApiTable[]>([]);
+  const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchTables = useCallback(async () => {
-    console.log("[Mesas] Fetching tables from /api/mesas");
+  const fetchMesas = useCallback(async () => {
+    console.log("[Mesas] Fetching mesas from /api/mesas");
     try {
       const res = await apiGet<any>("/api/mesas");
-      const list: ApiTable[] = Array.isArray(res) ? res : (res.mesas || []);
-      console.log("[Mesas] Loaded", list.length, "tables");
-      setTables(list);
+      const list: ApiMesa[] = Array.isArray(res) ? res : (res.mesas || []);
+      console.log("[Mesas] Loaded", list.length, "mesas");
+      setMesas(list);
       setError("");
     } catch (e: any) {
-      console.error("[Mesas] Error fetching tables:", e instanceof Error ? e.message : String(e));
+      console.error("[Mesas] Error fetching mesas:", e instanceof Error ? e.message : String(e));
       setError("Não foi possível carregar as mesas.");
     } finally {
       setLoading(false);
@@ -160,28 +168,37 @@ export default function MesasScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchTables();
+  useFocusEffect(useCallback(() => {
+    fetchMesas();
     const interval = setInterval(() => {
-      console.log("[Mesas] Auto-refresh");
-      fetchTables();
+      console.log("[Mesas] Auto-refresh (30s)");
+      fetchMesas();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchTables]);
+  }, [fetchMesas]));
 
   const handleRefresh = () => {
     console.log("[Mesas] Manual refresh");
     setRefreshing(true);
-    fetchTables();
+    fetchMesas();
   };
 
-  const handleTablePress = (table: ApiTable) => {
-    console.log("[Mesas] Table pressed:", table.number, "status:", table.status);
-    router.push(`/comanda/nova?mesa_id=${table.id}`);
+  const handleMesaPress = (mesa: ApiMesa) => {
+    console.log("[Mesas] Mesa pressed:", mesa.numero, "status:", mesa.status, "comanda_id:", mesa.comanda_id);
+    if (!isDisponivel(mesa.status) && mesa.comanda_id) {
+      // Mesa ocupada — ir para comanda ativa
+      router.push(`/comanda/${mesa.comanda_id}`);
+    } else if (isDisponivel(mesa.status) && (role === "garcom" || canAdmin)) {
+      // Mesa livre — abrir nova comanda
+      router.push(`/comanda/nova?mesa_id=${mesa.id}`);
+    } else {
+      // Fallback: detalhe da mesa
+      router.push(`/mesa/${mesa.id}`);
+    }
   };
 
-  const livreCount = tables.filter((t) => t.status === "livre" || t.status === "free").length;
-  const ocupadaCount = tables.filter((t) => t.status !== "livre" && t.status !== "free").length;
+  const livreCount = mesas.filter((m) => isDisponivel(m.status)).length;
+  const ocupadaCount = mesas.filter((m) => !isDisponivel(m.status)).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -203,18 +220,18 @@ export default function MesasScreen() {
             Mesas
           </Text>
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-            {ocupadaCount} ocupadas · {livreCount} livres
+            {ocupadaCount} ocupadas · {livreCount} disponíveis
           </Text>
         </View>
       </View>
 
-      {/* Legend */}
+      {/* Legenda */}
       <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingVertical: 10, gap: 12, flexWrap: "wrap" }}>
-        {(["livre", "ocupada", "reservada"] as string[]).map((s) => (
+        {(["disponivel", "ocupada", "reservada"] as string[]).map((s) => (
           <View key={s} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: getTableStatusColor(s) }} />
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: getMesaStatusColor(s) }} />
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-              {getTableStatusLabel(s)}
+              {getMesaStatusLabel(s)}
             </Text>
           </View>
         ))}
@@ -233,7 +250,7 @@ export default function MesasScreen() {
             {error}
           </Text>
           <AnimatedPressable
-            onPress={fetchTables}
+            onPress={fetchMesas}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
           >
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
@@ -243,9 +260,9 @@ export default function MesasScreen() {
         </View>
       ) : (
         <FlatList
-          data={tables}
+          data={mesas}
           renderItem={({ item, index }) => (
-            <TableCard table={item} onPress={() => handleTablePress(item)} index={index} />
+            <TableCard mesa={item} onPress={() => handleMesaPress(item)} index={index} />
           )}
           keyExtractor={(item) => item.id}
           numColumns={2}

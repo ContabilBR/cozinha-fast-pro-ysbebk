@@ -7,45 +7,29 @@ import {
   Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { formatCurrency, formatRelativeTime } from "@/utils/helpers";
-import { ClipboardList, Clock, ShoppingBag } from "lucide-react-native";
+import { formatCurrency, formatRelativeTime, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { ClipboardList, Clock, UtensilsCrossed } from "lucide-react-native";
 
-interface ApiOrder {
+interface ApiPedido {
   id: string;
-  table_id: string;
-  table_number: number;
-  user_id: string;
-  user_name?: string;
+  comanda_id: string;
+  prato_id: string;
+  prato?: { id: string; nome: string; preco: number };
+  quantidade: number;
   status: string;
-  total: number;
-  created_at: string;
-  items_count: number;
+  observacao?: string;
+  created_at?: string;
+  comanda?: { mesa?: { numero: number } };
 }
 
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  aberta: "Aberta",
-  open: "Aberta",
-  fechada: "Fechada",
-  closed: "Fechada",
-  cancelada: "Cancelada",
-  cancelled: "Cancelada",
-};
-
-const ORDER_STATUS_COLORS: Record<string, string> = {
-  aberta: "#22C55E",
-  open: "#22C55E",
-  fechada: "#94A3B8",
-  closed: "#94A3B8",
-  cancelada: "#EF4444",
-  cancelled: "#EF4444",
-};
-
-function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => void; index: number }) {
+function PedidoCard({ pedido, onPress, index }: { pedido: ApiPedido; onPress: () => void; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
@@ -57,10 +41,12 @@ function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => 
     ]).start();
   }, [index, opacity, translateY]);
 
-  const statusColor = ORDER_STATUS_COLORS[order.status] || "#94A3B8";
-  const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status;
-  const timeStr = formatRelativeTime(order.created_at);
-  const totalStr = formatCurrency(order.total);
+  const statusColor = getPedidoStatusColor(pedido.status);
+  const statusLabel = getPedidoStatusLabel(pedido.status);
+  const timeStr = formatRelativeTime(pedido.created_at);
+  const mesaNum = pedido.comanda?.mesa?.numero ?? "?";
+  const pratoNome = pedido.prato?.nome ?? "Prato";
+  const preco = formatCurrency((pedido.prato?.preco ?? 0) * pedido.quantidade);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -74,6 +60,7 @@ function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => 
           marginBottom: 10,
           borderWidth: 1,
           borderColor: COLORS.border,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -89,12 +76,12 @@ function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => 
               }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.primary }}>
-                {order.table_number}
+                {mesaNum}
               </Text>
             </View>
             <View>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                Mesa {order.table_number}
+                Mesa {mesaNum}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
                 <Clock size={12} color={COLORS.textSecondary} />
@@ -119,14 +106,14 @@ function OrderCard({ order, onPress, index }: { order: ApiOrder; onPress: () => 
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <ShoppingBag size={13} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-              {order.items_count} {order.items_count === 1 ? "item" : "itens"}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+            <UtensilsCrossed size={13} color={COLORS.textSecondary} />
+            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, flex: 1 }}>
+              {pedido.quantidade}x {pratoNome}
             </Text>
           </View>
           <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
-            {totalStr}
+            {preco}
           </Text>
         </View>
       </AnimatedPressable>
@@ -138,20 +125,25 @@ export default function PedidosScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const [orders, setOrders] = useState<ApiOrder[]>([]);
+  const [pedidos, setPedidos] = useState<ApiPedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchOrders = useCallback(async () => {
-    console.log("[Pedidos] Fetching orders from /api/orders");
+  const fetchPedidos = useCallback(async () => {
+    console.log("[Pedidos] Fetching pedidos from /api/pedidos");
     try {
-      const res = await apiGet<any>("/api/orders");
-      const list: ApiOrder[] = Array.isArray(res) ? res : (res.orders || []);
-      const sorted = list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      console.log("[Pedidos] Loaded", sorted.length, "orders");
-      setOrders(sorted);
+      const res = await apiGet<any>("/api/pedidos");
+      const list: ApiPedido[] = Array.isArray(res) ? res : (res.pedidos || []);
+      const sorted = list.sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bTime - aTime;
+      });
+      console.log("[Pedidos] Loaded", sorted.length, "pedidos");
+      setPedidos(sorted);
       setError("");
     } catch (e: any) {
       console.error("[Pedidos] Error:", e instanceof Error ? e.message : String(e));
@@ -162,19 +154,19 @@ export default function PedidosScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchOrders();
+  useFocusEffect(useCallback(() => {
+    fetchPedidos();
     const interval = setInterval(() => {
-      console.log("[Pedidos] Auto-refresh");
-      fetchOrders();
+      console.log("[Pedidos] Auto-refresh (30s)");
+      fetchPedidos();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, [fetchPedidos]));
 
   const handleRefresh = () => {
     console.log("[Pedidos] Manual refresh");
     setRefreshing(true);
-    fetchOrders();
+    fetchPedidos();
   };
 
   return (
@@ -190,10 +182,10 @@ export default function PedidosScreen() {
         }}
       >
         <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Pedidos
+          Meus Pedidos
         </Text>
         <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {orders.length} pedidos
+          {pedidos.length} pedidos
         </Text>
       </View>
 
@@ -210,7 +202,7 @@ export default function PedidosScreen() {
             {error}
           </Text>
           <AnimatedPressable
-            onPress={fetchOrders}
+            onPress={fetchPedidos}
             style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
           >
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
@@ -220,13 +212,13 @@ export default function PedidosScreen() {
         </View>
       ) : (
         <FlatList
-          data={orders}
+          data={pedidos}
           renderItem={({ item, index }) => (
-            <OrderCard
-              order={item}
+            <PedidoCard
+              pedido={item}
               onPress={() => {
-                console.log("[Pedidos] Order pressed:", item.id);
-                router.push(`/order/${item.id}`);
+                console.log("[Pedidos] Pedido pressed:", item.id);
+                router.push(`/pedido/${item.id}`);
               }}
               index={index}
             />
@@ -255,7 +247,7 @@ export default function PedidosScreen() {
                 Nenhum pedido ainda
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                Os pedidos aparecerão aqui
+                Os pedidos das suas comandas aparecerão aqui
               </Text>
             </View>
           }

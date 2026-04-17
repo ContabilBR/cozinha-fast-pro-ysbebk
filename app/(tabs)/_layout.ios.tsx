@@ -18,9 +18,9 @@ export default function TabLayoutIOS() {
           <Icon sf="table.furniture" />
           <Label>Mesas</Label>
         </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="(cardapio)">
-          <Icon sf="book.pages" />
-          <Label>Cardápio</Label>
+        <NativeTabs.Trigger name="(comandas)">
+          <Icon sf="receipt" />
+          <Label>Comandas</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(pedidos)">
           <Icon sf="list.bullet.clipboard" />
@@ -39,7 +39,7 @@ export default function TabLayoutIOS() {
       <NativeTabs>
         <NativeTabs.Trigger name="(cozinha)">
           <Icon sf="flame" />
-          <Label>Fila</Label>
+          <Label>Cozinha</Label>
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(cardapio)">
           <Icon sf="book.pages" />
@@ -64,6 +64,10 @@ export default function TabLayoutIOS() {
         <Icon sf="table.furniture" />
         <Label>Mesas</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(comandas)">
+        <Icon sf="receipt" />
+        <Label>Comandas</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(cardapio)">
         <Icon sf="book.pages" />
         <Label>Cardápio</Label>
@@ -71,10 +75,6 @@ export default function TabLayoutIOS() {
       <NativeTabs.Trigger name="(usuarios)">
         <Icon sf="person.2" />
         <Label>Usuários</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(relatorios)">
-        <Icon sf="doc.text" />
-        <Label>Relatórios</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(perfil)">
         <Icon sf="person.circle" />

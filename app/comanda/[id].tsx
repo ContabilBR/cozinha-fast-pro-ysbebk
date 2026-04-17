@@ -5,7 +5,6 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,17 +12,39 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { Comanda, Pedido } from "@/types";
 import { apiGet, apiPut } from "@/utils/api";
 import { formatCurrency, formatDate, getPedidoStatusLabel, getPedidoStatusColor, isAdmin } from "@/utils/helpers";
-import { ChevronDown, ChevronUp, Plus, X, CheckCircle, ShoppingBag } from "lucide-react-native";
+import { Plus, X, CheckCircle, ShoppingBag } from "lucide-react-native";
 
-function PedidoRow({ pedido }: { pedido: Pedido }) {
+interface PedidoItem {
+  id: string;
+  prato_id: string;
+  prato?: { id: string; nome: string; preco: number };
+  quantidade: number;
+  observacao?: string;
+  status: string;
+  created_at?: string;
+}
+
+interface ComandaDetail {
+  id: string;
+  mesa_id: string;
+  mesa?: { id: string; numero: number };
+  garcom_id: string;
+  garcom?: { id: string; name: string };
+  status: string;
+  total?: number;
+  created_at?: string;
+  closed_at?: string;
+  pedidos?: PedidoItem[];
+}
+
+function PedidoRow({ pedido }: { pedido: PedidoItem }) {
   const COLORS = useColors();
-  const [expanded, setExpanded] = useState(false);
   const statusColor = getPedidoStatusColor(pedido.status);
   const statusLabel = getPedidoStatusLabel(pedido.status);
-  const itemCount = pedido.itens?.length ?? 0;
+  const pratoNome = pedido.prato?.nome ?? "Prato";
+  const preco = formatCurrency((pedido.prato?.preco ?? 0) * pedido.quantidade);
 
   return (
     <View
@@ -32,94 +53,52 @@ function PedidoRow({ pedido }: { pedido: Pedido }) {
         borderRadius: 12,
         borderWidth: 1,
         borderColor: COLORS.border,
-        overflow: "hidden",
+        padding: 14,
         marginBottom: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
       }}
     >
-      <AnimatedPressable
-        onPress={() => {
-          console.log("[Comanda] Pedido row toggled:", pedido.id);
-          setExpanded((v) => !v);
-        }}
+      <View
         style={{
-          flexDirection: "row",
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          backgroundColor: COLORS.primaryMuted,
           alignItems: "center",
-          padding: 14,
-          gap: 10,
+          justifyContent: "center",
         }}
       >
-        <View
-          style={{
-            backgroundColor: statusColor + "20",
-            borderRadius: 8,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-          }}
-        >
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
-            {statusLabel}
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 12, color: COLORS.primary }}>
+          {pedido.quantidade}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+          {pratoNome}
+        </Text>
+        {pedido.observacao ? (
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
+            {pedido.observacao}
           </Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
-            {itemCount} {itemCount === 1 ? "item" : "itens"}
-          </Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-            {formatDate(pedido.sent_at)}
-          </Text>
-        </View>
-        {expanded ? (
-          <ChevronUp size={16} color={COLORS.textSecondary} />
-        ) : (
-          <ChevronDown size={16} color={COLORS.textSecondary} />
-        )}
-      </AnimatedPressable>
-
-      {expanded && (
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 6, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
-          {pedido.itens.map((item) => (
-            <View key={item.id} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", paddingTop: 8 }}>
-              <View
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 6,
-                  backgroundColor: COLORS.primaryMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
-                  {item.quantidade}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
-                  {item.prato?.nome ?? "Prato"}
-                </Text>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                    {formatCurrency(item.preco_unitario)} cada
-                  </Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: COLORS.text }}>
-                    {formatCurrency(item.preco_unitario * item.quantidade)}
-                  </Text>
-                </View>
-                {item.observacoes ? (
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>
-                    {item.observacoes}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          ))}
-          {pedido.observacoes ? (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic", marginTop: 4 }}>
-              Obs: {pedido.observacoes}
-            </Text>
-          ) : null}
-        </View>
-      )}
+        ) : null}
+        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary, marginTop: 2 }}>
+          {preco}
+        </Text>
+      </View>
+      <View
+        style={{
+          backgroundColor: statusColor + "20",
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 3,
+        }}
+      >
+        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
+          {statusLabel}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -133,7 +112,7 @@ export default function ComandaDetailScreen() {
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
 
-  const [comanda, setComanda] = useState<Comanda | null>(null);
+  const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -144,7 +123,7 @@ export default function ComandaDetailScreen() {
     console.log("[Comanda] Fetching comanda:", id);
     try {
       const res = await apiGet<any>(`/api/comandas/${id}`);
-      const c: Comanda = res.comanda || res;
+      const c: ComandaDetail = res.comanda || res;
       setComanda(c);
       setError("");
     } catch (e: any) {
@@ -165,11 +144,11 @@ export default function ComandaDetailScreen() {
   };
 
   const handleClose = async () => {
-    console.log("[Comanda] Close comanda pressed:", id);
+    console.log("[Comanda] Fechar comanda pressed:", id);
     setClosing(true);
     try {
-      await apiPut(`/api/comandas/${id}`, { status: "fechada" });
-      console.log("[Comanda] Comanda closed successfully");
+      await apiPut(`/api/comandas/${id}/fechar`, {});
+      console.log("[Comanda] Comanda fechada com sucesso");
       await fetchComanda();
     } catch (e: any) {
       console.error("[Comanda] Close error:", e);
@@ -179,11 +158,11 @@ export default function ComandaDetailScreen() {
   };
 
   const handleCancel = async () => {
-    console.log("[Comanda] Cancel comanda pressed:", id);
+    console.log("[Comanda] Cancelar comanda pressed:", id);
     setCancelling(true);
     try {
-      await apiPut(`/api/comandas/${id}`, { status: "cancelada" });
-      console.log("[Comanda] Comanda cancelled");
+      await apiPut(`/api/comandas/${id}/cancelar`, {});
+      console.log("[Comanda] Comanda cancelada");
       router.back();
     } catch (e: any) {
       console.error("[Comanda] Cancel error:", e);
@@ -192,10 +171,9 @@ export default function ComandaDetailScreen() {
     }
   };
 
-  const allDelivered = comanda?.pedidos?.every((p) => p.status === "entregue" || p.status === "cancelado") ?? false;
   const isAberta = comanda?.status === "aberta";
   const total = formatCurrency(comanda?.total ?? 0);
-  const openedAt = formatDate(comanda?.opened_at);
+  const openedAt = formatDate(comanda?.created_at);
   const mesaNum = comanda?.mesa?.numero ?? "?";
   const garcomName = comanda?.garcom?.name ?? "—";
 
@@ -206,6 +184,9 @@ export default function ComandaDetailScreen() {
   };
   const comandaStatusColor = statusColorMap[comanda?.status ?? "aberta"] ?? COLORS.textSecondary;
   const comandaStatusLabel = comanda?.status === "aberta" ? "Aberta" : comanda?.status === "fechada" ? "Fechada" : "Cancelada";
+
+  const pedidos = comanda?.pedidos ?? [];
+  const allDone = pedidos.length > 0 && pedidos.every((p) => p.status === "pronto" || p.status === "entregue" || p.status === "cancelado");
 
   return (
     <>
@@ -316,12 +297,12 @@ export default function ComandaDetailScreen() {
             <View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>
-                  Pedidos ({comanda?.pedidos?.length ?? 0})
+                  Itens ({pedidos.length})
                 </Text>
-                {isAberta && role === "garcom" && (
+                {isAberta && (
                   <AnimatedPressable
                     onPress={() => {
-                      console.log("[Comanda] Add pedido pressed, comanda:", id, "mesa:", comanda?.mesa_id);
+                      console.log("[Comanda] Adicionar item pressed, comanda:", id);
                       router.push({ pathname: "/pedido/novo", params: { comanda_id: id, mesa_id: comanda?.mesa_id } });
                     }}
                     style={{
@@ -336,21 +317,21 @@ export default function ComandaDetailScreen() {
                   >
                     <Plus size={14} color={COLORS.primary} />
                     <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
-                      Novo pedido
+                      Adicionar item
                     </Text>
                   </AnimatedPressable>
                 )}
               </View>
 
-              {comanda?.pedidos?.length === 0 ? (
+              {pedidos.length === 0 ? (
                 <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
                   <ShoppingBag size={28} color={COLORS.textTertiary} />
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
-                    Nenhum pedido ainda
+                    Nenhum item ainda
                   </Text>
                 </View>
               ) : (
-                comanda?.pedidos?.map((pedido) => (
+                pedidos.map((pedido) => (
                   <PedidoRow key={pedido.id} pedido={pedido} />
                 ))
               )}
@@ -359,7 +340,7 @@ export default function ComandaDetailScreen() {
             {/* Actions */}
             {isAberta && (
               <View style={{ gap: 10 }}>
-                {(role === "garcom" && allDelivered) || canAdmin ? (
+                {(allDone || canAdmin) && (
                   <AnimatedPressable
                     onPress={handleClose}
                     disabled={closing}
@@ -384,7 +365,7 @@ export default function ComandaDetailScreen() {
                       </>
                     )}
                   </AnimatedPressable>
-                ) : null}
+                )}
 
                 {canAdmin && (
                   <AnimatedPressable
