@@ -4,6 +4,7 @@ import { user as userTable, account as accountTable } from "./schema/auth-schema
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
+import { cleanupTables } from "./cleanup.js";
 
 const seedAuthUsers = [
   {
@@ -134,8 +135,26 @@ const seedUsuarios = [
   { nome: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "cozinheiro123", role: "cozinheiro" },
 ];
 
+export async function cleanupMesasAndComandas(app: App) {
+  try {
+    app.logger.info("Cleaning up mesas and comandas tables");
+    await cleanupTables(app);
+  } catch (error) {
+    app.logger.error({ err: error }, "Failed to cleanup mesas and comandas");
+    throw error;
+  }
+}
+
 export async function seedDatabase(app: App) {
   try {
+    // Check if cleanup-only mode is enabled
+    if (process.env.CLEANUP_ONLY === "true") {
+      app.logger.info("Running cleanup-only mode - deleting data from mesas and comandas");
+      await cleanupTables(app);
+      app.logger.info("Cleanup completed - no new data was seeded");
+      return;
+    }
+
     app.logger.info("Starting database seed");
 
     // Seed auth users

@@ -351,6 +351,30 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create mesa with duplicate numero returns 409", async () => {
+    const duplicateNumber = Math.floor(Math.random() * 900000) + 100000;
+
+    // Create first mesa
+    const firstRes = await authenticatedApi("/api/mesas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: duplicateNumber,
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    // Try to create with same numero
+    const dupRes = await authenticatedApi("/api/mesas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: duplicateNumber,
+      }),
+    });
+    await expectStatus(dupRes, 409);
+  });
+
   test("Update mesa status", async () => {
     const res = await authenticatedApi(`/api/mesas/${testTableId}`, authToken, {
       method: "PUT",
