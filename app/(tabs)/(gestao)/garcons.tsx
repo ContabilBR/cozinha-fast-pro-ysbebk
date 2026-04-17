@@ -15,18 +15,25 @@ import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { Plus, Pencil, Trash2, X, Tag } from "lucide-react-native";
+import { getInitials, getRoleLabel } from "@/utils/helpers";
+import { Plus, Pencil, Trash2, X, Users } from "lucide-react-native";
 
-interface ApiCategoria {
+interface ApiGarcom {
   id: string;
-  nome: string;
-  descricao?: string;
+  nome?: string;
+  name?: string;
+  email: string;
+  role: string;
 }
 
-function CategoriaCard({ cat, index, onEdit, onDelete }: {
-  cat: ApiCategoria;
+function getDisplayName(u: ApiGarcom): string {
+  return u.nome || u.name || "";
+}
+
+function GarcomCard({ garcom, index, onEdit, onDelete }: {
+  garcom: ApiGarcom;
   index: number;
-  onEdit: (c: ApiCategoria) => void;
+  onEdit: (g: ApiGarcom) => void;
   onDelete: (id: string) => void;
 }) {
   const COLORS = useColors();
@@ -39,6 +46,10 @@ function CategoriaCard({ cat, index, onEdit, onDelete }: {
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
   }, [index, opacity, translateY]);
+
+  const displayName = getDisplayName(garcom);
+  const initials = getInitials(displayName || garcom.email);
+  const roleLabel = getRoleLabel(garcom.role);
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -54,23 +65,28 @@ function CategoriaCard({ cat, index, onEdit, onDelete }: {
         alignItems: "center",
         gap: 12,
       }}>
-        <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-          <Tag size={18} color={COLORS.primary} />
+        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>{initials}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>{cat.nome}</Text>
-          {cat.descricao ? (
-            <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{cat.descricao}</Text>
-          ) : null}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
+            {displayName || "Sem nome"}
+          </Text>
+          <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+            {garcom.email}
+          </Text>
+          <View style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: COLORS.primary }}>{roleLabel}</Text>
+          </View>
         </View>
         <AnimatedPressable
-          onPress={() => { console.log("[GestaoCategorias] Edit pressed:", cat.id); onEdit(cat); }}
+          onPress={() => { console.log("[GestaoGarcons] Edit pressed:", garcom.id); onEdit(garcom); }}
           style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
         >
           <Pencil size={16} color={COLORS.textSecondary} />
         </AnimatedPressable>
         <AnimatedPressable
-          onPress={() => { console.log("[GestaoCategorias] Delete pressed:", cat.id); onDelete(cat.id); }}
+          onPress={() => { console.log("[GestaoGarcons] Delete pressed:", garcom.id); onDelete(garcom.id); }}
           style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.danger + "15", alignItems: "center", justifyContent: "center" }}
         >
           <Trash2 size={16} color={COLORS.danger} />
@@ -80,88 +96,112 @@ function CategoriaCard({ cat, index, onEdit, onDelete }: {
   );
 }
 
-export default function GestaoCategorias() {
+export default function GestaoGarconsScreen() {
   const COLORS = useColors();
 
-  const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
+  const [garcons, setGarcons] = useState<ApiGarcom[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [editingCat, setEditingCat] = useState<ApiCategoria | null>(null);
+  const [editingGarcom, setEditingGarcom] = useState<ApiGarcom | null>(null);
   const [nome, setNome] = useState("");
-  const [descricao, setDescricao] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
-  const fetchCategorias = useCallback(async () => {
-    console.log("[GestaoCategorias] GET /api/categorias");
+  const fetchGarcons = useCallback(async () => {
+    console.log("[GestaoGarcons] GET /api/garcons");
     try {
-      const res = await apiGet<any>("/api/categorias");
-      const list: ApiCategoria[] = Array.isArray(res) ? res : (res.categorias || []);
-      console.log("[GestaoCategorias] Loaded", list.length, "categorias");
-      setCategorias(list);
+      const res = await apiGet<any>("/api/garcons");
+      const list: ApiGarcom[] = Array.isArray(res) ? res : (res.garcons || res.usuarios || res.users || []);
+      console.log("[GestaoGarcons] Loaded", list.length, "garcons");
+      setGarcons(list);
       setError("");
     } catch (e: any) {
-      console.error("[GestaoCategorias] Error:", e);
-      setError("Não foi possível carregar as categorias.");
+      console.error("[GestaoGarcons] Error:", e);
+      // Fallback: try /api/usuarios filtered by role
+      try {
+        console.log("[GestaoGarcons] Fallback GET /api/usuarios");
+        const res2 = await apiGet<any>("/api/usuarios");
+        const all: ApiGarcom[] = Array.isArray(res2) ? res2 : (res2.usuarios || res2.users || []);
+        const filtered = all.filter((u) => u.role === "garcom");
+        console.log("[GestaoGarcons] Fallback loaded", filtered.length, "garcons");
+        setGarcons(filtered);
+        setError("");
+      } catch (e2: any) {
+        console.error("[GestaoGarcons] Fallback error:", e2);
+        setError("Não foi possível carregar os garçons.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchCategorias(); }, [fetchCategorias]);
+  useEffect(() => { fetchGarcons(); }, [fetchGarcons]);
 
   const handleRefresh = () => {
-    console.log("[GestaoCategorias] Manual refresh");
+    console.log("[GestaoGarcons] Manual refresh");
     setRefreshing(true);
-    fetchCategorias();
+    fetchGarcons();
   };
 
   const openCreate = () => {
-    console.log("[GestaoCategorias] Open create modal");
-    setEditingCat(null);
-    setNome(""); setDescricao(""); setModalError("");
+    console.log("[GestaoGarcons] Open create modal");
+    setEditingGarcom(null);
+    setNome(""); setEmail(""); setSenha(""); setModalError("");
     setShowModal(true);
   };
 
-  const openEdit = (c: ApiCategoria) => {
-    console.log("[GestaoCategorias] Open edit modal:", c.id);
-    setEditingCat(c);
-    setNome(c.nome); setDescricao(c.descricao ?? ""); setModalError("");
+  const openEdit = (g: ApiGarcom) => {
+    console.log("[GestaoGarcons] Open edit modal:", g.id);
+    setEditingGarcom(g);
+    setNome(getDisplayName(g)); setEmail(g.email ?? ""); setSenha(""); setModalError("");
     setShowModal(true);
   };
 
   const handleSave = async () => {
     if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
-    console.log("[GestaoCategorias] Save pressed, editingCat:", editingCat?.id ?? "new");
+    if (!editingGarcom && !email.trim()) { setModalError("E-mail é obrigatório."); return; }
+    if (!editingGarcom && !senha.trim()) { setModalError("Senha é obrigatória."); return; }
+    console.log("[GestaoGarcons] Save pressed, editingGarcom:", editingGarcom?.id ?? "new");
     setSaving(true); setModalError("");
     try {
-      if (editingCat) {
-        console.log("[GestaoCategorias] PUT /api/categorias/" + editingCat.id);
-        await apiPut(`/api/categorias/${editingCat.id}`, { nome: nome.trim(), descricao: descricao.trim() || undefined });
-        console.log("[GestaoCategorias] Categoria atualizada:", editingCat.id);
+      if (editingGarcom) {
+        const payload: any = { nome: nome.trim(), name: nome.trim(), email: email.trim(), role: "garcom" };
+        if (senha.trim()) payload.senha = senha;
+        console.log("[GestaoGarcons] PUT /api/usuarios/" + editingGarcom.id);
+        await apiPut(`/api/usuarios/${editingGarcom.id}`, payload);
+        console.log("[GestaoGarcons] Garcom atualizado:", editingGarcom.id);
       } else {
-        console.log("[GestaoCategorias] POST /api/categorias");
-        await apiPost("/api/categorias", { nome: nome.trim(), descricao: descricao.trim() || undefined });
-        console.log("[GestaoCategorias] Categoria criada");
+        console.log("[GestaoGarcons] POST /api/usuarios (garcom)");
+        await apiPost("/api/usuarios", {
+          nome: nome.trim(),
+          name: nome.trim(),
+          email: email.trim(),
+          senha: senha,
+          password: senha,
+          role: "garcom",
+        });
+        console.log("[GestaoGarcons] Garcom criado");
       }
       setShowModal(false);
-      await fetchCategorias();
+      await fetchGarcons();
     } catch (e: any) {
-      console.error("[GestaoCategorias] Save error:", e);
-      setModalError(e instanceof Error ? e.message : "Não foi possível salvar.");
+      console.error("[GestaoGarcons] Save error:", e);
+      setModalError(e instanceof Error ? e.message : "Não foi possível salvar o garçom.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = (id: string) => {
-    console.log("[GestaoCategorias] Delete confirm for:", id);
+    console.log("[GestaoGarcons] Delete confirm for:", id);
     Alert.alert(
-      "Excluir categoria?",
+      "Excluir garçom?",
       "Esta ação não pode ser desfeita.",
       [
         { text: "Cancelar", style: "cancel" },
@@ -169,14 +209,14 @@ export default function GestaoCategorias() {
           text: "Excluir",
           style: "destructive",
           onPress: async () => {
-            console.log("[GestaoCategorias] DELETE /api/categorias/" + id);
+            console.log("[GestaoGarcons] DELETE /api/usuarios/" + id);
             try {
-              await apiDelete(`/api/categorias/${id}`);
-              console.log("[GestaoCategorias] Categoria excluída:", id);
-              setCategorias((prev) => prev.filter((c) => c.id !== id));
+              await apiDelete(`/api/usuarios/${id}`);
+              console.log("[GestaoGarcons] Garcom excluído:", id);
+              setGarcons((prev) => prev.filter((g) => g.id !== id));
             } catch (e: any) {
-              console.error("[GestaoCategorias] Delete error:", e);
-              Alert.alert("Erro", "Não foi possível excluir a categoria.");
+              console.error("[GestaoGarcons] Delete error:", e);
+              Alert.alert("Erro", "Não foi possível excluir o garçom.");
             }
           },
         },
@@ -199,7 +239,7 @@ export default function GestaoCategorias() {
     <>
       <Stack.Screen
         options={{
-          title: "Categorias",
+          title: "Garçons",
           headerTintColor: COLORS.primary,
           headerBackButtonDisplayMode: "minimal",
           headerStyle: { backgroundColor: COLORS.surface },
@@ -213,29 +253,29 @@ export default function GestaoCategorias() {
           </View>
         ) : error ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar categorias</Text>
-            <AnimatedPressable onPress={fetchCategorias} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar garçons</Text>
+            <AnimatedPressable onPress={fetchGarcons} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
             </AnimatedPressable>
           </View>
         ) : (
           <FlatList
-            data={categorias}
+            data={garcons}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
             contentInsetAdjustmentBehavior="automatic"
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
             renderItem={({ item, index }) => (
-              <CategoriaCard cat={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
+              <GarcomCard garcom={item} index={index} onEdit={openEdit} onDelete={handleDelete} />
             )}
             ListEmptyComponent={
               <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
                 <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-                  <Tag size={32} color={COLORS.primary} />
+                  <Users size={32} color={COLORS.primary} />
                 </View>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhuma categoria</Text>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhum garçom cadastrado</Text>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                  Crie categorias para organizar o cardápio
+                  Adicione garçons para gerenciar o atendimento
                 </Text>
               </View>
             }
@@ -265,10 +305,10 @@ export default function GestaoCategorias() {
             <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
-                  {editingCat ? "Editar Categoria" : "Nova Categoria"}
+                  {editingGarcom ? "Editar Garçom" : "Novo Garçom"}
                 </Text>
                 <AnimatedPressable
-                  onPress={() => { console.log("[GestaoCategorias] Modal closed"); setShowModal(false); }}
+                  onPress={() => { console.log("[GestaoGarcons] Modal closed"); setShowModal(false); }}
                   style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
                 >
                   <X size={16} color={COLORS.textSecondary} />
@@ -277,12 +317,21 @@ export default function GestaoCategorias() {
 
               <View style={{ gap: 6 }}>
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
-                <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Entradas" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
+                <TextInput value={nome} onChangeText={setNome} placeholder="Nome completo" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
               </View>
 
               <View style={{ gap: 6 }}>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Descrição</Text>
-                <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição opcional" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                  E-mail {editingGarcom ? "" : "*"}
+                </Text>
+                <TextInput value={email} onChangeText={setEmail} placeholder="email@exemplo.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" style={inputStyle} />
+              </View>
+
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                  {editingGarcom ? "Nova senha (opcional)" : "Senha *"}
+                </Text>
+                <TextInput value={senha} onChangeText={setSenha} placeholder={editingGarcom ? "Deixe em branco para manter" : "Senha"} placeholderTextColor={COLORS.textTertiary} secureTextEntry style={inputStyle} />
               </View>
 
               {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
@@ -296,7 +345,7 @@ export default function GestaoCategorias() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                    {editingCat ? "Salvar alterações" : "Criar categoria"}
+                    {editingGarcom ? "Salvar alterações" : "Adicionar garçom"}
                   </Text>
                 )}
               </AnimatedPressable>

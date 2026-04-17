@@ -1,6 +1,6 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
-import { Stack, Redirect } from "expo-router";
+import { Stack, Redirect, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -18,6 +18,8 @@ import {
   Outfit_600SemiBold,
   Outfit_700Bold,
 } from "@expo-google-fonts/outfit";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
+import { ChevronLeft } from "lucide-react-native";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,6 +35,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+function BackButton() {
+  const router = useRouter();
+  return (
+    <AnimatedPressable
+      onPress={() => { console.log("[Nav] Back button pressed"); router.back(); }}
+      style={{ padding: 8, marginLeft: -4 }}
+      accessibilityLabel="Voltar"
+    >
+      <ChevronLeft size={24} color="#E8521A" />
+    </AnimatedPressable>
+  );
+}
+
+const BACK_HEADER = {
+  headerShown: true,
+  headerLeft: () => <BackButton />,
+  headerBackVisible: false,
+} as const;
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -67,43 +88,71 @@ export default function RootLayout() {
                   <Stack.Screen name="(gestao)" options={{ headerShown: false }} />
                   <Stack.Screen
                     name="comanda/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="comanda/nova"
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="mesa/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="pedido/novo"
-                    options={{ headerShown: true, presentation: "modal" }}
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
                   />
                   <Stack.Screen
                     name="pedido/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="prato/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="prato/novo"
-                    options={{ headerShown: true, presentation: "modal" }}
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
                   />
                   <Stack.Screen
                     name="prato/editar/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="categoria/index"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                   <Stack.Screen
                     name="usuario/novo"
-                    options={{ headerShown: true, presentation: "modal" }}
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
                   />
                   <Stack.Screen
                     name="usuario/[id]"
-                    options={{ headerShown: true, presentation: "card" }}
+                    options={{ ...BACK_HEADER, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="order/new"
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name="order/[id]"
+                    options={{ ...BACK_HEADER, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="dish/new"
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name="dish/[id]"
+                    options={{ ...BACK_HEADER, presentation: "card" }}
+                  />
+                  <Stack.Screen
+                    name="user/new"
+                    options={{ ...BACK_HEADER, presentation: "modal" }}
+                  />
+                  <Stack.Screen
+                    name="user/[id]"
+                    options={{ ...BACK_HEADER, presentation: "card" }}
                   />
                 </Stack>
                 <SystemBars style="auto" />

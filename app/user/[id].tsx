@@ -19,6 +19,7 @@ const ROLES: UserRole[] = ["garcom", "administrador", "gerente", "cozinheiro"];
 const ROLE_COLORS: Record<UserRole, string> = {
   garcom: "#3B82F6",
   administrador: "#EF4444",
+  admin: "#EF4444",
   gerente: "#8B5CF6",
   cozinheiro: "#F59E0B",
 };
