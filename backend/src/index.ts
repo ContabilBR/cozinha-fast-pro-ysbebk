@@ -8,10 +8,6 @@ import { registerDishRoutes } from './routes/dishes.js';
 import { registerTableRoutes } from './routes/tables.js';
 import { registerOrderRoutes } from './routes/orders.js';
 import { registerOrderItemRoutes } from './routes/order-items.js';
-import { registerKitchenRoutes } from './routes/kitchen.js';
-import { registerReportRoutes } from './routes/reports.js';
-import { registerDashboardRoutes } from './routes/dashboard.js';
-import { registerApiRoutes } from './routes/api.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -31,10 +27,6 @@ registerDishRoutes(app);
 registerTableRoutes(app);
 registerOrderRoutes(app);
 registerOrderItemRoutes(app);
-registerKitchenRoutes(app);
-registerReportRoutes(app);
-registerDashboardRoutes(app);
-registerApiRoutes(app);
 
 // Seed database on startup
 await seedDatabase(app);

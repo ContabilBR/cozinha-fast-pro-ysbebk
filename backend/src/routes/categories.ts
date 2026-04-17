@@ -1,45 +1,41 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { eq, count } from "drizzle-orm";
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
 
-interface CreateCategoryBody {
-  name: string;
-  description?: string;
-  color?: string;
-  icon?: string;
+interface CreateCategoriaBody {
+  nome: string;
+  descricao?: string;
 }
 
-interface UpdateCategoryBody {
-  name?: string;
-  description?: string;
-  color?: string;
-  icon?: string;
-  active?: boolean;
+interface UpdateCategoriaBody {
+  nome?: string;
+  descricao?: string;
 }
 
 export function registerCategoryRoutes(app: App) {
-  // GET /api/categories - List all active categories
+  // GET /api/categorias - List all categories
   app.fastify.get(
-    "/api/categories",
+    "/api/categorias",
     {
       schema: {
-        description: "List all active categories",
-        tags: ["categories"],
+        description: "List all categories",
+        tags: ["categorias"],
         response: {
           200: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", format: "uuid" },
-                name: { type: "string" },
-                description: { type: "string" },
-                color: { type: "string" },
-                icon: { type: "string" },
-                active: { type: "boolean" },
-                created_at: { type: "string", format: "date-time" },
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    nome: { type: "string" },
+                    descricao: { type: "string" },
+                    createdAt: { type: "string", format: "date-time" },
+                  },
+                },
               },
             },
           },
@@ -48,112 +44,95 @@ export function registerCategoryRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Listing active categories");
+        app.logger.info({}, "Listing categorias");
 
-        const categories = await app.db
-          .select({
-            id: schema.categories.id,
-            name: schema.categories.name,
-            description: schema.categories.description,
-            color: schema.categories.color,
-            icon: schema.categories.icon,
-            active: schema.categories.active,
-            created_at: schema.categories.createdAt,
-            dish_count: count(schema.dishes.id),
-          })
-          .from(schema.categories)
-          .leftJoin(schema.dishes, eq(schema.categories.id, schema.dishes.categoryId))
-          .where(eq(schema.categories.active, true))
-          .groupBy(schema.categories.id)
-          .orderBy(schema.categories.name);
+        const categorias = await app.db
+          .select()
+          .from(schema.categoriaPratos)
+          .orderBy(schema.categoriaPratos.nome);
 
-        return categories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          description: c.description,
-          color: c.color,
-          icon: c.icon,
-          active: c.active,
-          created_at: c.created_at.toISOString(),
-          dish_count: c.dish_count,
-        }));
+        return reply.code(200).send({
+          data: categorias.map((c) => ({
+            id: c.id,
+            nome: c.nome,
+            descricao: c.descricao,
+            createdAt: c.createdAt.toISOString(),
+          })),
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to list categories");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to list categorias");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // POST /api/categories - Create a new category
-  app.fastify.post<{ Body: CreateCategoryBody }>(
-    "/api/categories",
+  // POST /api/categorias - Create a new category
+  app.fastify.post<{ Body: CreateCategoriaBody }>(
+    "/api/categorias",
     {
       schema: {
         description: "Create a new category",
-        tags: ["categories"],
+        tags: ["categorias"],
         body: {
           type: "object",
-          required: ["name"],
+          required: ["nome"],
           properties: {
-            name: { type: "string" },
-            description: { type: "string" },
-            color: { type: "string" },
-            icon: { type: "string" },
+            nome: { type: "string" },
+            descricao: { type: ["string", "null"] },
           },
         },
         response: {
-          201: { type: "object" },
+          201: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              nome: { type: "string" },
+              descricao: { type: ["string", "null"] },
+              createdAt: { type: "string" },
+            },
+          },
           400: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreateCategoryBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
+    async (request: FastifyRequest<{ Body: CreateCategoriaBody }>, reply: FastifyReply) => {
       try {
-        if (!request.body.name) {
-          return reply.status(400).send({ error: "name is required" });
+        if (!request.body.nome) {
+          return reply.code(400).send({ error: "nome is required" });
         }
 
-        app.logger.info({ name: request.body.name }, "Creating category");
+        app.logger.info({ nome: request.body.nome }, "Creating categoria");
 
-        const [category] = await app.db
-          .insert(schema.categories)
+        const [categoria] = await app.db
+          .insert(schema.categoriaPratos)
           .values({
-            name: request.body.name,
-            description: request.body.description,
-            color: request.body.color,
-            icon: request.body.icon,
-            active: true,
+            nome: request.body.nome,
+            descricao: request.body.descricao,
           })
           .returning();
 
-        app.logger.info({ categoryId: category.id }, "Category created");
+        app.logger.info({ categoriaId: categoria.id }, "Categoria created successfully");
 
-        return reply.status(201).send({
-          id: category.id,
-          name: category.name,
-          description: category.description,
-          color: category.color,
-          icon: category.icon,
-          active: category.active,
-          created_at: category.createdAt.toISOString(),
+        return reply.code(201).send({
+          id: categoria.id,
+          nome: categoria.nome,
+          descricao: categoria.descricao,
+          createdAt: categoria.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to create category");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, body: request.body }, "Failed to create categoria");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/categories/:id - Update a category
-  app.fastify.put<{ Params: { id: string }; Body: UpdateCategoryBody }>(
-    "/api/categories/:id",
+  // PUT /api/categorias/:id - Update a category
+  app.fastify.put<{ Params: { id: string }; Body: UpdateCategoriaBody }>(
+    "/api/categorias/:id",
     {
       schema: {
         description: "Update a category",
-        tags: ["categories"],
+        tags: ["categorias"],
         params: {
           type: "object",
           required: ["id"],
@@ -162,76 +141,72 @@ export function registerCategoryRoutes(app: App) {
         body: {
           type: "object",
           properties: {
-            name: { type: "string" },
-            description: { type: "string" },
-            color: { type: "string" },
-            icon: { type: "string" },
-            active: { type: "boolean" },
+            nome: { type: "string" },
+            descricao: { type: ["string", "null"] },
           },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              nome: { type: "string" },
+              descricao: { type: ["string", "null"] },
+              createdAt: { type: "string" },
+            },
+          },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (
-      request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoryBody }>,
+      request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoriaBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ categoryId: request.params.id }, "Updating category");
+        app.logger.info({ categoriaId: request.params.id }, "Updating categoria");
 
         const existing = await app.db
           .select()
-          .from(schema.categories)
-          .where(eq(schema.categories.id, request.params.id));
+          .from(schema.categoriaPratos)
+          .where(eq(schema.categoriaPratos.id, request.params.id));
 
         if (!existing.length) {
-          return reply.status(404).send({ error: "Category not found" });
+          return reply.code(404).send({ error: "Categoria not found" });
         }
 
         const updates: any = {};
-        if (request.body.name !== undefined) updates.name = request.body.name;
-        if (request.body.description !== undefined) updates.description = request.body.description;
-        if (request.body.color !== undefined) updates.color = request.body.color;
-        if (request.body.icon !== undefined) updates.icon = request.body.icon;
-        if (request.body.active !== undefined) updates.active = request.body.active;
+        if (request.body.nome !== undefined) updates.nome = request.body.nome;
+        if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
 
         const [updated] = await app.db
-          .update(schema.categories)
+          .update(schema.categoriaPratos)
           .set(updates)
-          .where(eq(schema.categories.id, request.params.id))
+          .where(eq(schema.categoriaPratos.id, request.params.id))
           .returning();
 
-        app.logger.info({ categoryId: updated.id }, "Category updated");
+        app.logger.info({ categoriaId: updated.id }, "Categoria updated successfully");
 
-        return reply.status(200).send({
+        return reply.code(200).send({
           id: updated.id,
-          name: updated.name,
-          description: updated.description,
-          color: updated.color,
-          icon: updated.icon,
-          active: updated.active,
-          created_at: updated.createdAt.toISOString(),
+          nome: updated.nome,
+          descricao: updated.descricao,
+          createdAt: updated.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to update category");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to update categoria");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // DELETE /api/categories/:id - Delete (deactivate) a category
+  // DELETE /api/categorias/:id - Delete a category
   app.fastify.delete<{ Params: { id: string } }>(
-    "/api/categories/:id",
+    "/api/categorias/:id",
     {
       schema: {
         description: "Delete a category",
-        tags: ["categories"],
+        tags: ["categorias"],
         params: {
           type: "object",
           required: ["id"],
@@ -244,32 +219,28 @@ export function registerCategoryRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ categoryId: request.params.id }, "Deleting category");
+        app.logger.info({ categoriaId: request.params.id }, "Deleting categoria");
 
         const existing = await app.db
           .select()
-          .from(schema.categories)
-          .where(eq(schema.categories.id, request.params.id));
+          .from(schema.categoriaPratos)
+          .where(eq(schema.categoriaPratos.id, request.params.id));
 
         if (!existing.length) {
-          return reply.status(404).send({ error: "Category not found" });
+          return reply.code(404).send({ error: "Categoria not found" });
         }
 
         await app.db
-          .update(schema.categories)
-          .set({ active: false })
-          .where(eq(schema.categories.id, request.params.id));
+          .delete(schema.categoriaPratos)
+          .where(eq(schema.categoriaPratos.id, request.params.id));
 
-        app.logger.info({ categoryId: request.params.id }, "Category deleted");
+        app.logger.info({ categoriaId: request.params.id }, "Categoria deleted successfully");
 
-        return reply.status(204).send();
+        return reply.code(204).send();
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete category");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to delete categoria");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

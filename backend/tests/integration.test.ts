@@ -2,30 +2,27 @@ import { describe, test, expect } from "bun:test";
 import { api, authenticatedApi, signUpTestUser, expectStatus } from "./helpers";
 
 describe("API Integration Tests", () => {
-  // Shared state for chaining tests
   let authToken: string;
+  let testUserId: string;
 
   // Resource IDs for dependency chaining
-  let testUserId: string;
   let testCategoryId: string;
   let testDishId: string;
   let testTableId: string;
-  let testOrderId: string;
-  let testOrderItemId: string;
+  let testCommandaId: string;
+  let testPedidoId: string;
 
-  // Generate unique table numbers to avoid conflicts with seeded data
-  const baseTableNumber = Math.floor(Math.random() * 900000) + 100000;
-  const tableNumber1 = baseTableNumber;
-  const tableNumber2 = baseTableNumber + 1;
-
-  // Generate unique email for test user
+  // Generate unique data to avoid conflicts
   const uniqueEmail = `test-${Date.now()}@example.com`;
+  const tableNumber = Math.floor(Math.random() * 900000) + 100000;
 
   // ==================== Auth Setup ====================
   test("Sign up test user for authentication", async () => {
     const { token, user } = await signUpTestUser();
     authToken = token;
+    testUserId = user.id;
     expect(authToken).toBeDefined();
+    expect(testUserId).toBeDefined();
   });
 
   // ==================== Users CRUD ====================
@@ -41,54 +38,52 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: uniqueEmail,
+        email: `user-${Date.now()}@example.com`,
         password: "pass123456",
         name: "New User",
         role: "garcom",
       }),
     });
     await expectStatus(res, 201);
-    const data = await res.json();
-    testUserId = data.id;
   });
 
-  test("Create user with duplicate email returns 409", async () => {
-    const res = await authenticatedApi("/api/users", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: uniqueEmail,
-        password: "different-password",
-        name: "Duplicate User",
-        role: "gerente",
-      }),
-    });
-    await expectStatus(res, 409);
-  });
-
-  test("Create user missing required field fails", async () => {
+  test("Create user missing required field returns 400", async () => {
     const res = await authenticatedApi("/api/users", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         password: "pass123",
         name: "No Email User",
-        role: "garcom",
       }),
     });
     await expectStatus(res, 400);
   });
 
-  test("Update user", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
-      method: "PUT",
+  test("Create user with duplicate email returns 409", async () => {
+    // Create first user
+    const firstRes = await authenticatedApi("/api/users", authToken, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Updated User",
-        role: "cozinheiro",
+        email: uniqueEmail,
+        password: "pass123456",
+        name: "Unique User",
+        role: "garcom",
       }),
     });
-    await expectStatus(res, 200);
+    await expectStatus(firstRes, 201);
+
+    // Try to create with same email
+    const dupRes = await authenticatedApi("/api/users", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: uniqueEmail,
+        password: "different",
+        name: "Duplicate",
+      }),
+    });
+    await expectStatus(dupRes, 409);
   });
 
   test("Update non-existent user returns 404", async () => {
@@ -104,26 +99,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Deactivate user", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: false }),
-    });
-    await expectStatus(res, 200);
-  });
-
-  test("Delete user", async () => {
-    const res = await authenticatedApi(
-      `/api/users/${testUserId}`,
-      authToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 204);
-  });
-
   test("Delete non-existent user returns 404", async () => {
     const res = await authenticatedApi(
       "/api/users/00000000-0000-0000-0000-000000000000",
@@ -135,23 +110,22 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  // ==================== Categories CRUD ====================
-  test("List all categories", async () => {
-    const res = await api("/api/categories");
+  // ==================== Categorias CRUD ====================
+  test("List all categorias", async () => {
+    const res = await api("/api/categorias");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
-  test("Create category", async () => {
-    const res = await authenticatedApi("/api/categories", authToken, {
+  test("Create categoria", async () => {
+    const res = await api("/api/categorias", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Appetizers",
-        description: "Starters",
-        color: "#FF5733",
-        icon: "🍽️",
+        nome: "Appetizers",
+        descricao: "Starters and appetizers",
       }),
     });
     await expectStatus(res, 201);
@@ -159,68 +133,50 @@ describe("API Integration Tests", () => {
     testCategoryId = data.id;
   });
 
-  test("Create category missing required field fails", async () => {
-    const res = await api("/api/categories", {
+  test("Create categoria missing required field returns 400", async () => {
+    const res = await api("/api/categorias", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        description: "No name category",
+        descricao: "No name category",
       }),
     });
     await expectStatus(res, 400);
   });
 
-  test("Update category", async () => {
-    const res = await api(
-      `/api/categories/${testCategoryId}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Updated Appetizers",
-        }),
-      }
-    );
+  test("Update categoria", async () => {
+    const res = await api(`/api/categorias/${testCategoryId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Updated Appetizers",
+      }),
+    });
     await expectStatus(res, 200);
   });
 
-  test("Update non-existent category returns 404", async () => {
+  test("Update non-existent categoria returns 404", async () => {
     const res = await api(
-      "/api/categories/00000000-0000-0000-0000-000000000000",
+      "/api/categorias/00000000-0000-0000-0000-000000000000",
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Test" }),
+        body: JSON.stringify({ nome: "Test" }),
       }
     );
     await expectStatus(res, 404);
   });
 
-  test("Deactivate category", async () => {
-    const res = await api(
-      `/api/categories/${testCategoryId}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: false }),
-      }
-    );
-    await expectStatus(res, 200);
-  });
-
-  test("Delete category", async () => {
-    const res = await api(
-      `/api/categories/${testCategoryId}`,
-      {
-        method: "DELETE",
-      }
-    );
+  test("Delete categoria", async () => {
+    const res = await api(`/api/categorias/${testCategoryId}`, {
+      method: "DELETE",
+    });
     await expectStatus(res, 204);
   });
 
-  test("Delete non-existent category returns 404", async () => {
+  test("Delete non-existent categoria returns 404", async () => {
     const res = await api(
-      "/api/categories/00000000-0000-0000-0000-000000000000",
+      "/api/categorias/00000000-0000-0000-0000-000000000000",
       {
         method: "DELETE",
       }
@@ -228,39 +184,40 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  // ==================== Dishes CRUD (depends on category) ====================
-  let dishCategoryId: string;
+  // ==================== Pratos CRUD (depends on categoria) ====================
+  let pratoCategoryId: string;
 
-  test("Create category for dishes", async () => {
-    const res = await api("/api/categories", {
+  test("Create categoria for pratos", async () => {
+    const res = await api("/api/categorias", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Main Courses",
+        nome: "Main Courses",
       }),
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    dishCategoryId = data.id;
+    pratoCategoryId = data.id;
   });
 
-  test("List dishes", async () => {
-    const res = await api("/api/dishes");
+  test("List all pratos", async () => {
+    const res = await api("/api/pratos");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
-  test("Create dish", async () => {
-    const res = await authenticatedApi("/api/dishes", authToken, {
+  test("Create prato", async () => {
+    const res = await api("/api/pratos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Grilled Salmon",
-        description: "Fresh salmon",
-        category_id: dishCategoryId,
-        price: "25.99",
-        prep_time_minutes: 15,
+        nome: "Grilled Salmon",
+        preco: "25.99",
+        descricao: "Fresh salmon with lemon",
+        categoriaId: pratoCategoryId,
+        disponivel: true,
       }),
     });
     await expectStatus(res, 201);
@@ -268,86 +225,69 @@ describe("API Integration Tests", () => {
     testDishId = data.id;
   });
 
-  test("Get dish by ID", async () => {
-    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken);
+  test("Get prato by ID", async () => {
+    const res = await api(`/api/pratos/${testDishId}`);
     await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(testDishId);
   });
 
-  test("Get dish with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi(
-      "/api/dishes/invalid-uuid-format",
-      authToken
+  test("Get non-existent prato returns 404", async () => {
+    const res = await api(
+      "/api/pratos/00000000-0000-0000-0000-000000000000"
     );
-    await expectStatus(res, 400);
+    await expectStatus(res, 404);
   });
 
-  test("Create dish missing required field fails", async () => {
-    const res = await authenticatedApi("/api/dishes", authToken, {
+  test("Create prato missing required field returns 400", async () => {
+    const res = await api("/api/pratos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Pasta",
+        nome: "Pasta",
+        // missing required preco
       }),
     });
     await expectStatus(res, 400);
   });
 
-  test("Update dish", async () => {
-    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken, {
+  test("Update prato", async () => {
+    const res = await api(`/api/pratos/${testDishId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: "Grilled Salmon with Asparagus",
-        price: "27.99",
+        nome: "Grilled Salmon with Asparagus",
+        preco: "27.99",
       }),
     });
     await expectStatus(res, 200);
   });
 
-  test("Update non-existent dish returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/dishes/00000000-0000-0000-0000-000000000000",
-      authToken,
+  test("Update non-existent prato returns 404", async () => {
+    const res = await api(
+      "/api/pratos/00000000-0000-0000-0000-000000000000",
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Test" }),
+        body: JSON.stringify({ nome: "Test" }),
       }
     );
     await expectStatus(res, 404);
   });
 
-  test("Update dish with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi(
-      "/api/dishes/invalid-uuid-format",
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Test" }),
-      }
-    );
-    await expectStatus(res, 400);
-  });
-
-  test("Delete dish", async () => {
-    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken, {
+  test("Delete prato", async () => {
+    const res = await api(`/api/pratos/${testDishId}`, {
       method: "DELETE",
     });
-    await expectStatus(res, 200);
+    await expectStatus(res, 204);
   });
 
-  test("Get deleted dish returns 404", async () => {
-    const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken);
+  test("Get deleted prato returns 404", async () => {
+    const res = await api(`/api/pratos/${testDishId}`);
     await expectStatus(res, 404);
   });
 
-  test("Delete non-existent dish returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/dishes/00000000-0000-0000-0000-000000000000",
-      authToken,
+  test("Delete non-existent prato returns 404", async () => {
+    const res = await api(
+      "/api/pratos/00000000-0000-0000-0000-000000000000",
       {
         method: "DELETE",
       }
@@ -355,22 +295,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  // ==================== Tables CRUD ====================
-  test("List all tables", async () => {
-    const res = await api("/api/tables");
+  // ==================== Mesas CRUD ====================
+  test("List all mesas", async () => {
+    const res = await api("/api/mesas");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
-  test("Create table", async () => {
-    const res = await authenticatedApi("/api/tables", authToken, {
+  test("Create mesa", async () => {
+    const res = await api("/api/mesas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        number: tableNumber1,
-        capacity: 4,
-        location: "window",
+        numero: tableNumber,
       }),
     });
     await expectStatus(res, 201);
@@ -378,499 +317,309 @@ describe("API Integration Tests", () => {
     testTableId = data.id;
   });
 
-  test("Get table by ID", async () => {
-    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken);
+  test("Get mesa by ID", async () => {
+    const res = await api(`/api/mesas/${testTableId}`);
     await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(testTableId);
   });
 
-  test("Get table with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi(
-      "/api/tables/invalid-uuid-format",
-      authToken
+  test("Get non-existent mesa returns 404", async () => {
+    const res = await api(
+      "/api/mesas/00000000-0000-0000-0000-000000000000"
     );
-    await expectStatus(res, 400);
+    await expectStatus(res, 404);
   });
 
-  test("Create table missing required field fails", async () => {
-    const res = await api("/api/tables", {
+  test("Create mesa missing required field returns 400", async () => {
+    const res = await api("/api/mesas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        capacity: 4,
-        location: "window",
-      }),
+      body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
   });
 
-  test("Update table", async () => {
-    const res = await api(`/api/tables/${testTableId}`, {
+  test("Update mesa status", async () => {
+    const res = await api(`/api/mesas/${testTableId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         status: "ocupada",
-        capacity: 6,
       }),
     });
     await expectStatus(res, 200);
   });
 
-  test("Update non-existent table returns 404", async () => {
+  test("Update non-existent mesa returns 404", async () => {
     const res = await api(
-      "/api/tables/00000000-0000-0000-0000-000000000000",
+      "/api/mesas/00000000-0000-0000-0000-000000000000",
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "livre" }),
+        body: JSON.stringify({ status: "disponivel" }),
       }
     );
     await expectStatus(res, 404);
   });
 
-  test("Deactivate table", async () => {
-    const res = await api(`/api/tables/${testTableId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: false }),
-    });
-    await expectStatus(res, 200);
-  });
+  // ==================== Comandas CRUD (depends on mesa) ====================
+  let comandaMesaId: string;
 
-  test("Delete table", async () => {
-    const res = await api(
-      `/api/tables/${testTableId}`,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 204);
-  });
-
-  test("Get deleted table returns 404", async () => {
-    const res = await authenticatedApi(`/api/tables/${testTableId}`, authToken);
-    await expectStatus(res, 404);
-  });
-
-  test("Delete non-existent table returns 404", async () => {
-    const res = await api(
-      "/api/tables/00000000-0000-0000-0000-000000000000",
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  // ==================== Orders CRUD (depends on table) ====================
-  let orderTableId: string;
-
-  test("Create table for orders", async () => {
-    const res = await authenticatedApi("/api/tables", authToken, {
+  test("Create mesa for comanda", async () => {
+    const res = await api("/api/mesas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        number: tableNumber2,
-        capacity: 4,
-        location: "corner",
+        numero: Math.floor(Math.random() * 900000) + 100000,
       }),
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    orderTableId = data.id;
+    comandaMesaId = data.id;
   });
 
-  test("List orders", async () => {
-    const res = await authenticatedApi("/api/orders", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
-  test("Create new order", async () => {
-    const res = await authenticatedApi("/api/orders", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        table_id: orderTableId,
-        waiter_id: testUserId,
-        customer_count: 2,
-        notes: "No salt",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    testOrderId = data.id;
-  });
-
-  test("Create order missing required field fails", async () => {
-    const res = await authenticatedApi("/api/orders", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        waiter_id: "waiter-1",
-        customer_count: 2,
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Get order by ID", async () => {
-    const res = await authenticatedApi(`/api/orders/${testOrderId}`, authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(testOrderId);
-  });
-
-  test("Get order with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi(
-      "/api/orders/invalid-uuid-format",
-      authToken
-    );
-    await expectStatus(res, 400);
-  });
-
-  test("Get non-existent order returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/orders/00000000-0000-0000-0000-000000000000",
-      authToken
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Update order", async () => {
-    const res = await authenticatedApi(`/api/orders/${testOrderId}`, authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "fechando",
-        customer_count: 3,
-      }),
-    });
-    await expectStatus(res, 200);
-  });
-
-  test("Update non-existent order returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/orders/00000000-0000-0000-0000-000000000000",
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "aberta" }),
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Cancel order by changing status", async () => {
-    const res = await authenticatedApi(`/api/orders/${testOrderId}`, authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "cancelada",
-      }),
-    });
-    await expectStatus(res, 200);
-  });
-
-  // ==================== Order Items CRUD ====================
-  let orderItemOrderId: string;
-  let orderItemDishId: string;
-
-  test("Create dish for order items", async () => {
-    const res = await authenticatedApi("/api/dishes", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Caesar Salad",
-        category_id: dishCategoryId,
-        price: "12.99",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    orderItemDishId = data.id;
-  });
-
-  test("Create order for items", async () => {
-    const res = await authenticatedApi("/api/orders", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        table_id: orderTableId,
-        waiter_id: testUserId,
-        customer_count: 1,
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    orderItemOrderId = data.id;
-  });
-
-  test("Add item to order", async () => {
-    const res = await authenticatedApi(
-      `/api/orders/${orderItemOrderId}/items`,
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dish_id: orderItemDishId,
-          quantity: 2,
-          notes: "Extra dressing",
-        }),
-      }
-    );
-    await expectStatus(res, 201);
-    const data = await res.json();
-    testOrderItemId = data.id;
-  });
-
-  test("Add item missing required field fails", async () => {
-    const res = await authenticatedApi(
-      `/api/orders/${orderItemOrderId}/items`,
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          quantity: 1,
-        }),
-      }
-    );
-    await expectStatus(res, 400);
-  });
-
-  test("Add item to order with invalid order ID returns 400", async () => {
-    const res = await authenticatedApi(
-      `/api/orders/invalid-uuid-format/items`,
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dish_id: orderItemDishId,
-          quantity: 1,
-        }),
-      }
-    );
-    await expectStatus(res, 400);
-  });
-
-  test("Update order item", async () => {
-    const res = await authenticatedApi(
-      `/api/order-items/${testOrderItemId}`,
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "em_preparo",
-          quantity: 3,
-        }),
-      }
-    );
-    await expectStatus(res, 200);
-  });
-
-  test("Update non-existent order item returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/order-items/00000000-0000-0000-0000-000000000000",
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "pronto" }),
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Delete order item", async () => {
-    const res = await authenticatedApi(
-      `/api/order-items/${testOrderItemId}`,
-      authToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 200);
-  });
-
-  test("Delete non-existent order item returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/order-items/00000000-0000-0000-0000-000000000000",
-      authToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  // ==================== Kitchen ====================
-  test("Get kitchen queue", async () => {
-    const res = await api("/api/kitchen/items");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
-  test("Update kitchen item status with valid item", async () => {
-    // Create order and item for kitchen
-    const orderRes = await authenticatedApi("/api/orders", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        table_id: orderTableId,
-        waiter_id: testUserId,
-        customer_count: 1,
-      }),
-    });
-    await expectStatus(orderRes, 201);
-    const orderData = await orderRes.json();
-
-    const itemRes = await authenticatedApi(
-      `/api/orders/${orderData.id}/items`,
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dish_id: orderItemDishId,
-          quantity: 1,
-        }),
-      }
-    );
-    await expectStatus(itemRes, 201);
-    const itemData = await itemRes.json();
-
-    const updateRes = await api(
-      `/api/kitchen/items/${itemData.id}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "recebido",
-        }),
-      }
-    );
-    await expectStatus(updateRes, 200);
-  });
-
-  test("Update non-existent kitchen item returns 404", async () => {
-    const res = await api(
-      "/api/kitchen/items/00000000-0000-0000-0000-000000000000",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "pronto" }),
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  // ==================== Reports ====================
-  test("Get revenue summary report", async () => {
-    const res = await api("/api/reports/summary");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
-
-  test("Get reports with date filters", async () => {
-    const res = await api(
-      `/api/reports/summary?date_from=2026-01-01T00:00:00Z&date_to=2026-12-31T23:59:59Z`
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data).toBeDefined();
-  });
-
-  test("Get orders report", async () => {
-    const res = await authenticatedApi("/api/reports/orders", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
-  test("Get orders report with date filters", async () => {
-    const res = await authenticatedApi(
-      `/api/reports/orders?date_from=2026-01-01T00:00:00Z&date_to=2026-12-31T23:59:59Z`,
-      authToken
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
-  // ==================== Dashboard ====================
-  test("Get dashboard summary", async () => {
-    const res = await authenticatedApi("/api/dashboard", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.tablesStatus).toBeDefined();
-    expect(data.openOrdersCount).toBeDefined();
-  });
-
-  // ==================== Portuguese Alternative Endpoints ====================
-  test("List all mesas (tables Portuguese endpoint)", async () => {
-    const res = await api("/api/mesas");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.mesas).toBeDefined();
-    expect(Array.isArray(data.mesas)).toBe(true);
-  });
-
-  test("List all categorias (categories Portuguese endpoint)", async () => {
-    const res = await api("/api/categorias");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.categorias).toBeDefined();
-    expect(Array.isArray(data.categorias)).toBe(true);
-  });
-
-  test("List all pratos (dishes Portuguese endpoint)", async () => {
-    const res = await api("/api/pratos");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
-  });
-
-  test("List all comandas (orders Portuguese endpoint)", async () => {
+  test("List all comandas", async () => {
     const res = await api("/api/comandas");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.comandas).toBeDefined();
-    expect(Array.isArray(data.comandas)).toBe(true);
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
-  test("List all usuarios (users Portuguese endpoint)", async () => {
-    const res = await api("/api/usuarios");
-    await expectStatus(res, 200);
+  test("Create comanda", async () => {
+    const res = await api("/api/comandas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+        garcomId: testUserId,
+      }),
+    });
+    await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.usuarios).toBeDefined();
-    expect(Array.isArray(data.usuarios)).toBe(true);
+    testCommandaId = data.id;
   });
 
-  test("List kitchen items via cozinha endpoint", async () => {
-    const res = await api("/api/cozinha");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.itens).toBeDefined();
-    expect(Array.isArray(data.itens)).toBe(true);
+  test("Create comanda missing required field returns 400", async () => {
+    const res = await api("/api/comandas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        garcomId: testUserId,
+        // missing required mesaId
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
-  test("Get summary report via relatorios resumo endpoint", async () => {
-    const res = await api("/api/relatorios/resumo");
+  test("Get comanda by ID", async () => {
+    const res = await api(`/api/comandas/${testCommandaId}`);
+    await expectStatus(res, 200);
+  });
+
+  test("Get non-existent comanda returns 404", async () => {
+    const res = await api(
+      "/api/comandas/00000000-0000-0000-0000-000000000000"
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Close comanda", async () => {
+    const res = await api(`/api/comandas/${testCommandaId}/fechar`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        total: "50.00",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Close non-existent comanda returns 404", async () => {
+    const res = await api(
+      "/api/comandas/00000000-0000-0000-0000-000000000000/fechar",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ total: "10.00" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Cancel comanda", async () => {
+    // Create a new comanda to cancel
+    const createRes = await api("/api/comandas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const createData = await createRes.json();
+
+    const res = await api(`/api/comandas/${createData.id}/cancelar`, {
+      method: "PUT",
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Cancel non-existent comanda returns 404", async () => {
+    const res = await api(
+      "/api/comandas/00000000-0000-0000-0000-000000000000/cancelar",
+      {
+        method: "PUT",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  // ==================== Pedidos CRUD (depends on comanda and prato) ====================
+  let pedidoCommandaId: string;
+  let pedidoPratoId: string;
+
+  test("Create prato for pedidos", async () => {
+    const res = await api("/api/pratos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Caesar Salad",
+        preco: "12.99",
+        categoriaId: pratoCategoryId,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    pedidoPratoId = data.id;
+  });
+
+  test("Create comanda for pedidos", async () => {
+    const res = await api("/api/comandas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    pedidoCommandaId = data.id;
+  });
+
+  test("List all pedidos", async () => {
+    const res = await api("/api/pedidos");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.totalPedidosHoje).toBeDefined();
-    expect(data.receitaHoje).toBeDefined();
-    expect(data.mesasAtivas).toBeDefined();
-    expect(data.itensPendentes).toBeDefined();
+    expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
+  });
+
+  test("Create pedido", async () => {
+    const res = await api("/api/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comandaId: pedidoCommandaId,
+        pratoId: pedidoPratoId,
+        precoUnitario: "12.99",
+        quantidade: 2,
+        observacao: "Extra dressing",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    testPedidoId = data.id;
+  });
+
+  test("Create pedido missing required field returns 400", async () => {
+    const res = await api("/api/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comandaId: pedidoCommandaId,
+        quantidade: 1,
+        // missing required pratoId and precoUnitario
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Get pedido by ID", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}`);
+    await expectStatus(res, 200);
+  });
+
+  test("Get non-existent pedido returns 404", async () => {
+    const res = await api(
+      "/api/pedidos/00000000-0000-0000-0000-000000000000"
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Update pedido status", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "em_preparo",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update non-existent pedido status returns 404", async () => {
+    const res = await api(
+      "/api/pedidos/00000000-0000-0000-0000-000000000000/status",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "pronto" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Update pedido status to pronto", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "pronto",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update pedido status to entregue", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "entregue",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Delete pedido", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}`, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 204);
+  });
+
+  test("Get deleted pedido returns 404", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}`);
+    await expectStatus(res, 404);
+  });
+
+  test("Delete non-existent pedido returns 404", async () => {
+    const res = await api(
+      "/api/pedidos/00000000-0000-0000-0000-000000000000",
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
   });
 });

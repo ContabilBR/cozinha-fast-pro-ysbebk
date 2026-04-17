@@ -1,244 +1,157 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, desc, and, count } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
-import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
 
-interface CreateOrderBody {
-  table_id: string;
-  waiter_id: string;
-  customer_count?: number;
-  notes?: string;
+interface CreateComandaBody {
+  mesaId: string;
+  garcomId?: string;
 }
 
-interface UpdateOrderBody {
-  status?: string;
-  customer_count?: number;
-  notes?: string;
+interface FecharComandaBody {
+  total?: string;
 }
 
 export function registerOrderRoutes(app: App) {
-  // GET /api/orders
+  // GET /api/comandas - List all open comandas
   app.fastify.get(
-    "/api/orders",
+    "/api/comandas",
     {
       schema: {
-        description: "List all orders with table and waiter info",
-        tags: ["orders"],
+        description: "List all open comandas",
+        tags: ["comandas"],
         response: {
           200: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", format: "uuid" },
-                status: { type: "string", enum: ["aberta", "fechando", "fechada", "cancelada"] },
-                customer_count: { type: "number" },
-                notes: { type: "string" },
-                opened_at: { type: "string", format: "date-time" },
-                closed_at: { type: "string", format: "date-time" },
-                total_amount: { type: "string" },
-                created_at: { type: "string", format: "date-time" },
-                table: {
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
                   type: "object",
                   properties: {
                     id: { type: "string", format: "uuid" },
-                    number: { type: "number" },
-                    capacity: { type: "number" },
-                  },
-                },
-                waiter: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string" },
-                    name: { type: "string" },
-                    email: { type: "string" },
+                    mesaId: { type: "string", format: "uuid" },
+                    numero: { type: "number" },
+                    garcomId: { type: "string" },
+                    status: { type: "string" },
+                    total: { type: "string" },
+                    createdAt: { type: "string", format: "date-time" },
                   },
                 },
               },
             },
           },
-          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({}, "Listing orders");
+        app.logger.info({}, "Listing comandas");
 
-        const ordersWithCounts = await app.db
+        const comandas = await app.db
           .select({
-            id: schema.orders.id,
-            status: schema.orders.status,
-            customer_count: schema.orders.customerCount,
-            notes: schema.orders.notes,
-            opened_at: schema.orders.openedAt,
-            closed_at: schema.orders.closedAt,
-            total_amount: schema.orders.totalAmount,
-            created_at: schema.orders.createdAt,
-            table_id: schema.tables.id,
-            table_number: schema.tables.number,
-            table_capacity: schema.tables.capacity,
-            waiter_id: user.id,
-            waiter_name: user.name,
-            waiter_email: user.email,
-            items_count: count(schema.orderItems.id),
+            id: schema.comandas.id,
+            mesaId: schema.comandas.mesaId,
+            numero: schema.mesas.numero,
+            garcomId: schema.comandas.garcomId,
+            status: schema.comandas.status,
+            total: schema.comandas.total,
+            createdAt: schema.comandas.createdAt,
           })
-          .from(schema.orders)
-          .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
-          .leftJoin(user, eq(schema.orders.waiterId, user.id))
-          .leftJoin(schema.orderItems, eq(schema.orders.id, schema.orderItems.orderId))
-          .groupBy(schema.orders.id, schema.tables.id, user.id)
-          .orderBy(desc(schema.orders.openedAt));
+          .from(schema.comandas)
+          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id));
 
-        const result = ordersWithCounts.map((row) => ({
-          id: row.id,
-          status: row.status,
-          customer_count: row.customer_count,
-          notes: row.notes,
-          opened_at: row.opened_at.toISOString(),
-          closed_at: row.closed_at?.toISOString(),
-          total_amount: row.total_amount,
-          created_at: row.created_at.toISOString(),
-          items_count: row.items_count,
-          table: row.table_id
-            ? {
-                id: row.table_id,
-                number: row.table_number,
-                capacity: row.table_capacity,
-              }
-            : null,
-          waiter: row.waiter_id
-            ? {
-                id: row.waiter_id,
-                name: row.waiter_name,
-                email: row.waiter_email,
-              }
-            : null,
-        }));
-
-        app.logger.info({ count: result.length }, "Orders listed");
-        return result;
+        return reply.code(200).send({
+          data: comandas.map((c) => ({
+            id: c.id,
+            mesaId: c.mesaId,
+            numero: c.numero,
+            garcomId: c.garcomId,
+            status: c.status,
+            total: c.total,
+            createdAt: c.createdAt.toISOString(),
+          })),
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to list orders");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to list comandas");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // POST /api/orders
-  app.fastify.post<{ Body: CreateOrderBody }>(
-    "/api/orders",
+  // POST /api/comandas - Create a new comanda
+  app.fastify.post<{ Body: CreateComandaBody }>(
+    "/api/comandas",
     {
       schema: {
-        description: "Create a new order",
-        tags: ["orders"],
+        description: "Create a new comanda",
+        tags: ["comandas"],
         body: {
           type: "object",
-          required: ["table_id", "waiter_id"],
+          required: ["mesaId"],
           properties: {
-            table_id: { type: "string", format: "uuid" },
-            waiter_id: { type: "string" },
-            customer_count: { type: "number" },
-            notes: { type: "string" },
+            mesaId: { type: "string", format: "uuid" },
+            garcomId: { type: ["string", "null"] },
           },
         },
         response: {
-          201: { type: "object" },
+          201: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              mesaId: { type: "string" },
+              garcomId: { type: ["string", "null"] },
+              status: { type: "string" },
+              total: { type: "string" },
+              createdAt: { type: "string" },
+            },
+          },
           400: { type: "object", properties: { error: { type: "string" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreateOrderBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      if (!request.body.table_id || !request.body.waiter_id) {
-        return reply.status(400).send({ error: "table_id and waiter_id are required" });
-      }
-
+    async (request: FastifyRequest<{ Body: CreateComandaBody }>, reply: FastifyReply) => {
       try {
-        app.logger.info(
-          { tableId: request.body.table_id, waiterId: request.body.waiter_id },
-          "Creating order"
-        );
+        if (!request.body.mesaId) {
+          return reply.code(400).send({ error: "mesaId is required" });
+        }
 
-        const [order] = await app.db
-          .insert(schema.orders)
+        app.logger.info({ mesaId: request.body.mesaId }, "Creating comanda");
+
+        const [comanda] = await app.db
+          .insert(schema.comandas)
           .values({
-            tableId: request.body.table_id,
-            waiterId: request.body.waiter_id,
-            customerCount: request.body.customer_count || 1,
-            notes: request.body.notes,
+            mesaId: request.body.mesaId,
+            garcomId: request.body.garcomId,
             status: "aberta",
-            totalAmount: "0",
+            total: "0",
           })
           .returning();
 
-        // Update table status to ocupada
-        await app.db
-          .update(schema.tables)
-          .set({ status: "ocupada" })
-          .where(eq(schema.tables.id, request.body.table_id));
+        app.logger.info({ comandaId: comanda.id }, "Comanda created successfully");
 
-        // Fetch full order with relations
-        const rows = await app.db
-          .select()
-          .from(schema.orders)
-          .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
-          .leftJoin(user, eq(schema.orders.waiterId, user.id))
-          .where(eq(schema.orders.id, order.id));
-
-        if (!rows || rows.length === 0) {
-          return reply.status(500).send({ error: "Failed to retrieve created order" });
-        }
-
-        const row = rows[0];
-        app.logger.info({ orderId: order.id }, "Order created");
-
-        return reply.status(201).send({
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt,
-          closed_at: row.orders.closedAt,
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt,
-          table: row.tables
-            ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
-              }
-            : null,
-          waiter: row.user
-            ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
-              }
-            : null,
+        return reply.code(201).send({
+          id: comanda.id,
+          mesaId: comanda.mesaId,
+          garcomId: comanda.garcomId,
+          status: comanda.status,
+          total: comanda.total,
+          createdAt: comanda.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to create order");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, body: request.body }, "Failed to create comanda");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // GET /api/orders/:id
+  // GET /api/comandas/:id - Get a comanda by ID
   app.fastify.get<{ Params: { id: string } }>(
-    "/api/orders/:id",
+    "/api/comandas/:id",
     {
       schema: {
-        description: "Get a specific order with items",
-        tags: ["orders"],
+        description: "Get a comanda by ID",
+        tags: ["comandas"],
         params: {
           type: "object",
           required: ["id"],
@@ -246,99 +159,56 @@ export function registerOrderRoutes(app: App) {
         },
         response: {
           200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ orderId: request.params.id }, "Getting order");
+        app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
-        const rows = await app.db
-          .select()
-          .from(schema.orders)
-          .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
-          .leftJoin(user, eq(schema.orders.waiterId, user.id))
-          .where(eq(schema.orders.id, request.params.id));
+        const comandas = await app.db
+          .select({
+            id: schema.comandas.id,
+            mesaId: schema.comandas.mesaId,
+            numero: schema.mesas.numero,
+            garcomId: schema.comandas.garcomId,
+            status: schema.comandas.status,
+            total: schema.comandas.total,
+            createdAt: schema.comandas.createdAt,
+          })
+          .from(schema.comandas)
+          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
+          .where(eq(schema.comandas.id, request.params.id));
 
-        if (!rows || rows.length === 0) {
-          return reply.status(404).send({ error: "Order not found" });
+        if (!comandas.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
         }
 
-        const row = rows[0];
-
-        // Fetch order items
-        const items = await app.db
-          .select()
-          .from(schema.orderItems)
-          .leftJoin(schema.dishes, eq(schema.orderItems.dishId, schema.dishes.id))
-          .where(eq(schema.orderItems.orderId, request.params.id));
-
-        const mappedItems = items.map((item) => ({
-          id: item.order_items.id,
-          dish_id: item.order_items.dishId,
-          quantity: item.order_items.quantity,
-          unit_price: item.order_items.unitPrice,
-          notes: item.order_items.notes,
-          status: item.order_items.status,
-          requested_at: item.order_items.requestedAt?.toISOString(),
-          received_at: item.order_items.receivedAt?.toISOString(),
-          started_at: item.order_items.startedAt?.toISOString(),
-          ready_at: item.order_items.readyAt?.toISOString(),
-          delivered_at: item.order_items.deliveredAt?.toISOString(),
-          dish: item.dishes
-            ? {
-                name: item.dishes.name,
-                price: item.dishes.price,
-              }
-            : null,
-        }));
-
-        app.logger.info({ orderId: request.params.id, itemCount: mappedItems.length }, "Order retrieved");
-
-        return reply.status(200).send({
-          id: row.orders.id,
-          status: row.orders.status,
-          customer_count: row.orders.customerCount,
-          notes: row.orders.notes,
-          opened_at: row.orders.openedAt.toISOString(),
-          closed_at: row.orders.closedAt?.toISOString(),
-          total_amount: row.orders.totalAmount,
-          created_at: row.orders.createdAt.toISOString(),
-          table: row.tables
-            ? {
-                id: row.tables.id,
-                number: row.tables.number,
-                capacity: row.tables.capacity,
-              }
-            : null,
-          waiter: row.user
-            ? {
-                id: row.user.id,
-                name: row.user.name,
-                email: row.user.email,
-              }
-            : null,
-          items: mappedItems,
+        const c = comandas[0];
+        return reply.code(200).send({
+          id: c.id,
+          mesaId: c.mesaId,
+          numero: c.numero,
+          garcomId: c.garcomId,
+          status: c.status,
+          total: c.total,
+          createdAt: c.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to get order");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to get comanda");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/orders/:id
-  app.fastify.put<{ Params: { id: string }; Body: UpdateOrderBody }>(
-    "/api/orders/:id",
+  // PUT /api/comandas/:id/fechar - Close a comanda
+  app.fastify.put<{ Params: { id: string }; Body: FecharComandaBody }>(
+    "/api/comandas/:id/fechar",
     {
       schema: {
-        description: "Update an order",
-        tags: ["orders"],
+        description: "Close a comanda",
+        tags: ["comandas"],
         params: {
           type: "object",
           required: ["id"],
@@ -347,115 +217,127 @@ export function registerOrderRoutes(app: App) {
         body: {
           type: "object",
           properties: {
-            status: { type: "string", enum: ["aberta", "fechando", "fechada", "cancelada"] },
-            customer_count: { type: "number" },
-            notes: { type: "string" },
+            total: { type: "string" },
           },
         },
         response: {
           200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (
-      request: FastifyRequest<{ Params: { id: string }; Body: UpdateOrderBody }>,
+      request: FastifyRequest<{ Params: { id: string }; Body: FecharComandaBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ orderId: request.params.id }, "Updating order");
+        app.logger.info({ comandaId: request.params.id }, "Closing comanda");
 
         const existing = await app.db
           .select()
-          .from(schema.orders)
-          .where(eq(schema.orders.id, request.params.id))
-          .limit(1);
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, request.params.id));
 
-        if (!existing || existing.length === 0) {
-          return reply.status(404).send({ error: "Order not found" });
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
         }
 
-        const updates: any = {};
-        if (request.body.status !== undefined) updates.status = request.body.status;
-        if (request.body.customer_count !== undefined) updates.customerCount = request.body.customer_count;
-        if (request.body.notes !== undefined) updates.notes = request.body.notes;
+        // Calculate total from pedidos if not provided
+        let total = request.body.total || "0";
+        if (!request.body.total) {
+          const pedidos = await app.db
+            .select()
+            .from(schema.pedidos)
+            .where(eq(schema.pedidos.comandaId, request.params.id));
 
-        // If closing order, set closedAt
-        if (request.body.status === "fechada" || request.body.status === "cancelada") {
-          updates.closedAt = new Date();
+          const calculatedTotal = pedidos.reduce((sum, p) => {
+            return sum + parseFloat(p.precoUnitario) * p.quantidade;
+          }, 0);
+          total = calculatedTotal.toFixed(2);
         }
 
         const [updated] = await app.db
-          .update(schema.orders)
-          .set(updates)
-          .where(eq(schema.orders.id, request.params.id))
+          .update(schema.comandas)
+          .set({
+            status: "fechada",
+            total,
+            closedAt: new Date(),
+          })
+          .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Update table status if order is being closed
-        if (request.body.status === "fechada" || request.body.status === "cancelada") {
-          await app.db
-            .update(schema.tables)
-            .set({ status: "livre" })
-            .where(eq(schema.tables.id, updated.tableId));
-        }
+        app.logger.info({ comandaId: updated.id }, "Comanda closed successfully");
 
-        // Fetch full order with relations
-        const rows = await app.db
-          .select({
-            id: schema.orders.id,
-            status: schema.orders.status,
-            customer_count: schema.orders.customerCount,
-            notes: schema.orders.notes,
-            opened_at: schema.orders.openedAt,
-            closed_at: schema.orders.closedAt,
-            total_amount: schema.orders.totalAmount,
-            created_at: schema.orders.createdAt,
-            table_id: schema.tables.id,
-            table_number: schema.tables.number,
-            table_capacity: schema.tables.capacity,
-            waiter_id: user.id,
-            waiter_name: user.name,
-            waiter_email: user.email,
-          })
-          .from(schema.orders)
-          .leftJoin(schema.tables, eq(schema.orders.tableId, schema.tables.id))
-          .leftJoin(user, eq(schema.orders.waiterId, user.id))
-          .where(eq(schema.orders.id, updated.id));
-
-        const row = rows[0];
-        app.logger.info({ orderId: updated.id }, "Order updated");
-
-        return reply.status(200).send({
-          id: row.id,
-          status: row.status,
-          customer_count: row.customer_count,
-          notes: row.notes,
-          opened_at: row.opened_at,
-          closed_at: row.closed_at,
-          total_amount: row.total_amount,
-          created_at: row.created_at,
-          table: row.table_id
-            ? {
-                id: row.table_id,
-                number: row.table_number,
-                capacity: row.table_capacity,
-              }
-            : null,
-          waiter: row.waiter_id
-            ? {
-                id: row.waiter_id,
-                name: row.waiter_name,
-                email: row.waiter_email,
-              }
-            : null,
+        return reply.code(200).send({
+          id: updated.id,
+          mesaId: updated.mesaId,
+          garcomId: updated.garcomId,
+          status: updated.status,
+          total: updated.total,
+          closedAt: updated.closedAt?.toISOString(),
+          createdAt: updated.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to update order");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to close comanda");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // PUT /api/comandas/:id/cancelar - Cancel a comanda
+  app.fastify.put<{ Params: { id: string } }>(
+    "/api/comandas/:id/cancelar",
+    {
+      schema: {
+        description: "Cancel a comanda",
+        tags: ["comandas"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: { type: "object" },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      try {
+        app.logger.info({ comandaId: request.params.id }, "Canceling comanda");
+
+        const existing = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, request.params.id));
+
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
+        }
+
+        const [updated] = await app.db
+          .update(schema.comandas)
+          .set({
+            status: "cancelada",
+            closedAt: new Date(),
+          })
+          .where(eq(schema.comandas.id, request.params.id))
+          .returning();
+
+        app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
+
+        return reply.code(200).send({
+          id: updated.id,
+          mesaId: updated.mesaId,
+          garcomId: updated.garcomId,
+          status: updated.status,
+          total: updated.total,
+          closedAt: updated.closedAt?.toISOString(),
+          createdAt: updated.createdAt.toISOString(),
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to cancel comanda");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

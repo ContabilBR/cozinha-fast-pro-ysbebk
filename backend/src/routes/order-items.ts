@@ -2,333 +2,345 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
 
-interface CreateOrderItemBody {
-  dish_id: string;
-  quantity?: number;
-  notes?: string;
+interface CreatePedidoBody {
+  comandaId: string;
+  pratoId: string;
+  quantidade?: number;
+  precoUnitario: string;
+  observacao?: string;
 }
 
-interface UpdateOrderItemBody {
-  status?: string;
-  notes?: string;
-  quantity?: number;
+interface UpdatePedidoStatusBody {
+  status: string;
 }
 
 export function registerOrderItemRoutes(app: App) {
-  // POST /api/orders/:order_id/items
-  app.fastify.post<{ Params: { order_id: string }; Body: CreateOrderItemBody }>(
-    "/api/orders/:order_id/items",
+  // GET /api/pedidos - List all pedidos
+  app.fastify.get(
+    "/api/pedidos",
     {
       schema: {
-        description: "Add item to order",
-        tags: ["order-items"],
-        params: {
-          type: "object",
-          required: ["order_id"],
-          properties: {
-            order_id: { type: "string", format: "uuid" },
-          },
-        },
-        body: {
-          type: "object",
-          required: ["dish_id"],
-          properties: {
-            dish_id: { type: "string", format: "uuid" },
-            quantity: { type: "number" },
-            notes: { type: "string" },
-          },
-        },
+        description: "List all pedidos",
+        tags: ["pedidos"],
         response: {
-          201: { type: "object" },
-          400: { type: "object", properties: { error: { type: "string" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
+          200: {
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    comandaId: { type: "string", format: "uuid" },
+                    pratoId: { type: "string", format: "uuid" },
+                    pratoNome: { type: "string" },
+                    quantidade: { type: "number" },
+                    precoUnitario: { type: "string" },
+                    observacao: { type: "string" },
+                    status: { type: "string" },
+                    createdAt: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Params: { order_id: string }; Body: CreateOrderItemBody }>,
-      reply: FastifyReply
-    ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      if (!request.body.dish_id) {
-        return reply.status(400).send({ error: "dish_id is required" });
-      }
-
+    async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        app.logger.info(
-          { orderId: request.params.order_id, dishId: request.body.dish_id },
-          "Adding item to order"
-        );
+        app.logger.info({}, "Listing pedidos");
 
-        // Get dish to get price
-        const dishes = await app.db
-          .select()
-          .from(schema.dishes)
-          .where(eq(schema.dishes.id, request.body.dish_id))
-          .limit(1);
+        const pedidos = await app.db
+          .select({
+            id: schema.pedidos.id,
+            comandaId: schema.pedidos.comandaId,
+            pratoId: schema.pedidos.pratoId,
+            pratoNome: schema.pratos.nome,
+            quantidade: schema.pedidos.quantidade,
+            precoUnitario: schema.pedidos.precoUnitario,
+            observacao: schema.pedidos.observacao,
+            status: schema.pedidos.status,
+            createdAt: schema.pedidos.createdAt,
+          })
+          .from(schema.pedidos)
+          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id));
 
-        if (!dishes || dishes.length === 0) {
-          return reply.status(400).send({ error: "Dish not found" });
+        return reply.code(200).send({
+          data: pedidos.map((p) => ({
+            id: p.id,
+            comandaId: p.comandaId,
+            pratoId: p.pratoId,
+            pratoNome: p.pratoNome || "Desconhecido",
+            quantidade: p.quantidade,
+            precoUnitario: p.precoUnitario,
+            observacao: p.observacao,
+            status: p.status,
+            createdAt: p.createdAt.toISOString(),
+          })),
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to list pedidos");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // POST /api/pedidos - Create a new pedido
+  app.fastify.post<{ Body: CreatePedidoBody }>(
+    "/api/pedidos",
+    {
+      schema: {
+        description: "Create a new pedido",
+        tags: ["pedidos"],
+        body: {
+          type: "object",
+          required: ["comandaId", "pratoId", "precoUnitario"],
+          properties: {
+            comandaId: { type: "string", format: "uuid" },
+            pratoId: { type: "string", format: "uuid" },
+            quantidade: { type: "number" },
+            precoUnitario: { type: "string" },
+            observacao: { type: ["string", "null"] },
+          },
+        },
+        response: {
+          201: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              comandaId: { type: "string" },
+              pratoId: { type: "string" },
+              quantidade: { type: "number" },
+              precoUnitario: { type: "string" },
+              observacao: { type: ["string", "null"] },
+              status: { type: "string" },
+              createdAt: { type: "string" },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: CreatePedidoBody }>, reply: FastifyReply) => {
+      try {
+        if (!request.body.comandaId || !request.body.pratoId || !request.body.precoUnitario) {
+          return reply.code(400).send({ error: "comandaId, pratoId, and precoUnitario are required" });
         }
 
-        const dish = dishes[0];
+        app.logger.info({ comandaId: request.body.comandaId }, "Creating pedido");
 
-        const [created] = await app.db
-          .insert(schema.orderItems)
+        const [pedido] = await app.db
+          .insert(schema.pedidos)
           .values({
-            orderId: request.params.order_id,
-            dishId: request.body.dish_id,
-            quantity: request.body.quantity || 1,
-            unitPrice: dish.price,
-            notes: request.body.notes,
+            comandaId: request.body.comandaId,
+            pratoId: request.body.pratoId,
+            quantidade: request.body.quantidade || 1,
+            precoUnitario: request.body.precoUnitario,
+            observacao: request.body.observacao,
             status: "pendente",
           })
           .returning();
 
-        // Recalculate order total
-        const items = await app.db
-          .select()
-          .from(schema.orderItems)
-          .where(eq(schema.orderItems.orderId, request.params.order_id));
+        app.logger.info({ pedidoId: pedido.id }, "Pedido created successfully");
 
-        const totalAmount = items
-          .filter((item) => item.status !== "cancelado")
-          .reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
-
-        await app.db
-          .update(schema.orders)
-          .set({ totalAmount: totalAmount.toString() })
-          .where(eq(schema.orders.id, request.params.order_id));
-
-        app.logger.info({ itemId: created.id }, "Item added to order");
-
-        return reply.status(201).send({
-          id: created.id,
-          order_id: created.orderId,
-          dish_id: created.dishId,
-          quantity: created.quantity,
-          unit_price: created.unitPrice,
-          notes: created.notes,
-          status: created.status,
-          requested_at: created.requestedAt?.toISOString(),
-          received_at: created.receivedAt?.toISOString(),
-          started_at: created.startedAt?.toISOString(),
-          ready_at: created.readyAt?.toISOString(),
-          delivered_at: created.deliveredAt?.toISOString(),
-          created_at: created.createdAt.toISOString(),
+        return reply.code(201).send({
+          id: pedido.id,
+          comandaId: pedido.comandaId,
+          pratoId: pedido.pratoId,
+          quantidade: pedido.quantidade,
+          precoUnitario: pedido.precoUnitario,
+          observacao: pedido.observacao,
+          status: pedido.status,
+          createdAt: pedido.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to add item to order");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, body: request.body }, "Failed to create pedido");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/order-items/:id
-  app.fastify.put<{ Params: { id: string }; Body: UpdateOrderItemBody }>(
-    "/api/order-items/:id",
+  // GET /api/pedidos/:id - Get a pedido
+  app.fastify.get<{ Params: { id: string } }>(
+    "/api/pedidos/:id",
     {
       schema: {
-        description: "Update order item",
-        tags: ["order-items"],
+        description: "Get a pedido by ID",
+        tags: ["pedidos"],
         params: {
           type: "object",
           required: ["id"],
           properties: { id: { type: "string", format: "uuid" } },
-        },
-        body: {
-          type: "object",
-          properties: {
-            status: {
-              type: "string",
-              enum: ["pendente", "recebido", "em_preparo", "pronto", "entregue", "cancelado"],
-            },
-            notes: { type: "string" },
-            quantity: { type: "number" },
-          },
         },
         response: {
           200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
-          404: { type: "object", properties: { error: { type: "string" } } },
-        },
-      },
-    },
-    async (
-      request: FastifyRequest<{ Params: { id: string }; Body: UpdateOrderItemBody }>,
-      reply: FastifyReply
-    ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      try {
-        app.logger.info({ itemId: request.params.id }, "Updating order item");
-
-        const existing = await app.db
-          .select()
-          .from(schema.orderItems)
-          .where(eq(schema.orderItems.id, request.params.id))
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          return reply.status(404).send({ error: "Order item not found" });
-        }
-
-        const existingItem = existing[0];
-        const updates: any = {};
-        if (request.body.notes !== undefined) updates.notes = request.body.notes;
-        if (request.body.quantity !== undefined) updates.quantity = request.body.quantity;
-
-        // Handle status change and set timestamps
-        if (request.body.status !== undefined && request.body.status !== existingItem.status) {
-          updates.status = request.body.status;
-
-          if (request.body.status === "recebido") updates.receivedAt = new Date();
-          else if (request.body.status === "em_preparo") updates.startedAt = new Date();
-          else if (request.body.status === "pronto") updates.readyAt = new Date();
-          else if (request.body.status === "entregue") updates.deliveredAt = new Date();
-
-          // Log status change
-          const dishes = await app.db
-            .select()
-            .from(schema.dishes)
-            .where(eq(schema.dishes.id, existingItem.dishId))
-            .limit(1);
-
-          await app.db.insert(schema.actionLogs).values({
-            userId: auth.userId,
-            action: "item_status_change",
-            entityType: "order_item",
-            entityId: request.params.id,
-            details: {
-              oldStatus: existingItem.status,
-              newStatus: request.body.status,
-              dishName: dishes && dishes.length > 0 ? dishes[0].name : null,
-            },
-          });
-
-          app.logger.info(
-            {
-              itemId: request.params.id,
-              oldStatus: existingItem.status,
-              newStatus: request.body.status,
-            },
-            "Order item status changed"
-          );
-        }
-
-        const [updated] = await app.db
-          .update(schema.orderItems)
-          .set(updates)
-          .where(eq(schema.orderItems.id, request.params.id))
-          .returning();
-
-        // Recalculate order total
-        const items = await app.db
-          .select()
-          .from(schema.orderItems)
-          .where(eq(schema.orderItems.orderId, existingItem.orderId));
-
-        const totalAmount = items
-          .filter((item) => item.status !== "cancelado")
-          .reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
-
-        await app.db
-          .update(schema.orders)
-          .set({ totalAmount: totalAmount.toString() })
-          .where(eq(schema.orders.id, existingItem.orderId));
-
-        app.logger.info({ itemId: updated.id }, "Order item updated");
-
-        return reply.status(200).send({
-          id: updated.id,
-          order_id: updated.orderId,
-          dish_id: updated.dishId,
-          quantity: updated.quantity,
-          unit_price: updated.unitPrice,
-          notes: updated.notes,
-          status: updated.status,
-          requested_at: updated.requestedAt?.toISOString(),
-          received_at: updated.receivedAt?.toISOString(),
-          started_at: updated.startedAt?.toISOString(),
-          ready_at: updated.readyAt?.toISOString(),
-          delivered_at: updated.deliveredAt?.toISOString(),
-          created_at: updated.createdAt.toISOString(),
-        });
-      } catch (error) {
-        app.logger.error({ err: error }, "Failed to update order item");
-        return reply.status(500).send({ error: "Internal server error" });
-      }
-    }
-  );
-
-  // DELETE /api/order-items/:id
-  app.fastify.delete<{ Params: { id: string } }>(
-    "/api/order-items/:id",
-    {
-      schema: {
-        description: "Cancel order item",
-        tags: ["order-items"],
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
-        },
-        response: {
-          200: { type: "object", properties: { success: { type: "boolean" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ itemId: request.params.id }, "Cancelling order item");
+        app.logger.info({ pedidoId: request.params.id }, "Getting pedido");
+
+        const pedidos = await app.db
+          .select({
+            id: schema.pedidos.id,
+            comandaId: schema.pedidos.comandaId,
+            pratoId: schema.pedidos.pratoId,
+            pratoNome: schema.pratos.nome,
+            quantidade: schema.pedidos.quantidade,
+            precoUnitario: schema.pedidos.precoUnitario,
+            observacao: schema.pedidos.observacao,
+            status: schema.pedidos.status,
+            createdAt: schema.pedidos.createdAt,
+          })
+          .from(schema.pedidos)
+          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+          .where(eq(schema.pedidos.id, request.params.id));
+
+        if (!pedidos.length) {
+          return reply.code(404).send({ error: "Pedido not found" });
+        }
+
+        const p = pedidos[0];
+        return reply.code(200).send({
+          id: p.id,
+          comandaId: p.comandaId,
+          pratoId: p.pratoId,
+          pratoNome: p.pratoNome || "Desconhecido",
+          quantidade: p.quantidade,
+          precoUnitario: p.precoUnitario,
+          observacao: p.observacao,
+          status: p.status,
+          createdAt: p.createdAt.toISOString(),
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to get pedido");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // PUT /api/pedidos/:id/status - Update pedido status
+  app.fastify.put<{ Params: { id: string }; Body: UpdatePedidoStatusBody }>(
+    "/api/pedidos/:id/status",
+    {
+      schema: {
+        description: "Update pedido status",
+        tags: ["pedidos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          required: ["status"],
+          properties: {
+            status: { type: "string", enum: ["pendente", "em_preparo", "pronto", "entregue", "cancelado"] },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              comandaId: { type: "string" },
+              pratoId: { type: "string" },
+              quantidade: { type: "number" },
+              precoUnitario: { type: "string" },
+              observacao: { type: ["string", "null"] },
+              status: { type: "string" },
+              createdAt: { type: "string" },
+            },
+          },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: UpdatePedidoStatusBody }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        app.logger.info({ pedidoId: request.params.id, status: request.body.status }, "Updating pedido status");
 
         const existing = await app.db
           .select()
-          .from(schema.orderItems)
-          .where(eq(schema.orderItems.id, request.params.id))
-          .limit(1);
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.id, request.params.id));
 
-        if (!existing || existing.length === 0) {
-          return reply.status(404).send({ error: "Order item not found" });
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Pedido not found" });
         }
 
-        const existingItem = existing[0];
+        const [updated] = await app.db
+          .update(schema.pedidos)
+          .set({ status: request.body.status as any })
+          .where(eq(schema.pedidos.id, request.params.id))
+          .returning();
 
-        await app.db
-          .update(schema.orderItems)
-          .set({ status: "cancelado" })
-          .where(eq(schema.orderItems.id, request.params.id));
+        app.logger.info({ pedidoId: updated.id }, "Pedido status updated successfully");
 
-        // Recalculate order total
-        const items = await app.db
-          .select()
-          .from(schema.orderItems)
-          .where(eq(schema.orderItems.orderId, existingItem.orderId));
-
-        const totalAmount = items
-          .filter((item) => item.status !== "cancelado")
-          .reduce((sum, item) => sum + parseFloat(item.unitPrice) * item.quantity, 0);
-
-        await app.db
-          .update(schema.orders)
-          .set({ totalAmount: totalAmount.toString() })
-          .where(eq(schema.orders.id, existingItem.orderId));
-
-        app.logger.info({ itemId: request.params.id }, "Order item cancelled");
-        return reply.status(200).send({ success: true });
+        return reply.code(200).send({
+          id: updated.id,
+          comandaId: updated.comandaId,
+          pratoId: updated.pratoId,
+          quantidade: updated.quantidade,
+          precoUnitario: updated.precoUnitario,
+          observacao: updated.observacao,
+          status: updated.status,
+          createdAt: updated.createdAt.toISOString(),
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to cancel order item");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to update pedido status");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // DELETE /api/pedidos/:id - Delete a pedido
+  app.fastify.delete<{ Params: { id: string } }>(
+    "/api/pedidos/:id",
+    {
+      schema: {
+        description: "Delete a pedido",
+        tags: ["pedidos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          204: { description: "Pedido deleted" },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      try {
+        app.logger.info({ pedidoId: request.params.id }, "Deleting pedido");
+
+        const existing = await app.db
+          .select()
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.id, request.params.id));
+
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Pedido not found" });
+        }
+
+        await app.db.delete(schema.pedidos).where(eq(schema.pedidos.id, request.params.id));
+
+        app.logger.info({ pedidoId: request.params.id }, "Pedido deleted successfully");
+
+        return reply.code(204).send();
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to delete pedido");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

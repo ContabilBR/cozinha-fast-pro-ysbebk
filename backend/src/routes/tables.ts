@@ -1,44 +1,40 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
 
-interface CreateTableBody {
-  number: number;
-  capacity: number;
-  location?: string;
+interface CreateMesaBody {
+  numero: number;
 }
 
-interface UpdateTableBody {
-  number?: number;
-  capacity?: number;
-  location?: string;
+interface UpdateMesaBody {
+  numero?: number;
   status?: string;
-  active?: boolean;
 }
 
 export function registerTableRoutes(app: App) {
-  // GET /api/tables - List all active tables
+  // GET /api/mesas - List all mesas
   app.fastify.get(
-    "/api/tables",
+    "/api/mesas",
     {
       schema: {
-        description: "List all active tables",
-        tags: ["tables"],
+        description: "List all mesas",
+        tags: ["mesas"],
         response: {
           200: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", format: "uuid" },
-                number: { type: "number" },
-                capacity: { type: "number" },
-                location: { type: "string" },
-                status: { type: "string", enum: ["livre", "ocupada", "reservada", "fechando"] },
-                active: { type: "boolean" },
-                created_at: { type: "string", format: "date-time" },
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    numero: { type: "number" },
+                    status: { type: "string" },
+                    createdAt: { type: "string", format: "date-time" },
+                  },
+                },
               },
             },
           },
@@ -47,113 +43,90 @@ export function registerTableRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Listing active tables");
+        app.logger.info({}, "Listing mesas");
+        const mesas = await app.db.select().from(schema.mesas).orderBy(schema.mesas.numero);
 
-        const tables = await app.db
-          .select({
-            id: schema.tables.id,
-            number: schema.tables.number,
-            capacity: schema.tables.capacity,
-            location: schema.tables.location,
-            status: schema.tables.status,
-            active: schema.tables.active,
-            created_at: schema.tables.createdAt,
-            current_order_id: schema.orders.id,
-          })
-          .from(schema.tables)
-          .leftJoin(schema.orders, and(
-            eq(schema.tables.id, schema.orders.tableId),
-            eq(schema.orders.status, 'aberta')
-          ))
-          .where(eq(schema.tables.active, true))
-          .orderBy(schema.tables.number);
-
-        return tables.map((t) => ({
-          id: t.id,
-          number: t.number,
-          capacity: t.capacity,
-          location: t.location,
-          status: t.status,
-          active: t.active,
-          created_at: t.created_at.toISOString(),
-          current_order_id: t.current_order_id || null,
-        }));
+        return reply.code(200).send({
+          data: mesas.map((m) => ({
+            id: m.id,
+            numero: m.numero,
+            status: m.status,
+            createdAt: m.createdAt.toISOString(),
+          })),
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to list tables");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to list mesas");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // POST /api/tables - Create a new table
-  app.fastify.post<{ Body: CreateTableBody }>(
-    "/api/tables",
+  // POST /api/mesas - Create a new mesa
+  app.fastify.post<{ Body: CreateMesaBody }>(
+    "/api/mesas",
     {
       schema: {
-        description: "Create a new table",
-        tags: ["tables"],
+        description: "Create a new mesa",
+        tags: ["mesas"],
         body: {
           type: "object",
-          required: ["number", "capacity"],
+          required: ["numero"],
           properties: {
-            number: { type: "number" },
-            capacity: { type: "number" },
-            location: { type: "string" },
+            numero: { type: "number" },
           },
         },
         response: {
-          201: { type: "object" },
+          201: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              numero: { type: "number" },
+              status: { type: "string" },
+              createdAt: { type: "string" },
+            },
+          },
           400: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreateTableBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
+    async (request: FastifyRequest<{ Body: CreateMesaBody }>, reply: FastifyReply) => {
       try {
-        if (!request.body.number || !request.body.capacity) {
-          return reply.status(400).send({ error: "number and capacity are required" });
+        if (!request.body.numero) {
+          return reply.code(400).send({ error: "numero is required" });
         }
 
-        app.logger.info({ number: request.body.number }, "Creating table");
+        app.logger.info({ numero: request.body.numero }, "Creating mesa");
 
-        const [table] = await app.db
-          .insert(schema.tables)
+        const [mesa] = await app.db
+          .insert(schema.mesas)
           .values({
-            number: request.body.number,
-            capacity: request.body.capacity,
-            location: request.body.location,
-            status: "livre",
-            active: true,
+            numero: request.body.numero,
+            status: "disponivel",
           })
           .returning();
 
-        app.logger.info({ tableId: table.id }, "Table created");
+        app.logger.info({ mesaId: mesa.id }, "Mesa created successfully");
 
-        return reply.status(201).send({
-          id: table.id,
-          number: table.number,
-          capacity: table.capacity,
-          location: table.location,
-          status: table.status,
-          active: table.active,
-          created_at: table.createdAt.toISOString(),
+        return reply.code(201).send({
+          id: mesa.id,
+          numero: mesa.numero,
+          status: mesa.status,
+          createdAt: mesa.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to create table");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, body: request.body }, "Failed to create mesa");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // GET /api/tables/:id - Get a table with current order
+  // GET /api/mesas/:id - Get a mesa
   app.fastify.get<{ Params: { id: string } }>(
-    "/api/tables/:id",
+    "/api/mesas/:id",
     {
       schema: {
-        description: "Get a table by ID",
-        tags: ["tables"],
+        description: "Get a mesa by ID",
+        tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
@@ -161,66 +134,44 @@ export function registerTableRoutes(app: App) {
         },
         response: {
           200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ tableId: request.params.id }, "Getting table");
+        app.logger.info({ mesaId: request.params.id }, "Getting mesa");
 
-        const rows = await app.db
-          .select({
-            id: schema.tables.id,
-            number: schema.tables.number,
-            capacity: schema.tables.capacity,
-            location: schema.tables.location,
-            status: schema.tables.status,
-            active: schema.tables.active,
-            created_at: schema.tables.createdAt,
-            current_order_id: schema.orders.id,
-          })
-          .from(schema.tables)
-          .leftJoin(schema.orders, and(
-            eq(schema.tables.id, schema.orders.tableId),
-            eq(schema.orders.status, 'aberta')
-          ))
-          .where(eq(schema.tables.id, request.params.id))
-          .limit(1);
+        const mesas = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, request.params.id));
 
-        if (!rows || rows.length === 0) {
-          return reply.status(404).send({ error: "Table not found" });
+        if (!mesas.length) {
+          return reply.code(404).send({ error: "Mesa not found" });
         }
 
-        const row = rows[0];
-        return reply.status(200).send({
-          id: row.id,
-          number: row.number,
-          capacity: row.capacity,
-          location: row.location,
-          status: row.status,
-          active: row.active,
-          created_at: row.created_at.toISOString(),
-          current_order_id: row.current_order_id || null,
+        const mesa = mesas[0];
+        return reply.code(200).send({
+          id: mesa.id,
+          numero: mesa.numero,
+          status: mesa.status,
+          createdAt: mesa.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to get table");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to get mesa");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/tables/:id - Update a table
-  app.fastify.put<{ Params: { id: string }; Body: UpdateTableBody }>(
-    "/api/tables/:id",
+  // PUT /api/mesas/:id - Update a mesa
+  app.fastify.put<{ Params: { id: string }; Body: UpdateMesaBody }>(
+    "/api/mesas/:id",
     {
       schema: {
-        description: "Update a table",
-        tags: ["tables"],
+        description: "Update a mesa",
+        tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
@@ -229,114 +180,61 @@ export function registerTableRoutes(app: App) {
         body: {
           type: "object",
           properties: {
-            number: { type: "number" },
-            capacity: { type: "number" },
-            location: { type: "string" },
-            status: { type: "string", enum: ["livre", "ocupada", "reservada", "fechando"] },
-            active: { type: "boolean" },
+            numero: { type: "number" },
+            status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
           },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              numero: { type: "number" },
+              status: { type: "string" },
+              createdAt: { type: "string" },
+            },
+          },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (
-      request: FastifyRequest<{ Params: { id: string }; Body: UpdateTableBody }>,
+      request: FastifyRequest<{ Params: { id: string }; Body: UpdateMesaBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ tableId: request.params.id }, "Updating table");
+        app.logger.info({ mesaId: request.params.id, body: request.body }, "Updating mesa");
 
         const existing = await app.db
           .select()
-          .from(schema.tables)
-          .where(eq(schema.tables.id, request.params.id));
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, request.params.id));
 
         if (!existing.length) {
-          return reply.status(404).send({ error: "Table not found" });
+          return reply.code(404).send({ error: "Mesa not found" });
         }
 
         const updates: any = {};
-        if (request.body.number !== undefined) updates.number = request.body.number;
-        if (request.body.capacity !== undefined) updates.capacity = request.body.capacity;
-        if (request.body.location !== undefined) updates.location = request.body.location;
+        if (request.body.numero !== undefined) updates.numero = request.body.numero;
         if (request.body.status !== undefined) updates.status = request.body.status;
-        if (request.body.active !== undefined) updates.active = request.body.active;
 
         const [updated] = await app.db
-          .update(schema.tables)
+          .update(schema.mesas)
           .set(updates)
-          .where(eq(schema.tables.id, request.params.id))
+          .where(eq(schema.mesas.id, request.params.id))
           .returning();
 
-        app.logger.info({ tableId: updated.id }, "Table updated");
+        app.logger.info({ mesaId: updated.id }, "Mesa updated successfully");
 
-        return reply.status(200).send({
+        return reply.code(200).send({
           id: updated.id,
-          number: updated.number,
-          capacity: updated.capacity,
-          location: updated.location,
+          numero: updated.numero,
           status: updated.status,
-          active: updated.active,
-          created_at: updated.createdAt.toISOString(),
+          createdAt: updated.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to update table");
-        return reply.status(500).send({ error: "Internal server error" });
-      }
-    }
-  );
-
-  // DELETE /api/tables/:id - Delete (deactivate) a table
-  app.fastify.delete<{ Params: { id: string } }>(
-    "/api/tables/:id",
-    {
-      schema: {
-        description: "Delete a table",
-        tags: ["tables"],
-        params: {
-          type: "object",
-          required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
-        },
-        response: {
-          204: { description: "Table deleted" },
-          404: { type: "object", properties: { error: { type: "string" } } },
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      try {
-        app.logger.info({ tableId: request.params.id }, "Deleting table");
-
-        const existing = await app.db
-          .select()
-          .from(schema.tables)
-          .where(eq(schema.tables.id, request.params.id));
-
-        if (!existing.length) {
-          return reply.status(404).send({ error: "Table not found" });
-        }
-
-        await app.db
-          .update(schema.tables)
-          .set({ active: false })
-          .where(eq(schema.tables.id, request.params.id));
-
-        app.logger.info({ tableId: request.params.id }, "Table deleted");
-
-        return reply.status(204).send();
-      } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete table");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to update mesa");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

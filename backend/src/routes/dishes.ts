@@ -2,57 +2,51 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth, requireRole } from "../utils/auth.js";
 
-interface CreateDishBody {
-  name: string;
-  description?: string;
-  category_id?: string;
-  price: string;
-  image_url?: string;
-  prep_time_minutes?: number;
-  active?: boolean;
+interface CreatePratoBody {
+  nome: string;
+  descricao?: string;
+  preco: string;
+  categoriaId?: string;
+  imagemUrl?: string;
+  disponivel?: boolean;
 }
 
-interface UpdateDishBody {
-  name?: string;
-  description?: string;
-  category_id?: string;
-  price?: string;
-  image_url?: string;
-  prep_time_minutes?: number;
-  active?: boolean;
+interface UpdatePratoBody {
+  nome?: string;
+  descricao?: string;
+  preco?: string;
+  categoriaId?: string;
+  imagemUrl?: string;
+  disponivel?: boolean;
 }
 
 export function registerDishRoutes(app: App) {
-  // GET /api/dishes
+  // GET /api/pratos - List all pratos
   app.fastify.get(
-    "/api/dishes",
+    "/api/pratos",
     {
       schema: {
-        description: "List all dishes with categories",
-        tags: ["dishes"],
+        description: "List all pratos",
+        tags: ["pratos"],
         response: {
           200: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", format: "uuid" },
-                name: { type: "string" },
-                description: { type: "string" },
-                price: { type: "string" },
-                image_url: { type: "string" },
-                prep_time_minutes: { type: "number" },
-                active: { type: "boolean" },
-                created_at: { type: "string", format: "date-time" },
-                category: {
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: {
                   type: "object",
                   properties: {
                     id: { type: "string", format: "uuid" },
-                    name: { type: "string" },
-                    color: { type: "string" },
-                    icon: { type: "string" },
+                    nome: { type: "string" },
+                    descricao: { type: "string" },
+                    preco: { type: "string" },
+                    categoriaId: { type: "string" },
+                    categoriaNome: { type: "string" },
+                    imagemUrl: { type: "string" },
+                    disponivel: { type: "boolean" },
+                    createdAt: { type: "string", format: "date-time" },
                   },
                 },
               },
@@ -63,146 +57,126 @@ export function registerDishRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Listing dishes");
+        app.logger.info({}, "Listing pratos");
 
-        const dishes = await app.db
-          .select()
-          .from(schema.dishes)
-          .where(eq(schema.dishes.active, true))
-          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id));
+        const pratos = await app.db
+          .select({
+            id: schema.pratos.id,
+            nome: schema.pratos.nome,
+            descricao: schema.pratos.descricao,
+            preco: schema.pratos.preco,
+            categoriaId: schema.pratos.categoriaId,
+            categoriaNome: schema.categoriaPratos.nome,
+            imagemUrl: schema.pratos.imagemUrl,
+            disponivel: schema.pratos.disponivel,
+            createdAt: schema.pratos.createdAt,
+          })
+          .from(schema.pratos)
+          .leftJoin(schema.categoriaPratos, eq(schema.pratos.categoriaId, schema.categoriaPratos.id));
 
-        const result = dishes.map((row) => ({
-          id: row.dishes.id,
-          name: row.dishes.name,
-          description: row.dishes.description,
-          price: row.dishes.price,
-          image_url: row.dishes.imageUrl,
-          prep_time_minutes: row.dishes.prepTimeMinutes,
-          active: row.dishes.active,
-          created_at: row.dishes.createdAt.toISOString(),
-          category: row.categories
-            ? {
-                id: row.categories.id,
-                name: row.categories.name,
-                color: row.categories.color,
-                icon: row.categories.icon,
-              }
-            : null,
-        }));
-
-        app.logger.info({ count: result.length }, "Dishes listed");
-        return result;
+        return reply.code(200).send({
+          data: pratos.map((p) => ({
+            id: p.id,
+            nome: p.nome,
+            descricao: p.descricao,
+            preco: p.preco,
+            categoriaId: p.categoriaId,
+            categoriaNome: p.categoriaNome || "Sem categoria",
+            imagemUrl: p.imagemUrl,
+            disponivel: p.disponivel,
+            createdAt: p.createdAt.toISOString(),
+          })),
+        });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to list dishes");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to list pratos");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // POST /api/dishes
-  app.fastify.post<{ Body: CreateDishBody }>(
-    "/api/dishes",
+  // POST /api/pratos - Create a new prato
+  app.fastify.post<{ Body: CreatePratoBody }>(
+    "/api/pratos",
     {
       schema: {
-        description: "Create a new dish",
-        tags: ["dishes"],
+        description: "Create a new prato",
+        tags: ["pratos"],
         body: {
           type: "object",
-          required: ["name", "price"],
+          required: ["nome", "preco"],
           properties: {
-            name: { type: "string" },
-            description: { type: "string" },
-            category_id: { type: "string", format: "uuid" },
-            price: { type: "string" },
-            image_url: { type: "string" },
-            prep_time_minutes: { type: "number" },
-            active: { type: "boolean" },
+            nome: { type: "string" },
+            descricao: { type: ["string", "null"] },
+            preco: { type: "string" },
+            categoriaId: { type: ["string", "null"] },
+            imagemUrl: { type: ["string", "null"] },
+            disponivel: { type: "boolean" },
           },
         },
         response: {
           201: {
             type: "object",
             properties: {
-              id: { type: "string", format: "uuid" },
-              name: { type: "string" },
-              price: { type: "string" },
+              id: { type: "string" },
+              nome: { type: "string" },
+              descricao: { type: ["string", "null"] },
+              preco: { type: "string" },
+              categoriaId: { type: ["string", "null"] },
+              imagemUrl: { type: ["string", "null"] },
+              disponivel: { type: "boolean" },
+              createdAt: { type: "string" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreateDishBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
-      if (!request.body.name || !request.body.price) {
-        return reply.status(400).send({ error: "name and price are required" });
-      }
-
+    async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
       try {
-        app.logger.info({ name: request.body.name, price: request.body.price }, "Creating dish");
+        if (!request.body.nome || !request.body.preco) {
+          return reply.code(400).send({ error: "nome and preco are required" });
+        }
 
-        const [dish] = await app.db
-          .insert(schema.dishes)
+        app.logger.info({ nome: request.body.nome }, "Creating prato");
+
+        const [prato] = await app.db
+          .insert(schema.pratos)
           .values({
-            name: request.body.name,
-            description: request.body.description,
-            categoryId: request.body.category_id,
-            price: request.body.price,
-            imageUrl: request.body.image_url,
-            prepTimeMinutes: request.body.prep_time_minutes || 15,
-            active: request.body.active !== false,
+            nome: request.body.nome,
+            descricao: request.body.descricao,
+            preco: request.body.preco,
+            categoriaId: request.body.categoriaId,
+            imagemUrl: request.body.imagemUrl,
+            disponivel: request.body.disponivel !== false,
           })
           .returning();
 
-        app.logger.info({ dishId: dish.id }, "Dish created");
+        app.logger.info({ pratoId: prato.id }, "Prato created successfully");
 
-        // Fetch with category
-        const rows = await app.db
-          .select()
-          .from(schema.dishes)
-          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
-          .where(eq(schema.dishes.id, dish.id));
-
-        if (!rows || rows.length === 0) {
-          return reply.status(500).send({ error: "Failed to retrieve created dish" });
-        }
-
-        const row = rows[0];
-        return reply.status(201).send({
-          id: row.dishes.id,
-          name: row.dishes.name,
-          description: row.dishes.description,
-          price: row.dishes.price,
-          image_url: row.dishes.imageUrl,
-          prep_time_minutes: row.dishes.prepTimeMinutes,
-          active: row.dishes.active,
-          created_at: row.dishes.createdAt,
-          category: row.categories
-            ? {
-                id: row.categories.id,
-                name: row.categories.name,
-                color: row.categories.color,
-                icon: row.categories.icon,
-              }
-            : null,
+        return reply.code(201).send({
+          id: prato.id,
+          nome: prato.nome,
+          descricao: prato.descricao,
+          preco: prato.preco,
+          categoriaId: prato.categoriaId,
+          imagemUrl: prato.imagemUrl,
+          disponivel: prato.disponivel,
+          createdAt: prato.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to create dish");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, body: request.body }, "Failed to create prato");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // GET /api/dishes/:id
+  // GET /api/pratos/:id - Get a prato
   app.fastify.get<{ Params: { id: string } }>(
-    "/api/dishes/:id",
+    "/api/pratos/:id",
     {
       schema: {
-        description: "Get a dish by ID",
-        tags: ["dishes"],
+        description: "Get a prato by ID",
+        tags: ["pratos"],
         params: {
           type: "object",
           required: ["id"],
@@ -210,62 +184,60 @@ export function registerDishRoutes(app: App) {
         },
         response: {
           200: { type: "object" },
-          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ dishId: request.params.id }, "Getting dish");
+        app.logger.info({ pratoId: request.params.id }, "Getting prato");
 
-        const rows = await app.db
-          .select()
-          .from(schema.dishes)
-          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
-          .where(eq(schema.dishes.id, request.params.id))
-          .limit(1);
+        const pratos = await app.db
+          .select({
+            id: schema.pratos.id,
+            nome: schema.pratos.nome,
+            descricao: schema.pratos.descricao,
+            preco: schema.pratos.preco,
+            categoriaId: schema.pratos.categoriaId,
+            categoriaNome: schema.categoriaPratos.nome,
+            imagemUrl: schema.pratos.imagemUrl,
+            disponivel: schema.pratos.disponivel,
+            createdAt: schema.pratos.createdAt,
+          })
+          .from(schema.pratos)
+          .leftJoin(schema.categoriaPratos, eq(schema.pratos.categoriaId, schema.categoriaPratos.id))
+          .where(eq(schema.pratos.id, request.params.id));
 
-        if (!rows || rows.length === 0) {
-          return reply.status(404).send({ error: "Dish not found" });
+        if (!pratos.length) {
+          return reply.code(404).send({ error: "Prato not found" });
         }
 
-        const row = rows[0];
-        return reply.status(200).send({
-          id: row.dishes.id,
-          name: row.dishes.name,
-          description: row.dishes.description,
-          price: row.dishes.price,
-          image_url: row.dishes.imageUrl,
-          prep_time_minutes: row.dishes.prepTimeMinutes,
-          active: row.dishes.active,
-          created_at: row.dishes.createdAt.toISOString(),
-          category: row.categories
-            ? {
-                id: row.categories.id,
-                name: row.categories.name,
-                color: row.categories.color,
-                icon: row.categories.icon,
-              }
-            : null,
+        const p = pratos[0];
+        return reply.code(200).send({
+          id: p.id,
+          nome: p.nome,
+          descricao: p.descricao,
+          preco: p.preco,
+          categoriaId: p.categoriaId,
+          categoriaNome: p.categoriaNome || "Sem categoria",
+          imagemUrl: p.imagemUrl,
+          disponivel: p.disponivel,
+          createdAt: p.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to get dish");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to get prato");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/dishes/:id
-  app.fastify.put<{ Params: { id: string }; Body: UpdateDishBody }>(
-    "/api/dishes/:id",
+  // PUT /api/pratos/:id - Update a prato
+  app.fastify.put<{ Params: { id: string }; Body: UpdatePratoBody }>(
+    "/api/pratos/:id",
     {
       schema: {
-        description: "Update a dish",
-        tags: ["dishes"],
+        description: "Update a prato",
+        tags: ["pratos"],
         params: {
           type: "object",
           required: ["id"],
@@ -274,131 +246,120 @@ export function registerDishRoutes(app: App) {
         body: {
           type: "object",
           properties: {
-            name: { type: "string" },
-            description: { type: "string" },
-            category_id: { type: "string", format: "uuid" },
-            price: { type: "string" },
-            image_url: { type: "string" },
-            prep_time_minutes: { type: "number" },
-            active: { type: "boolean" },
+            nome: { type: "string" },
+            descricao: { type: ["string", "null"] },
+            preco: { type: "string" },
+            categoriaId: { type: ["string", "null"] },
+            imagemUrl: { type: ["string", "null"] },
+            disponivel: { type: "boolean" },
           },
         },
         response: {
-          200: { type: "object" },
-          400: { type: "object", properties: { error: { type: "string" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              nome: { type: "string" },
+              descricao: { type: ["string", "null"] },
+              preco: { type: "string" },
+              categoriaId: { type: ["string", "null"] },
+              imagemUrl: { type: ["string", "null"] },
+              disponivel: { type: "boolean" },
+              createdAt: { type: "string" },
+            },
+          },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateDishBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: UpdatePratoBody }>,
+      reply: FastifyReply
+    ) => {
       try {
-        app.logger.info({ dishId: request.params.id }, "Updating dish");
+        app.logger.info({ pratoId: request.params.id }, "Updating prato");
 
         const existing = await app.db
           .select()
-          .from(schema.dishes)
-          .where(eq(schema.dishes.id, request.params.id))
-          .limit(1);
+          .from(schema.pratos)
+          .where(eq(schema.pratos.id, request.params.id));
 
-        if (!existing || existing.length === 0) {
-          return reply.status(404).send({ error: "Dish not found" });
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Prato not found" });
         }
 
         const updates: any = {};
-        if (request.body.name !== undefined) updates.name = request.body.name;
-        if (request.body.description !== undefined) updates.description = request.body.description;
-        if (request.body.category_id !== undefined) updates.categoryId = request.body.category_id;
-        if (request.body.price !== undefined) updates.price = request.body.price;
-        if (request.body.image_url !== undefined) updates.imageUrl = request.body.image_url;
-        if (request.body.prep_time_minutes !== undefined) updates.prepTimeMinutes = request.body.prep_time_minutes;
-        if (request.body.active !== undefined) updates.active = request.body.active;
+        if (request.body.nome !== undefined) updates.nome = request.body.nome;
+        if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
+        if (request.body.preco !== undefined) updates.preco = request.body.preco;
+        if (request.body.categoriaId !== undefined) updates.categoriaId = request.body.categoriaId;
+        if (request.body.imagemUrl !== undefined) updates.imagemUrl = request.body.imagemUrl;
+        if (request.body.disponivel !== undefined) updates.disponivel = request.body.disponivel;
 
         const [updated] = await app.db
-          .update(schema.dishes)
+          .update(schema.pratos)
           .set(updates)
-          .where(eq(schema.dishes.id, request.params.id))
+          .where(eq(schema.pratos.id, request.params.id))
           .returning();
 
-        // Fetch with category
-        const rows = await app.db
-          .select()
-          .from(schema.dishes)
-          .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id))
-          .where(eq(schema.dishes.id, updated.id));
+        app.logger.info({ pratoId: updated.id }, "Prato updated successfully");
 
-        const row = rows[0];
-        return reply.status(200).send({
-          id: row.dishes.id,
-          name: row.dishes.name,
-          description: row.dishes.description,
-          price: row.dishes.price,
-          image_url: row.dishes.imageUrl,
-          prep_time_minutes: row.dishes.prepTimeMinutes,
-          active: row.dishes.active,
-          created_at: row.dishes.createdAt.toISOString(),
-          category: row.categories
-            ? {
-                id: row.categories.id,
-                name: row.categories.name,
-                color: row.categories.color,
-                icon: row.categories.icon,
-              }
-            : null,
+        return reply.code(200).send({
+          id: updated.id,
+          nome: updated.nome,
+          descricao: updated.descricao,
+          preco: updated.preco,
+          categoriaId: updated.categoriaId,
+          imagemUrl: updated.imagemUrl,
+          disponivel: updated.disponivel,
+          createdAt: updated.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to update dish");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to update prato");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // DELETE /api/dishes/:id
+  // DELETE /api/pratos/:id - Delete a prato
   app.fastify.delete<{ Params: { id: string } }>(
-    "/api/dishes/:id",
+    "/api/pratos/:id",
     {
       schema: {
-        description: "Delete a dish",
-        tags: ["dishes"],
+        description: "Delete a prato",
+        tags: ["pratos"],
         params: {
           type: "object",
           required: ["id"],
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object", properties: { success: { type: "boolean" } } },
-          401: { type: "object", properties: { error: { type: "string" } } },
+          204: { description: "Prato deleted" },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
-        app.logger.info({ dishId: request.params.id }, "Deleting dish");
+        app.logger.info({ pratoId: request.params.id }, "Deleting prato");
 
         const existing = await app.db
           .select()
-          .from(schema.dishes)
-          .where(eq(schema.dishes.id, request.params.id))
-          .limit(1);
+          .from(schema.pratos)
+          .where(eq(schema.pratos.id, request.params.id));
 
-        if (!existing || existing.length === 0) {
-          return reply.status(404).send({ error: "Dish not found" });
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Prato not found" });
         }
 
-        await app.db.delete(schema.dishes).where(eq(schema.dishes.id, request.params.id));
+        await app.db.delete(schema.pratos).where(eq(schema.pratos.id, request.params.id));
 
-        app.logger.info({ dishId: request.params.id }, "Dish deleted");
-        return { success: true };
+        app.logger.info({ pratoId: request.params.id }, "Prato deleted successfully");
+
+        return reply.code(204).send();
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete dish");
-        return reply.status(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error }, "Failed to delete prato");
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

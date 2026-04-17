@@ -174,7 +174,7 @@ export async function seedDatabase(app: App) {
     }
 
     // Check if database already seeded (categories)
-    const existingCategories = await app.db.select().from(schema.categories).limit(1);
+    const existingCategories = await app.db.select().from(schema.categoriaPratos).limit(1);
 
     if (existingCategories.length > 0) {
       app.logger.info("Database categories and other data already seeded");
@@ -188,12 +188,10 @@ export async function seedDatabase(app: App) {
     const categoryIds: Record<string, string> = {};
     for (const cat of seedCategories) {
       const [category] = await app.db
-        .insert(schema.categories)
+        .insert(schema.categoriaPratos)
         .values({
-          name: cat.name,
-          icon: cat.icon,
-          color: cat.color,
-          active: true,
+          nome: cat.name,
+          descricao: `${cat.name} do nosso restaurante`,
         })
         .returning();
       categoryIds[cat.name] = category.id;
@@ -203,14 +201,14 @@ export async function seedDatabase(app: App) {
     const dishIds: Record<string, string> = {};
     for (const dish of seedDishes) {
       const [createdDish] = await app.db
-        .insert(schema.dishes)
+        .insert(schema.pratos)
         .values({
-          name: dish.name,
-          categoryId: categoryIds[dish.category],
-          price: dish.price,
-          prepTimeMinutes: dish.prepTime,
-          imageUrl: `https://picsum.photos/seed/${dish.image}/400/300`,
-          active: true,
+          nome: dish.name,
+          descricao: `Prato delicioso de ${dish.name}`,
+          categoriaId: categoryIds[dish.category],
+          preco: dish.price,
+          imagemUrl: `https://picsum.photos/seed/${dish.image}/400/300`,
+          disponivel: true,
         })
         .returning();
       dishIds[dish.name] = createdDish.id;
@@ -220,13 +218,10 @@ export async function seedDatabase(app: App) {
     const tableIds: Record<number, string> = {};
     for (const table of seedTables) {
       const [createdTable] = await app.db
-        .insert(schema.tables)
+        .insert(schema.mesas)
         .values({
-          number: table.number,
-          capacity: table.capacity,
-          location: table.location,
-          status: table.status as any,
-          active: true,
+          numero: table.number,
+          status: "disponivel",
         })
         .returning();
       tableIds[table.number] = createdTable.id;
@@ -240,95 +235,87 @@ export async function seedDatabase(app: App) {
       const burgerId = dishIds["X-Burguer Especial"];
 
       if (coxinhaId && frangoGrelhadoId) {
-        // Order 1: Table 3 - Bruschetta x2 + Frango Grelhado x1
-        const [order1] = await app.db
-          .insert(schema.orders)
+        // Comanda 1: Table 3 - Bruschetta x2 + Frango Grelhado x1
+        const [comanda1] = await app.db
+          .insert(schema.comandas)
           .values({
-            tableId: tableIds[3],
-            waiterId: garcomUserId,
+            mesaId: tableIds[3],
+            garcomId: garcomUserId,
             status: "aberta",
-            customerCount: 2,
-            totalAmount: "0",
-            openedAt: new Date(),
+            total: "0",
           })
           .returning();
 
-        // Add items to Order 1
+        // Add items to Comanda 1
         await app.db
-          .insert(schema.orderItems)
+          .insert(schema.pedidos)
           .values({
-            orderId: order1.id,
-            dishId: coxinhaId,
-            quantity: 2,
-            unitPrice: "18.90",
+            comandaId: comanda1.id,
+            pratoId: coxinhaId,
+            quantidade: 2,
+            precoUnitario: "18.90",
             status: "pendente",
-            requestedAt: new Date(),
           });
 
         await app.db
-          .insert(schema.orderItems)
+          .insert(schema.pedidos)
           .values({
-            orderId: order1.id,
-            dishId: frangoGrelhadoId,
-            quantity: 1,
-            unitPrice: "45.90",
+            comandaId: comanda1.id,
+            pratoId: frangoGrelhadoId,
+            quantidade: 1,
+            precoUnitario: "45.90",
             status: "pendente",
-            requestedAt: new Date(),
           });
 
-        // Update Order 1 total: (2 * 18.90) + 45.90 = 83.70
+        // Update Comanda 1 total: (2 * 18.90) + 45.90 = 83.70
         await app.db
-          .update(schema.orders)
-          .set({ totalAmount: "83.70" })
-          .where(eq(schema.orders.id, order1.id));
+          .update(schema.comandas)
+          .set({ total: "83.70" })
+          .where(eq(schema.comandas.id, comanda1.id));
 
-        app.logger.info({ orderId: order1.id }, "Order 1 created");
+        app.logger.info({ comandaId: comanda1.id }, "Comanda 1 created");
       }
 
       if (refrigeranteId && burgerId) {
-        // Order 2: Table 5 - Suco Natural x2 + X-Burguer x1
-        const [order2] = await app.db
-          .insert(schema.orders)
+        // Comanda 2: Table 5 - Suco Natural x2 + X-Burguer x1
+        const [comanda2] = await app.db
+          .insert(schema.comandas)
           .values({
-            tableId: tableIds[5],
-            waiterId: garcomUserId,
+            mesaId: tableIds[5],
+            garcomId: garcomUserId,
             status: "aberta",
-            customerCount: 2,
-            totalAmount: "0",
-            openedAt: new Date(),
+            total: "0",
           })
           .returning();
 
-        // Add items to Order 2
+        // Add items to Comanda 2
         await app.db
-          .insert(schema.orderItems)
+          .insert(schema.pedidos)
           .values({
-            orderId: order2.id,
-            dishId: refrigeranteId,
-            quantity: 2,
-            unitPrice: "12.00",
+            comandaId: comanda2.id,
+            pratoId: refrigeranteId,
+            quantidade: 2,
+            precoUnitario: "12.00",
             status: "pendente",
-            requestedAt: new Date(),
           });
 
         await app.db
-          .insert(schema.orderItems)
+          .insert(schema.pedidos)
           .values({
-            orderId: order2.id,
-            dishId: burgerId,
-            quantity: 1,
-            unitPrice: "38.00",
+            comandaId: comanda2.id,
+            pratoId: burgerId,
+            quantidade: 1,
+            precoUnitario: "38.00",
             status: "pendente",
-            requestedAt: new Date(),
           });
 
-        // Update Order 2 total: (2 * 12.00) + 38.00 = 62.00
+        // Update Comanda 2 total: (2 * 12.00) + 38.00 = 62.00
         await app.db
-          .update(schema.orders)
-          .set({ totalAmount: "62.00" })
-          .where(eq(schema.orders.id, order2.id));
+          .update(schema.comandas)
+          .set({ total: "62.00" })
+          .where(eq(schema.comandas.id, comanda2.id));
 
-        app.logger.info({ orderId: order2.id }, "Order 2 created");
+        app.logger.info({ comandaId: comanda2.id }, "Comanda 2 created");
       }
     }
 
