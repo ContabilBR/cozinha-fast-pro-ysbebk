@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -236,10 +236,8 @@ export default function GestaoMesasScreen() {
     setFormError("");
     try {
       await apiPost("/api/mesas", { numero: numVal, capacidade: capVal });
-      console.log("[GestaoMesas] Mesa created successfully");
-      setNumero("");
-      setCapacidade("4");
-      fetchMesas();
+      console.log("[GestaoMesas] Mesa created successfully, navigating back");
+      router.back();
     } catch (e: any) {
       console.error("[GestaoMesas] Create error:", e instanceof Error ? e.message : String(e));
       const msg = e instanceof Error ? e.message : "Não foi possível criar a mesa.";

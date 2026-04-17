@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Image } from "expo-image";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -316,6 +316,7 @@ function PratoForm({
   useEffect(() => {
     setValues(initial);
     setFormError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial.nome, initial.descricao, initial.preco, initial.categoriaId, initial.imagemUrl, initial.disponivel]);
 
   const set = (key: keyof PratoFormValues, val: string | boolean) => {
@@ -832,8 +833,8 @@ export default function GestaoPratos() {
     };
     console.log("[GestaoPratos] POST /api/pratos", body.nome);
     await apiPost("/api/pratos", body);
-    console.log("[GestaoPratos] Prato created");
-    fetchAll();
+    console.log("[GestaoPratos] Prato created, navigating back");
+    router.back();
   };
 
   const handleSaveEdit = async (id: string, values: PratoFormValues) => {

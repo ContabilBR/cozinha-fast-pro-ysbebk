@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -396,10 +396,8 @@ export default function GestaoCategorias() {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
       });
-      console.log("[GestaoCategorias] Categoria created");
-      setNome("");
-      setDescricao("");
-      fetchCategorias();
+      console.log("[GestaoCategorias] Categoria created, navigating back");
+      router.back();
     } catch (e: any) {
       console.error("[GestaoCategorias] Create error:", e instanceof Error ? e.message : String(e));
       setFormError(e instanceof Error ? e.message : "Não foi possível criar a categoria.");
