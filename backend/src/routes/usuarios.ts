@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateUsuarioBody {
   nome: string;
@@ -234,7 +235,7 @@ export function registerUsuariosRoutes(app: App) {
     "/api/usuarios/:id",
     {
       schema: {
-        description: "Delete a usuario",
+        description: "Delete a usuario (requires authentication and admin/gerente role)",
         tags: ["usuarios"],
         params: {
           type: "object",
@@ -242,12 +243,19 @@ export function registerUsuariosRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Usuario deleted" },
+          204: { description: "Usuario deleted successfully" },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
+      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
+
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");
 

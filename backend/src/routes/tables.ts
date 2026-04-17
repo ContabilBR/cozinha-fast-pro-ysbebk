@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, ne, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
+import { requireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateMesaBody {
   numero: number;
@@ -325,7 +325,7 @@ export function registerTableRoutes(app: App) {
     "/api/mesas/:id",
     {
       schema: {
-        description: "Delete a mesa (requires authentication and libre status)",
+        description: "Delete a mesa (requires authentication and admin/gerente role)",
         tags: ["mesas"],
         params: {
           type: "object",
@@ -333,12 +333,9 @@ export function registerTableRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: {
-            type: "object",
-            properties: { success: { type: "boolean" } },
-          },
-          400: { type: "object", properties: { error: { type: "string" } } },
+          204: { description: "Mesa deleted successfully" },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -346,6 +343,8 @@ export function registerTableRoutes(app: App) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const auth = await requireAuth(app, request, reply);
       if (!auth) return;
+
+      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id }, "Deleting mesa");
@@ -360,16 +359,11 @@ export function registerTableRoutes(app: App) {
           return reply.code(404).send({ error: "Mesa not found" });
         }
 
-        const mesa = existing[0];
-        if (mesa.status !== "livre") {
-          return reply.code(400).send({ error: "Mesa não pode ser excluída pois não está livre" });
-        }
-
         await app.db.delete(schema.mesas).where(eq(schema.mesas.id, request.params.id));
 
         app.logger.info({ mesaId: request.params.id }, "Mesa deleted successfully");
 
-        return reply.code(200).send({ success: true });
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete mesa");
         return reply.code(500).send({ error: "Internal server error" });

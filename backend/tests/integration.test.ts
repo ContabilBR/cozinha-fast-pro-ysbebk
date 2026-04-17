@@ -4,6 +4,9 @@ import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile } f
 describe("API Integration Tests", () => {
   let authToken: string;
   let testUserId: string;
+  let adminToken: string;
+  let adminUserId: string;
+  let testUsuarioId: string;
 
   // Resource IDs for dependency chaining
   let testCategoryId: string;
@@ -23,6 +26,20 @@ describe("API Integration Tests", () => {
     testUserId = user.id;
     expect(authToken).toBeDefined();
     expect(testUserId).toBeDefined();
+  });
+
+  test("Sign up admin user for delete tests", async () => {
+    const { token, user } = await signUpTestUser();
+    adminToken = token;
+    adminUserId = user.id;
+
+    // Update admin user role to 'administrador'
+    const updateRes = await authenticatedApi(`/api/users/${adminUserId}`, adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "administrador" }),
+    });
+    expect(updateRes.status).toBe(200);
   });
 
   // ==================== Users CRUD ====================
@@ -169,16 +186,16 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete categoria", async () => {
-    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, authToken, {
+    const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "DELETE",
     });
-    await expectStatus(res, 200);
+    await expectStatus(res, 204);
   });
 
   test("Delete non-existent categoria returns 404", async () => {
     const res = await authenticatedApi(
       "/api/categorias/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
@@ -280,12 +297,12 @@ describe("API Integration Tests", () => {
   test("Delete prato", async () => {
     const res = await authenticatedApi(
       `/api/pratos/${testDishId}`,
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
     );
-    await expectStatus(res, 200);
+    await expectStatus(res, 204);
   });
 
   test("Get deleted prato returns 404", async () => {
@@ -299,7 +316,7 @@ describe("API Integration Tests", () => {
   test("Delete non-existent prato returns 404", async () => {
     const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
@@ -399,14 +416,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete mesa when libre", async () => {
-    // Create a mesa with libre status
-    const createRes = await authenticatedApi("/api/mesas", authToken, {
+  test("Delete mesa", async () => {
+    // Create a mesa for deletion
+    const createRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         numero: Math.floor(Math.random() * 900000) + 100000,
-        status: "livre",
       }),
     });
     await expectStatus(createRes, 201);
@@ -415,53 +431,18 @@ describe("API Integration Tests", () => {
     // Delete it
     const res = await authenticatedApi(
       `/api/mesas/${mesaData.mesa.id}`,
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
     );
-    await expectStatus(res, 200);
-  });
-
-  test("Delete mesa when ocupada returns 400", async () => {
-    // Create a mesa and set it to ocupada
-    const createRes = await authenticatedApi("/api/mesas", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        numero: Math.floor(Math.random() * 900000) + 100000,
-      }),
-    });
-    await expectStatus(createRes, 201);
-    const mesaData = await createRes.json();
-
-    // Update to ocupada
-    const updateRes = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}`,
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "ocupada" }),
-      }
-    );
-    await expectStatus(updateRes, 200);
-
-    // Try to delete occupied mesa
-    const res = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}`,
-      authToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 400);
+    await expectStatus(res, 204);
   });
 
   test("Delete non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
-      authToken,
+      adminToken,
       {
         method: "DELETE",
       }
@@ -732,7 +713,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Usuarios CRUD ====================
-  let testUsuarioId: string;
   const usuarioEmail = `usuario-${Date.now()}@example.com`;
 
   test("List all usuarios", async () => {
@@ -795,15 +775,16 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete usuario", async () => {
-    const res = await api(`/api/usuarios/${testUsuarioId}`, {
+    const res = await authenticatedApi(`/api/usuarios/${testUsuarioId}`, adminToken, {
       method: "DELETE",
     });
     await expectStatus(res, 204);
   });
 
   test("Delete non-existent usuario returns 404", async () => {
-    const res = await api(
+    const res = await authenticatedApi(
       "/api/usuarios/00000000-0000-0000-0000-000000000000",
+      adminToken,
       {
         method: "DELETE",
       }

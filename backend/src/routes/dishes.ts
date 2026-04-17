@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
+import { requireAuth, requireRole } from "../utils/auth.js";
 
 interface CreatePratoBody {
   nome: string;
@@ -397,7 +397,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Delete a prato (requires authentication)",
+        description: "Delete a prato (requires authentication and admin/gerente role)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -405,11 +405,9 @@ export function registerDishRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: {
-            type: "object",
-            properties: { success: { type: "boolean" } },
-          },
+          204: { description: "Prato deleted successfully" },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -417,6 +415,8 @@ export function registerDishRoutes(app: App) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const auth = await requireAuth(app, request, reply);
       if (!auth) return;
+
+      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
@@ -434,7 +434,7 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ pratoId: request.params.id }, "Prato deleted successfully");
 
-        return reply.code(200).send({ success: true });
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete prato");
         return reply.code(500).send({ error: "Internal server error" });
