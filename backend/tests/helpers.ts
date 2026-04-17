@@ -79,14 +79,35 @@ export async function signUpTestUser(): Promise<TestUser> {
     throw new Error(`Failed to sign up test user (${res.status}): ${body}`);
   }
 
-  const data = (await res.json()) as TestUser;
+  const data = await res.json() as any;
+
+  // Better Auth returns { user, session } where session has the token
+  const token = data.session?.token || data.token;
+  const user = data.user || data;
+
+  if (!token) {
+    throw new Error(`Failed to extract token from sign-up response: ${JSON.stringify(data)}`);
+  }
+
+  const testUser: TestUser = {
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      emailVerified: user.emailVerified || false,
+      image: user.image || null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    },
+  };
 
   // Auto-register cleanup so the test file doesn't need to
   afterAll(async () => {
-    await deleteTestUser(data.token);
+    await deleteTestUser(testUser.token);
   });
 
-  return data;
+  return testUser;
 }
 
 /**

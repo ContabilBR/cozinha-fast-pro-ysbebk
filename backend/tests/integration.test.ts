@@ -42,6 +42,37 @@ describe("API Integration Tests", () => {
     expect(updateRes.status).toBe(200);
   });
 
+  // ==================== Auth Endpoints ====================
+  test("Get current authenticated user", async () => {
+    const res = await authenticatedApi("/api/auth/me", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.user).toBeDefined();
+    expect(data.user.id).toBeDefined();
+    expect(data.user.email).toBeDefined();
+  });
+
+  test("Get current user without authentication returns 401", async () => {
+    const res = await api("/api/auth/me");
+    await expectStatus(res, 401);
+  });
+
+  test("Sign out authenticated user", async () => {
+    const res = await authenticatedApi("/api/auth/sign-out", authToken, {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
+
+  test("Sign out without authentication returns 401", async () => {
+    const res = await api("/api/auth/sign-out", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
+  });
+
   // ==================== Users CRUD ====================
   test("List all users", async () => {
     const res = await authenticatedApi("/api/users", authToken);
@@ -324,6 +355,64 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ==================== Pratos Photo Upload ====================
+  let fotoPratoId: string;
+
+  test("Create prato for photo upload", async () => {
+    const res = await authenticatedApi("/api/pratos", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Pasta Carbonara",
+        preco: "18.99",
+        categoriaId: pratoCategoryId,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    fotoPratoId = data.prato.id;
+  });
+
+  test("Upload photo for prato", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("prato.jpg", "test image content", "image/jpeg");
+    formData.append("file", testFile);
+
+    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, authToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+  });
+
+  test("Upload photo to non-existent prato returns 404", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("prato.jpg", "test image content", "image/jpeg");
+    formData.append("file", testFile);
+
+    const res = await authenticatedApi(
+      "/api/pratos/00000000-0000-0000-0000-000000000000/foto",
+      authToken,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Upload photo without file returns 400", async () => {
+    const formData = new FormData();
+
+    const res = await authenticatedApi(`/api/pratos/${fotoPratoId}/foto`, authToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 400);
+  });
+
   // ==================== Mesas CRUD ====================
   test("List all mesas", async () => {
     const res = await authenticatedApi("/api/mesas", authToken);
@@ -436,12 +525,49 @@ describe("API Integration Tests", () => {
         method: "DELETE",
       }
     );
-    await expectStatus(res, 204);
+    await expectStatus(res, 200);
   });
 
   test("Delete non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
+      adminToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  // ==================== Mesas Force Delete ====================
+  test("Force delete mesa", async () => {
+    // Create a mesa for force deletion
+    const createRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    // Force delete it
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.mesa.id}/force`,
+      adminToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+  });
+
+  test("Force delete non-existent mesa returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/mesas/00000000-0000-0000-0000-000000000000/force",
       adminToken,
       {
         method: "DELETE",

@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth } from "../utils/auth.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
 
@@ -23,6 +22,8 @@ interface UpdateUserBody {
 }
 
 export function registerUserRoutes(app: App) {
+  const requireAuth = app.requireAuth();
+
   // GET /api/users - List all users
   app.fastify.get(
     "/api/users",
@@ -40,8 +41,8 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({}, "Listing all users");
@@ -92,8 +93,8 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateUserBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         if (!request.body.name || !request.body.email || !request.body.password) {
@@ -196,8 +197,8 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateUserBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Updating user");
@@ -258,8 +259,8 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Deleting user");

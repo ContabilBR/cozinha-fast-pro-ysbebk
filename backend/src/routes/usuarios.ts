@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth, requireRole } from "../utils/auth.js";
+import { requireRole } from "../utils/auth.js";
 
 interface CreateUsuarioBody {
   nome: string;
@@ -20,6 +20,8 @@ interface UpdateUsuarioBody {
 }
 
 export function registerUsuariosRoutes(app: App) {
+  const requireAuth = app.requireAuth();
+
   // GET /api/usuarios - List all usuarios
   app.fastify.get(
     "/api/usuarios",
@@ -251,10 +253,10 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
-      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");

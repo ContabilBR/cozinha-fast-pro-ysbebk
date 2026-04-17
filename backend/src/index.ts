@@ -19,6 +19,7 @@ const schema = { ...appSchema, ...authSchema };
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
 app.withStorage();
+app.withAuth();
 
 // Export App type for use in route files
 export type App = typeof app;

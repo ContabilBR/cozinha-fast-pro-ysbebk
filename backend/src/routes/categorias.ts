@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth, requireRole } from "../utils/auth.js";
+import { requireRole } from "../utils/auth.js";
 
 interface CreateCategoriaBody {
   nome: string;
@@ -15,6 +15,7 @@ interface UpdateCategoriaBody {
 }
 
 export function registerCategoriasRoutes(app: App) {
+  const requireAuth = app.requireAuth();
   // GET /api/categorias - List all categories
   app.fastify.get(
     "/api/categorias",
@@ -45,7 +46,7 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
+      const auth = await requireAuth(request, reply);
       if (!auth) return;
 
       try {
@@ -106,7 +107,7 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateCategoriaBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
+      const auth = await requireAuth(request, reply);
       if (!auth) return;
 
       try {
@@ -183,7 +184,7 @@ export function registerCategoriasRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoriaBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(app, request, reply);
+      const auth = await requireAuth(request, reply);
       if (!auth) return;
 
       try {
@@ -246,10 +247,10 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
-      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ categoriaId: request.params.id }, "Deleting categoria");

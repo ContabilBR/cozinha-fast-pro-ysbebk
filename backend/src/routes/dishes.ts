@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth, requireRole } from "../utils/auth.js";
+import { requireRole } from "../utils/auth.js";
 
 interface CreatePratoBody {
   nome: string;
@@ -23,6 +23,7 @@ interface UpdatePratoBody {
 }
 
 export function registerDishRoutes(app: App) {
+  const requireAuth = app.requireAuth();
   // GET /api/pratos - List all pratos
   app.fastify.get(
     "/api/pratos",
@@ -64,8 +65,8 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({}, "Listing pratos");
@@ -153,8 +154,8 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         if (!request.body.nome || !request.body.preco) {
@@ -240,8 +241,8 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Getting prato");
@@ -342,8 +343,8 @@ export function registerDishRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdatePratoBody }>,
       reply: FastifyReply
     ) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Updating prato");
@@ -413,10 +414,10 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
+      const session = await requireAuth(request, reply);
+      if (!session) return;
 
-      if (!requireRole(auth.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
@@ -437,6 +438,97 @@ export function registerDishRoutes(app: App) {
         return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete prato");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // POST /api/pratos/:id/foto - Upload photo for a prato
+  app.fastify.post<{ Params: { id: string } }>(
+    "/api/pratos/:id/foto",
+    {
+      schema: {
+        description: "Upload a photo for a prato (requires authentication)",
+        tags: ["pratos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              imagem_url: { type: ["string", "null"] },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+          413: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await requireAuth(request, reply);
+      if (!session) return;
+
+      try {
+        app.logger.info({ pratoId: request.params.id }, "Uploading prato photo");
+
+        // Get the file from multipart form data
+        const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+
+        if (!data) {
+          app.logger.warn({ pratoId: request.params.id }, "No file provided in upload request");
+          return reply.code(400).send({ error: "No file provided" });
+        }
+
+        // Check if prato exists
+        const existing = await app.db
+          .select()
+          .from(schema.pratos)
+          .where(eq(schema.pratos.id, request.params.id));
+
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Prato not found" });
+        }
+
+        let buffer: Buffer;
+        try {
+          buffer = await data.toBuffer();
+        } catch (error) {
+          app.logger.warn({ err: error }, "File too large");
+          return reply.code(413).send({ error: "File too large" });
+        }
+
+        const mimeType = data.mimetype || "application/octet-stream";
+        const ext = mimeType.startsWith("image/") ? mimeType.replace("image/", ".") : ".bin";
+        const filename = `pratos/${request.params.id}-${Date.now()}${ext}`;
+        const key = filename;
+
+        // Upload to storage
+        const uploadedKey = await app.storage.upload(key, buffer);
+
+        // Get signed URL for client access
+        const { url } = await app.storage.getSignedUrl(uploadedKey);
+
+        // Update prato with image URL
+        const [updated] = await app.db
+          .update(schema.pratos)
+          .set({ imagemUrl: url })
+          .where(eq(schema.pratos.id, request.params.id))
+          .returning();
+
+        app.logger.info({ pratoId: request.params.id, url }, "Prato photo uploaded successfully");
+
+        return reply.code(200).send({
+          id: updated.id,
+          imagem_url: updated.imagemUrl,
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to upload prato photo");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
