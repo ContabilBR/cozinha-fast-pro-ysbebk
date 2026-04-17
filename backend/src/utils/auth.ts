@@ -1,39 +1,43 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { session as sessionTable, user as userTable } from "../db/schema/auth-schema.js";
+import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 
 export async function requireAuth(
   app: App,
   request: FastifyRequest,
   reply: FastifyReply
-): Promise<{ userId: string; user: any } | null> {
-  const authHeader = request.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    reply.status(401).send({ error: "Unauthorized" });
-    return null;
-  }
-
-  const token = authHeader.slice(7).trim();
-
+): Promise<{ userId: string; user: any; profile: any } | null> {
   try {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      app.logger.warn({}, "Missing or invalid authorization header");
+      reply.status(401).send({ error: "Unauthorized" });
+      return null;
+    }
+
+    const token = authHeader.slice(7).trim();
+
     // Look up token in session table
-    const sess = await app.db
+    const sessions = await app.db
       .select()
       .from(sessionTable)
       .where(eq(sessionTable.token, token))
       .limit(1);
 
-    if (!sess || sess.length === 0) {
+    if (!sessions || sessions.length === 0) {
+      app.logger.warn({ token: token.substring(0, 10) + "..." }, "Session not found for token");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
 
-    const sessionRecord = sess[0];
+    const session = sessions[0];
 
     // Check if session has expired
-    if (new Date(sessionRecord.expiresAt) <= new Date()) {
+    if (new Date(session.expiresAt) < new Date()) {
+      app.logger.warn({ sessionId: session.id }, "Session expired");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
@@ -42,19 +46,34 @@ export async function requireAuth(
     const users = await app.db
       .select()
       .from(userTable)
-      .where(eq(userTable.id, sessionRecord.userId))
+      .where(eq(userTable.id, session.userId))
       .limit(1);
 
     if (!users || users.length === 0) {
+      app.logger.warn({ userId: session.userId }, "User not found for session");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
 
     const user = users[0];
 
+    // Get profile for role information
+    const profiles = await app.db
+      .select()
+      .from(schema.profiles)
+      .where(eq(schema.profiles.userId, user.id))
+      .limit(1);
+
+    const profile = profiles && profiles.length > 0
+      ? { role: profiles[0].role, name: profiles[0].name }
+      : { role: user.role || "usuario", name: user.name };
+
+    app.logger.info({ userId: user.id }, "Auth validation successful");
+
     return {
       userId: user.id,
       user: user,
+      profile: profile,
     };
   } catch (error) {
     app.logger.error({ err: error }, "Auth validation failed");
@@ -65,10 +84,13 @@ export async function requireAuth(
 
 export function requireRole(
   user: any,
+  profile: any,
   allowedRoles: string[],
   reply: FastifyReply
 ): boolean {
-  if (!allowedRoles.includes(user.role)) {
+  // Check both user role and profile role
+  const userRole = profile?.role || user?.role;
+  if (!allowedRoles.includes(userRole)) {
     reply.status(403).send({ error: "Forbidden" });
     return false;
   }

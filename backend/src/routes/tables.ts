@@ -35,7 +35,7 @@ export function registerTableRoutes(app: App) {
                   properties: {
                     id: { type: "string", format: "uuid" },
                     numero: { type: "number" },
-                    status: { type: "string", enum: ["livre", "ocupada"] },
+                    status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
                     capacidade: { type: "number" },
                     createdAt: { type: "string", format: "date-time" },
                   },
@@ -84,7 +84,7 @@ export function registerTableRoutes(app: App) {
           properties: {
             numero: { type: "number" },
             capacidade: { type: "number" },
-            status: { type: "string", enum: ["livre", "ocupada"] },
+            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
           },
         },
         response: {
@@ -96,7 +96,7 @@ export function registerTableRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   numero: { type: "number" },
-                  status: { type: "string", enum: ["livre", "ocupada"] },
+                  status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
                   capacidade: { type: "number" },
                   createdAt: { type: "string", format: "date-time" },
                 },
@@ -131,11 +131,12 @@ export function registerTableRoutes(app: App) {
           return reply.code(409).send({ error: "Número de mesa já existe" });
         }
 
+        const statusValue = request.body.status || "livre";
         const [mesa] = await app.db
           .insert(schema.mesas)
           .values({
-            numero: request.body.numero as number,
-            status: (request.body.status || "livre") as "livre" | "ocupada",
+            numero: request.body.numero,
+            status: statusValue as any,
             capacidade: request.body.capacidade || 4,
           })
           .returning();
@@ -176,7 +177,7 @@ export function registerTableRoutes(app: App) {
             properties: {
               id: { type: "string", format: "uuid" },
               numero: { type: "number" },
-              status: { type: "string", enum: ["livre", "ocupada"] },
+              status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
               capacidade: { type: "number" },
               createdAt: { type: "string", format: "date-time" },
             },
@@ -233,7 +234,7 @@ export function registerTableRoutes(app: App) {
           type: "object",
           properties: {
             numero: { type: "number" },
-            status: { type: "string", enum: ["livre", "ocupada"] },
+            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
             capacidade: { type: "number" },
           },
         },
@@ -246,7 +247,7 @@ export function registerTableRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   numero: { type: "number" },
-                  status: { type: "string", enum: ["livre", "ocupada"] },
+                  status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
                   capacidade: { type: "number" },
                   createdAt: { type: "string", format: "date-time" },
                 },
@@ -345,7 +346,7 @@ export function registerTableRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id }, "Deleting mesa with cascade");
@@ -421,7 +422,7 @@ export function registerTableRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id }, "Force deleting mesa");

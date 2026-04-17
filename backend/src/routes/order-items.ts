@@ -293,6 +293,9 @@ export function registerOrderItemRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdatePedidoStatusBody }>,
       reply: FastifyReply
     ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({ pedidoId: request.params.id, status: request.body.status }, "Updating pedido status");
 

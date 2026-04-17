@@ -5,8 +5,10 @@ import type { App } from "../index.js";
 import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 interface CreateComandaBody {
-  mesaId: string;
+  mesaId?: string;
+  mesa_id?: string;
   garcomId?: string;
+  garcom_id?: string;
 }
 
 interface FecharComandaBody {
@@ -92,9 +94,11 @@ export function registerOrderRoutes(app: App) {
         tags: ["comandas"],
         body: {
           type: "object",
-          required: ["mesaId"],
+          required: ["mesa_id"],
           properties: {
+            mesa_id: { type: "string", format: "uuid" },
             mesaId: { type: "string", format: "uuid" },
+            garcom_id: { type: ["string", "null"] },
             garcomId: { type: ["string", "null"] },
           },
         },
@@ -119,17 +123,20 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
-        if (!request.body.mesaId) {
-          return reply.code(400).send({ error: "mesaId is required" });
+        const mesaId = request.body.mesa_id || request.body.mesaId;
+        const garcomId = request.body.garcom_id || request.body.garcomId;
+
+        if (!mesaId) {
+          return reply.code(400).send({ error: "mesa_id is required" });
         }
 
-        app.logger.info({ mesaId: request.body.mesaId }, "Creating comanda");
+        app.logger.info({ mesaId }, "Creating comanda");
 
         const [comanda] = await app.db
           .insert(schema.comandas)
           .values({
-            mesaId: request.body.mesaId,
-            garcomId: request.body.garcomId,
+            mesaId,
+            garcomId,
             status: "aberta",
             total: "0",
           })
@@ -139,17 +146,17 @@ export function registerOrderRoutes(app: App) {
         await app.db
           .update(schema.mesas)
           .set({ status: "ocupada" })
-          .where(eq(schema.mesas.id, request.body.mesaId));
+          .where(eq(schema.mesas.id, mesaId));
 
         app.logger.info({ comandaId: comanda.id }, "Comanda created successfully");
 
         return reply.code(201).send({
           id: comanda.id,
-          mesaId: comanda.mesaId,
-          garcomId: comanda.garcomId,
+          mesa_id: comanda.mesaId,
+          garcom_id: comanda.garcomId,
           status: comanda.status,
           total: comanda.total,
-          createdAt: comanda.createdAt.toISOString(),
+          created_at: comanda.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create comanda");

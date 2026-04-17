@@ -19,6 +19,7 @@ interface UpdatePratoBody {
   preco?: string;
   categoriaId?: string;
   imagemUrl?: string;
+  imagem_url?: string;
   disponivel?: boolean;
 }
 
@@ -311,6 +312,7 @@ export function registerDishRoutes(app: App) {
             preco: { type: "string" },
             categoriaId: { type: ["string", "null"] },
             imagemUrl: { type: ["string", "null"] },
+            imagem_url: { type: ["string", "null"] },
             disponivel: { type: "boolean" },
           },
         },
@@ -362,7 +364,8 @@ export function registerDishRoutes(app: App) {
         if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
         if (request.body.preco !== undefined) updates.preco = request.body.preco;
         if (request.body.categoriaId !== undefined) updates.categoriaId = request.body.categoriaId;
-        if (request.body.imagemUrl !== undefined) updates.imagemUrl = request.body.imagemUrl;
+        const imagemUrl = request.body.imagemUrl || request.body.imagem_url;
+        if (imagemUrl !== undefined) updates.imagemUrl = imagemUrl;
         if (request.body.disponivel !== undefined) updates.disponivel = request.body.disponivel;
 
         const [updated] = await app.db
@@ -416,7 +419,7 @@ export function registerDishRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
@@ -474,7 +477,7 @@ export function registerDishRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, ["administrador", "gerente", "cozinheiro"], reply)) return;
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente", "cozinheiro"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Uploading prato photo");

@@ -7,6 +7,7 @@ describe("API Integration Tests", () => {
   let adminToken: string;
   let adminUserId: string;
   let testUsuarioId: string;
+  let testGarcomId: string;
 
   // Resource IDs for dependency chaining
   let testCategoryId: string;
@@ -54,22 +55,6 @@ describe("API Integration Tests", () => {
 
   test("Get current user without authentication returns 401", async () => {
     const res = await api("/api/auth/me");
-    await expectStatus(res, 401);
-  });
-
-  test("Sign out authenticated user", async () => {
-    const res = await authenticatedApi("/api/auth/sign-out", authToken, {
-      method: "POST",
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.success).toBeDefined();
-  });
-
-  test("Sign out without authentication returns 401", async () => {
-    const res = await api("/api/auth/sign-out", {
-      method: "POST",
-    });
     await expectStatus(res, 401);
   });
 
@@ -944,6 +929,113 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ==================== Garcons CRUD ====================
+  const garcomEmail = `garcom-${Date.now()}@example.com`;
+
+  test("List all garcons", async () => {
+    const res = await authenticatedApi("/api/garcons", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("Create garcon", async () => {
+    const res = await authenticatedApi("/api/garcons", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Garcon",
+        email: garcomEmail,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    testGarcomId = data.id;
+  });
+
+  test("Create garcon missing required field returns 400", async () => {
+    const res = await authenticatedApi("/api/garcons", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `garcom2-${Date.now()}@example.com`,
+        // missing required name and password
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create garcon with duplicate email returns 409", async () => {
+    const dupEmail = `garcom-dup-${Date.now()}@example.com`;
+
+    // Create first garcon
+    const firstRes = await authenticatedApi("/api/garcons", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "First Garcon",
+        email: dupEmail,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    // Try to create with same email
+    const dupRes = await authenticatedApi("/api/garcons", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Second Garcon",
+        email: dupEmail,
+        password: "different",
+      }),
+    });
+    await expectStatus(dupRes, 409);
+  });
+
+  test("Update garcon", async () => {
+    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated Garcon",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update non-existent garcon returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/garcons/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Test" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete garcon", async () => {
+    const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Delete non-existent garcon returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/garcons/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
   // ==================== Relatorios ====================
   test("Get relatorio resumo", async () => {
     const res = await api("/api/relatorios/resumo");
@@ -980,5 +1072,48 @@ describe("API Integration Tests", () => {
       body: formData,
     });
     await expectStatus(res, 400);
+  });
+
+  test("Upload file", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("test-file.txt", "test file content", "text/plain");
+    formData.append("file", testFile);
+
+    const res = await authenticatedApi("/api/upload", authToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.url).toBeDefined();
+  });
+
+  test("Upload file missing file returns 400", async () => {
+    const formData = new FormData();
+
+    const res = await authenticatedApi("/api/upload", authToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 400);
+  });
+
+  // ==================== Sign Out (Last Tests) ====================
+  test("Sign out authenticated user", async () => {
+    // Create a fresh token just for sign-out testing
+    const { token: signOutToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/auth/sign-out", signOutToken, {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
+
+  test("Sign out without authentication returns 401", async () => {
+    const res = await api("/api/auth/sign-out", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
   });
 });

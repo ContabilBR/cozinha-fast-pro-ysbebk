@@ -255,7 +255,7 @@ export function registerUsuariosRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      if (!requireRole(session.user, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");

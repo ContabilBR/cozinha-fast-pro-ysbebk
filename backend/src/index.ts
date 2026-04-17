@@ -11,6 +11,7 @@ import { registerCategoriasRoutes } from './routes/categorias.js';
 import { registerUsuariosRoutes } from './routes/usuarios.js';
 import { registerRelatoriosRoutes } from './routes/relatorios.js';
 import { registerUploadRoutes } from './routes/upload.js';
+import { registerGarconRoutes } from './routes/garcons.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -35,6 +36,7 @@ registerCategoriasRoutes(app);
 registerUsuariosRoutes(app);
 registerRelatoriosRoutes(app);
 registerUploadRoutes(app);
+registerGarconRoutes(app);
 
 // Seed database on startup
 await seedDatabase(app);
