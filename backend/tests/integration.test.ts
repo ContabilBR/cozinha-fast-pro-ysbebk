@@ -316,6 +316,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update dish with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/dishes/invalid-uuid-format",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Test" }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Delete dish", async () => {
     const res = await authenticatedApi(`/api/dishes/${testDishId}`, authToken, {
       method: "DELETE",
@@ -473,7 +486,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         table_id: orderTableId,
-        waiter_id: "waiter-1",
+        waiter_id: testUserId,
         customer_count: 2,
         notes: "No salt",
       }),
@@ -571,7 +584,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         table_id: orderTableId,
-        waiter_id: "waiter-2",
+        waiter_id: testUserId,
         customer_count: 1,
       }),
     });
@@ -607,6 +620,22 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          quantity: 1,
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add item to order with invalid order ID returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/orders/invalid-uuid-format/items`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dish_id: orderItemDishId,
           quantity: 1,
         }),
       }

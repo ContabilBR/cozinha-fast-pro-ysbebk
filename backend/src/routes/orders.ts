@@ -216,7 +216,8 @@ export function registerOrderRoutes(app: App) {
         const row = rows[0];
         app.logger.info({ orderId: order.id }, "Order created");
 
-        reply.code(201).send({
+        reply.code(201);
+        return {
           id: row.id,
           status: row.status,
           customer_count: row.customer_count,
@@ -239,7 +240,7 @@ export function registerOrderRoutes(app: App) {
                 email: row.waiter_email,
               }
             : null,
-        });
+        };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create order");
         return reply.status(500).send({ error: "Internal server error" });

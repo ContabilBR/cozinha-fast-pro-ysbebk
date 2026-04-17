@@ -131,7 +131,8 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: category.id }, "Category created");
 
-        reply.code(201).send({
+        reply.code(201);
+        return {
           id: category.id,
           name: category.name,
           description: category.description,
@@ -139,7 +140,7 @@ export function registerCategoryRoutes(app: App) {
           icon: category.icon,
           active: category.active,
           created_at: category.createdAt,
-        });
+        };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create category");
         return reply.status(500).send({ error: "Internal server error" });
@@ -260,7 +261,8 @@ export function registerCategoryRoutes(app: App) {
 
         app.logger.info({ categoryId: request.params.id }, "Category deleted");
 
-        return reply.status(204).send();
+        reply.status(204);
+        return;
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete category");
         return reply.status(500).send({ error: "Internal server error" });

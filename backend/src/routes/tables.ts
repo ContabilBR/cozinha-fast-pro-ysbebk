@@ -108,6 +108,9 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateTableBody }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         if (!request.body.number || !request.body.capacity) {
           return reply.status(400).send({ error: "number and capacity are required" });
@@ -128,7 +131,8 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: table.id }, "Table created");
 
-        reply.code(201).send({
+        reply.code(201);
+        return {
           id: table.id,
           number: table.number,
           capacity: table.capacity,
@@ -136,7 +140,7 @@ export function registerTableRoutes(app: App) {
           status: table.status,
           active: table.active,
           created_at: table.createdAt,
-        });
+        };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create table");
         return reply.status(500).send({ error: "Internal server error" });
@@ -243,6 +247,9 @@ export function registerTableRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateTableBody }>,
       reply: FastifyReply
     ) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ tableId: request.params.id }, "Updating table");
 
@@ -305,6 +312,9 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const auth = await requireAuth(app, request, reply);
+      if (!auth) return;
+
       try {
         app.logger.info({ tableId: request.params.id }, "Deleting table");
 
@@ -324,7 +334,8 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ tableId: request.params.id }, "Table deleted");
 
-        return reply.status(204).send();
+        reply.status(204);
+        return;
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete table");
         return reply.status(500).send({ error: "Internal server error" });

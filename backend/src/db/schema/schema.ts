@@ -98,6 +98,23 @@ export const orderItems = pgTable("order_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Profiles
+export const profiles = pgTable(
+  "profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: uniqueIndex("profiles_user_id_idx").on(table.userId),
+  })
+);
+
 // Action Logs
 export const actionLogs = pgTable("action_logs", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -58,20 +58,17 @@ export function registerDishRoutes(app: App) {
               },
             },
           },
-          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const auth = await requireAuth(app, request, reply);
-      if (!auth) return;
-
       try {
         app.logger.info({}, "Listing dishes");
 
         const dishes = await app.db
           .select()
           .from(schema.dishes)
+          .where(eq(schema.dishes.active, true))
           .leftJoin(schema.categories, eq(schema.dishes.categoryId, schema.categories.id));
 
         const result = dishes.map((row) => ({
@@ -187,7 +184,8 @@ export function registerDishRoutes(app: App) {
         }
 
         const row = rows[0];
-        reply.code(201).send({
+        reply.code(201);
+        return {
           id: row.id,
           name: row.name,
           description: row.description,
@@ -204,7 +202,7 @@ export function registerDishRoutes(app: App) {
                 icon: row.category_icon,
               }
             : null,
-        });
+        };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create dish");
         return reply.status(500).send({ error: "Internal server error" });

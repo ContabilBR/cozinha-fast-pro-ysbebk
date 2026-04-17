@@ -139,17 +139,18 @@ export function registerUserRoutes(app: App) {
         const user = created[0];
         app.logger.info({ userId: user.id }, "User created successfully");
 
-        reply.code(201).send({
+        reply.code(201);
+        return {
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
           active: user.active,
           created_at: user.createdAt,
-        });
+        };
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
-        reply.status(500).send({ error: "Internal server error" });
+        return reply.status(500).send({ error: "Internal server error" });
       }
     }
   );
@@ -265,7 +266,8 @@ export function registerUserRoutes(app: App) {
 
         app.logger.info({ userId: request.params.id }, "User deleted");
 
-        return reply.status(204).send();
+        reply.status(204);
+        return;
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete user");
         return reply.status(500).send({ error: "Internal server error" });

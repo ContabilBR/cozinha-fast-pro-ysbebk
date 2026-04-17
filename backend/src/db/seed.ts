@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import * as schema from "./schema/schema.js";
-import { user as userTable } from "./schema/auth-schema.js";
+import { user as userTable, account as accountTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
+import { randomUUID } from "crypto";
 
 const seedUsers = [
   {
@@ -146,6 +147,19 @@ export async function seedDatabase(app: App) {
             .update(userTable)
             .set({ role: seedUser.role as any })
             .where(eq(userTable.id, result.user.id));
+
+          // Create profile for user
+          try {
+            await app.db
+              .insert(schema.profiles)
+              .values({
+                userId: result.user.id,
+                role: seedUser.role,
+                name: seedUser.name,
+              });
+          } catch (profileErr) {
+            app.logger.warn({ userId: result.user.id }, "Profile may already exist");
+          }
         }
       } catch (err) {
         app.logger.warn({ email: seedUser.email }, "Failed to create user via Better Auth, user may already exist");

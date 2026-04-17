@@ -15,6 +15,13 @@
       "when": 1775875522591,
       "tag": "20260411024522_dapper_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776383716990,
+      "tag": "20260416235516_ambiguous_goliath",
+      "breakpoints": true
     }
   ]
 }
