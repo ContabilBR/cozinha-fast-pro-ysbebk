@@ -6,7 +6,7 @@ import Constants from "expo-constants";
 
 const API_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 
-export const BEARER_TOKEN_KEY = "Newly_bearer_token";
+export const BEARER_TOKEN_KEY = "cozinhafastpro_bearer_token";
 
 // Platform-specific storage: localStorage for web, SecureStore for native
 const storage = Platform.OS === "web"
@@ -21,8 +21,8 @@ export const authClient = createAuthClient({
   baseURL: API_URL,
   plugins: [
     expoClient({
-      scheme: "Newly",
-      storagePrefix: "Newly",
+      scheme: "cozinhafastpro",
+      storagePrefix: "cozinhafastpro",
       storage,
     }),
   ],

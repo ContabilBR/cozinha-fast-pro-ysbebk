@@ -1,68 +1,71 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
-import { BACKEND_URL, apiCall } from "@/utils/api";
-import { BEARER_TOKEN_KEY } from "@/lib/auth";
-
-const TOKEN_KEY = BEARER_TOKEN_KEY;
-const USER_KEY = "cozinhafast_user";
+import * as Linking from "expo-linking";
+import { authClient, setBearerToken, clearAuthTokens, API_URL } from "@/lib/auth";
 
 export interface AuthUser {
   id: string;
   email: string;
-  name: string;
-  role: string;
-  token?: string;
+  name?: string;
+  image?: string;
+  role?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function storeToken(token: string) {
-  if (Platform.OS === "web") {
-    localStorage.setItem(TOKEN_KEY, token);
-  } else {
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
-  }
-}
+function openOAuthPopup(provider: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
 
-async function getStoredToken(): Promise<string | null> {
-  try {
-    if (Platform.OS === "web") {
-      return localStorage.getItem(TOKEN_KEY);
-    } else {
-      return await SecureStore.getItemAsync(TOKEN_KEY);
+    const popup = window.open(
+      popupUrl,
+      "oauth-popup",
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    if (!popup) {
+      reject(new Error("Failed to open popup. Please allow popups."));
+      return;
     }
-  } catch {
-    return null;
-  }
-}
 
-async function removeToken() {
-  if (Platform.OS === "web") {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-  } else {
-    await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
-    await SecureStore.deleteItemAsync(USER_KEY).catch(() => {});
-  }
-}
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "oauth-success" && event.data?.token) {
+        window.removeEventListener("message", handleMessage);
+        clearInterval(checkClosed);
+        resolve(event.data.token);
+      } else if (event.data?.type === "oauth-error") {
+        window.removeEventListener("message", handleMessage);
+        clearInterval(checkClosed);
+        reject(new Error(event.data.error || "OAuth failed"));
+      }
+    };
 
-function buildUserFromResponse(data: any, meData: any, token: string): AuthUser {
-  const profile = meData?.profile || meData?.user?.profile;
-  return {
-    id: meData?.user?.id || data?.user?.id || "",
-    email: meData?.user?.email || data?.user?.email || "",
-    name: profile?.name || meData?.user?.name || data?.user?.name || "",
-    role: profile?.role || meData?.user?.role || data?.user?.role || "",
-    token,
-  };
+    window.addEventListener("message", handleMessage);
+
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        window.removeEventListener("message", handleMessage);
+        reject(new Error("Authentication cancelled"));
+      }
+    }, 500);
+  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -70,32 +73,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    restoreSession();
+    fetchUser();
+
+    const subscription = Linking.addEventListener("url", () => {
+      console.log("[Auth] Deep link received, refreshing user session");
+      fetchUser();
+    });
+
+    const intervalId = setInterval(() => {
+      fetchUser();
+    }, 5 * 60 * 1000);
+
+    return () => {
+      subscription.remove();
+      clearInterval(intervalId);
+    };
   }, []);
 
-  const restoreSession = async () => {
-    console.log("[Auth] Restoring session...");
+  const fetchUser = async () => {
     try {
-      const token = await getStoredToken();
-      if (!token) {
-        console.log("[Auth] No stored token found");
+      setLoading(true);
+      const session = await authClient.getSession();
+      console.log("[Auth] Session response:", JSON.stringify(session?.data?.user));
+      if (session?.data?.user) {
+        const rawUser = session.data.user as any;
+        let role = rawUser.role || "";
+
+        // Se role não veio na sessão, buscar do /api/auth/me
+        if (!role && session.data.session?.token) {
+          try {
+            const meRes = await fetch(`${API_URL}/api/auth/me`, {
+              headers: { Authorization: `Bearer ${session.data.session.token}` },
+            });
+            if (meRes.ok) {
+              const me = await meRes.json();
+              role = me.role || "";
+              console.log("[Auth] Role fetched from /api/auth/me:", role);
+            } else {
+              console.warn("[Auth] /api/auth/me returned", meRes.status);
+            }
+          } catch (e) {
+            console.warn("[Auth] Could not fetch /api/auth/me:", e);
+          }
+        }
+
+        const authUser: AuthUser = {
+          id: rawUser.id || "",
+          email: rawUser.email || "",
+          name: rawUser.name || "",
+          image: rawUser.image || "",
+          role,
+        };
+        console.log("[Auth] User fetched:", authUser.email, "role:", authUser.role);
+        setUser(authUser);
+
+        if (session.data.session?.token) {
+          await setBearerToken(session.data.session.token);
+        }
+      } else {
         setUser(null);
-        return;
+        await clearAuthTokens();
       }
-      const meData = await apiCall("/api/auth/me", { method: "GET" }, token);
-      const profile = meData?.profile || meData?.user?.profile;
-      const userData: AuthUser = {
-        id: meData?.user?.id || meData?.id || "",
-        email: meData?.user?.email || meData?.email || "",
-        name: profile?.name || meData?.user?.name || meData?.name || "",
-        role: profile?.role || meData?.user?.role || meData?.role || "",
-        token,
-      };
-      console.log("[Auth] Session restored for:", userData.email, "role:", userData.role);
-      setUser(userData);
-    } catch (e) {
-      console.error("[Auth] Session restore error:", e);
-      await removeToken();
+    } catch (error) {
+      console.error("[Auth] Failed to fetch user:", error);
       setUser(null);
     } finally {
       setLoading(false);
@@ -103,78 +143,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    console.log("[Auth] Signing in with email:", email);
-    let data: any;
+    console.log("[Auth] signInWithEmail called for:", email);
+    let result: any;
     try {
-      console.log("[Auth] Calling /api/auth/sign-in/email for:", email);
-      data = await apiCall("/api/auth/sign-in/email", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
+      result = await authClient.signIn.email({ email, password });
+      console.log("[Auth] signIn.email result:", JSON.stringify(result));
+    } catch (error: any) {
+      const msg = error?.message || "Erro ao fazer login. Tente novamente.";
+      console.error("[Auth] signIn.email threw exception:", msg);
+      throw new Error(msg);
+    }
+
+    // Better Auth retorna erros no campo .error em vez de lançar exceção
+    if (result?.error) {
+      const errMsg = result.error?.message || "E-mail ou senha incorretos";
+      console.error("[Auth] signIn.email returned error field:", errMsg, "code:", result.error?.code);
+      throw new Error(errMsg);
+    }
+
+    // Aguardar um momento para a sessão ser estabelecida
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await fetchUser();
+  };
+
+  const signUpWithEmail = async (email: string, password: string, name?: string) => {
+    console.log("[Auth] signUpWithEmail called for:", email);
+    try {
+      await authClient.signUp.email({ email, password, name: name || "" });
+      await fetchUser();
+    } catch (error) {
+      console.error("[Auth] Email sign up failed:", error);
+      throw error;
+    }
+  };
+
+  const signInWithSocial = async (provider: "google" | "apple") => {
+    console.log("[Auth] signInWithSocial called for provider:", provider);
+    if (Platform.OS === "web") {
+      const token = await openOAuthPopup(provider);
+      await setBearerToken(token);
+      await fetchUser();
+    } else {
+      const { error } = await authClient.signIn.social({
+        provider,
+        callbackURL: "/auth-callback",
       });
-    } catch (e: any) {
-      console.error("[Auth] Login request failed:", e?.message);
-      const msg: string = e?.message || "";
-      if (msg === "Sem conexão com o servidor") {
-        throw new Error("Sem conexão com o servidor");
+      if (error) {
+        throw new Error(error.message || "Social sign in failed");
       }
-      if (
-        msg.includes("401") ||
-        msg.includes("403") ||
-        msg.toLowerCase().includes("invalid") ||
-        msg.toLowerCase().includes("incorrect") ||
-        msg.toLowerCase().includes("unauthorized") ||
-        msg.toLowerCase().includes("credenciais") ||
-        msg.toLowerCase().includes("inválid") ||
-        msg.toLowerCase().includes("invalidas") ||
-        msg.toLowerCase().includes("senha") ||
-        msg.toLowerCase().includes("password")
-      ) {
-        throw new Error("E-mail ou senha incorretos");
+      await fetchUser();
+    }
+  };
+
+  const signInWithGoogle = () => signInWithSocial("google");
+
+  const signInWithApple = async () => {
+    console.log("[Auth] signInWithApple called, platform:", Platform.OS);
+    if (Platform.OS === "ios") {
+      const AppleAuthentication = require("expo-apple-authentication");
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error("No identity token received from Apple");
       }
-      throw new Error("Erro ao fazer login. Tente novamente.");
+      const { error } = await authClient.signIn.social({
+        provider: "apple",
+        idToken: credential.identityToken,
+      });
+      if (error) {
+        throw new Error(error.message || "Apple sign in failed");
+      }
+      await fetchUser();
+    } else {
+      await signInWithSocial("apple");
     }
-
-    // Better Auth /sign-in/email returns { token, user } directly
-    // Fallback to session-based shapes for compatibility
-    const token: string =
-      data?.token ||
-      data?.session?.token ||
-      data?.session?.id ||
-      "";
-    if (!token) {
-      console.error("[Auth] No token in response:", JSON.stringify(data));
-      throw new Error("Token não recebido. Tente novamente.");
-    }
-
-    // Try /api/auth/me to get full user profile including role
-    let meData: any = {};
-    try {
-      meData = await apiCall("/api/auth/me", { method: "GET" }, token);
-      console.log("[Auth] /api/auth/me response:", JSON.stringify(meData));
-    } catch (e) {
-      console.warn("[Auth] Could not fetch /api/auth/me, using sign-in data:", e);
-    }
-
-    const userData = buildUserFromResponse(data, meData, token);
-    console.log("[Auth] Login successful for:", userData.email, "role:", userData.role);
-    await storeToken(token);
-    setUser(userData);
   };
 
   const signOut = async () => {
-    console.log("[Auth] Signing out");
+    console.log("[Auth] signOut called");
     try {
-      const token = await getStoredToken();
-      if (token) {
-        await apiCall("/api/auth/sign-out", { method: "POST" }, token).catch(() => {});
-      }
-    } catch {}
-    await removeToken();
-    setUser(null);
+      await authClient.signOut();
+    } catch (error) {
+      console.error("[Auth] Sign out failed (API):", error);
+    } finally {
+      setUser(null);
+      await clearAuthTokens();
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithEmail, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signInWithEmail,
+        signUpWithEmail,
+        signInWithApple,
+        signInWithGoogle,
+        signOut,
+        fetchUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
