@@ -2,21 +2,20 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  Modal,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
   ActivityIndicator,
   Alert,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import { Plus, Pencil, Trash2, Tag, X } from "lucide-react-native";
+import { Plus, Pencil, Trash2, Tag, Check, X } from "lucide-react-native";
 
 interface ApiCategoria {
   id: string;
@@ -24,22 +23,228 @@ interface ApiCategoria {
   descricao?: string;
 }
 
-function CategoriaItem({
+function CategoriaRow({
   categoria,
   onEdit,
   onDelete,
+  onSaveEdit,
+  isEditing,
+  onCancelEdit,
 }: {
   categoria: ApiCategoria;
   onEdit: (c: ApiCategoria) => void;
   onDelete: (c: ApiCategoria) => void;
+  onSaveEdit: (id: string, nome: string, descricao: string) => Promise<void>;
+  isEditing: boolean;
+  onCancelEdit: () => void;
 }) {
   const COLORS = useColors();
+  const [editNome, setEditNome] = useState(categoria.nome);
+  const [editDescricao, setEditDescricao] = useState(categoria.descricao ?? "");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  // Sync when editing starts
+  useEffect(() => {
+    if (isEditing) {
+      setEditNome(categoria.nome);
+      setEditDescricao(categoria.descricao ?? "");
+      setEditError("");
+    }
+  }, [isEditing, categoria]);
+
+  const handleSave = async () => {
+    if (!editNome.trim()) {
+      setEditError("Nome é obrigatório.");
+      return;
+    }
+    setSaving(true);
+    setEditError("");
+    try {
+      await onSaveEdit(categoria.id, editNome.trim(), editDescricao.trim());
+    } catch (e: any) {
+      setEditError(e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontFamily: "Outfit_400Regular" as const,
+    fontSize: 14,
+    color: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  };
+
+  if (isEditing) {
+    return (
+      <View
+        style={{
+          backgroundColor: COLORS.primaryMuted,
+          borderRadius: 16,
+          padding: 16,
+          marginHorizontal: 16,
+          marginVertical: 5,
+          borderWidth: 1.5,
+          borderColor: COLORS.primary + "40",
+          gap: 10,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: COLORS.primary + "20",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={13} color={COLORS.primary} />
+          </View>
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 13,
+              color: COLORS.primary,
+            }}
+          >
+            Editando categoria
+          </Text>
+        </View>
+
+        <View style={{ gap: 6 }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 12,
+              color: COLORS.text,
+            }}
+          >
+            Nome *
+          </Text>
+          <TextInput
+            value={editNome}
+            onChangeText={(t) => {
+              setEditNome(t);
+              setEditError("");
+            }}
+            placeholder="Nome da categoria"
+            placeholderTextColor={COLORS.textTertiary}
+            style={inputStyle}
+            autoFocus
+          />
+        </View>
+
+        <View style={{ gap: 6 }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 12,
+              color: COLORS.text,
+            }}
+          >
+            Descrição
+          </Text>
+          <TextInput
+            value={editDescricao}
+            onChangeText={setEditDescricao}
+            placeholder="Descrição opcional"
+            placeholderTextColor={COLORS.textTertiary}
+            multiline
+            numberOfLines={2}
+            style={[inputStyle, { minHeight: 60, textAlignVertical: "top" }]}
+          />
+        </View>
+
+        {editError ? (
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 12,
+              color: COLORS.danger,
+            }}
+          >
+            {editError}
+          </Text>
+        ) : null}
+
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <AnimatedPressable
+            onPress={() => {
+              console.log("[GestaoCategorias] Cancel edit:", categoria.id);
+              onCancelEdit();
+            }}
+            style={{
+              flex: 1,
+              height: 42,
+              borderRadius: 12,
+              backgroundColor: COLORS.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+            }}
+          >
+            <X size={14} color={COLORS.textSecondary} />
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 14,
+                color: COLORS.textSecondary,
+              }}
+            >
+              Cancelar
+            </Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            onPress={() => {
+              console.log("[GestaoCategorias] Save edit pressed:", categoria.id);
+              handleSave();
+            }}
+            disabled={saving}
+            style={{
+              flex: 1,
+              height: 42,
+              borderRadius: 12,
+              backgroundColor: COLORS.primary,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Check size={14} color="#fff" />
+                <Text
+                  style={{
+                    fontFamily: "Outfit_600SemiBold",
+                    fontSize: 14,
+                    color: "#fff",
+                  }}
+                >
+                  Salvar
+                </Text>
+              </>
+            )}
+          </AnimatedPressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <AnimatedPressable
-      onPress={() => {
-        console.log("[GestaoCategorias] Edit pressed:", categoria.id, categoria.nome);
-        onEdit(categoria);
-      }}
+    <View
       style={{
         backgroundColor: COLORS.surface,
         borderRadius: 16,
@@ -98,7 +303,7 @@ function CategoriaItem({
       <View style={{ flexDirection: "row", gap: 8 }}>
         <AnimatedPressable
           onPress={() => {
-            console.log("[GestaoCategorias] Edit icon pressed:", categoria.id);
+            console.log("[GestaoCategorias] Edit icon pressed:", categoria.id, categoria.nome);
             onEdit(categoria);
           }}
           style={{
@@ -114,7 +319,7 @@ function CategoriaItem({
         </AnimatedPressable>
         <AnimatedPressable
           onPress={() => {
-            console.log("[GestaoCategorias] Delete icon pressed:", categoria.id);
+            console.log("[GestaoCategorias] Delete icon pressed:", categoria.id, categoria.nome);
             onDelete(categoria);
           }}
           style={{
@@ -129,7 +334,7 @@ function CategoriaItem({
           <Trash2 size={15} color="#EF4444" />
         </AnimatedPressable>
       </View>
-    </AnimatedPressable>
+    </View>
   );
 }
 
@@ -142,12 +347,14 @@ export default function GestaoCategorias() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingCategoria, setEditingCategoria] = useState<ApiCategoria | null>(null);
+  // Create form
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Inline edit
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const fetchCategorias = useCallback(async () => {
     console.log("[GestaoCategorias] GET /api/categorias");
@@ -176,55 +383,40 @@ export default function GestaoCategorias() {
     fetchCategorias();
   };
 
-  const openCreate = () => {
-    console.log("[GestaoCategorias] Open create modal");
-    setEditingCategoria(null);
-    setNome("");
-    setDescricao("");
-    setFormError("");
-    setModalVisible(true);
-  };
-
-  const openEdit = (c: ApiCategoria) => {
-    console.log("[GestaoCategorias] Open edit modal:", c.id, c.nome);
-    setEditingCategoria(c);
-    setNome(c.nome);
-    setDescricao(c.descricao ?? "");
-    setFormError("");
-    setModalVisible(true);
-  };
-
-  const handleSave = async () => {
+  const handleCreate = async () => {
     if (!nome.trim()) {
       setFormError("Nome é obrigatório.");
       return;
     }
+    console.log("[GestaoCategorias] POST /api/categorias nome:", nome.trim());
     setSubmitting(true);
     setFormError("");
     try {
-      if (editingCategoria) {
-        console.log("[GestaoCategorias] PUT /api/categorias/", editingCategoria.id, "nome:", nome);
-        await apiPut(`/api/categorias/${editingCategoria.id}`, {
-          nome: nome.trim(),
-          descricao: descricao.trim() || undefined,
-        });
-        console.log("[GestaoCategorias] Categoria updated");
-      } else {
-        console.log("[GestaoCategorias] POST /api/categorias nome:", nome);
-        await apiPost("/api/categorias", {
-          nome: nome.trim(),
-          descricao: descricao.trim() || undefined,
-        });
-        console.log("[GestaoCategorias] Categoria created");
-      }
-      setModalVisible(false);
+      await apiPost("/api/categorias", {
+        nome: nome.trim(),
+        descricao: descricao.trim() || undefined,
+      });
+      console.log("[GestaoCategorias] Categoria created");
+      setNome("");
+      setDescricao("");
       fetchCategorias();
     } catch (e: any) {
-      console.error("[GestaoCategorias] Save error:", e instanceof Error ? e.message : String(e));
-      setFormError(e instanceof Error ? e.message : "Não foi possível salvar.");
+      console.error("[GestaoCategorias] Create error:", e instanceof Error ? e.message : String(e));
+      setFormError(e instanceof Error ? e.message : "Não foi possível criar a categoria.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSaveEdit = async (id: string, editNome: string, editDescricao: string) => {
+    console.log("[GestaoCategorias] PUT /api/categorias/", id, "nome:", editNome);
+    await apiPut(`/api/categorias/${id}`, {
+      nome: editNome,
+      descricao: editDescricao || undefined,
+    });
+    console.log("[GestaoCategorias] Categoria updated:", id);
+    setEditingId(null);
+    fetchCategorias();
   };
 
   const handleDelete = (c: ApiCategoria) => {
@@ -243,6 +435,7 @@ export default function GestaoCategorias() {
               await apiDelete(`/api/categorias/${c.id}`);
               console.log("[GestaoCategorias] Categoria deleted:", c.id);
               setCategorias((prev) => prev.filter((cat) => cat.id !== c.id));
+              if (editingId === c.id) setEditingId(null);
             } catch (e: any) {
               console.error("[GestaoCategorias] Delete error:", e instanceof Error ? e.message : String(e));
               Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível excluir.");
@@ -264,8 +457,7 @@ export default function GestaoCategorias() {
     borderColor: COLORS.border,
   };
 
-  const modalTitle = editingCategoria ? "Editar Categoria" : "Nova Categoria";
-  const saveLabel = editingCategoria ? "Salvar alterações" : "Criar Categoria";
+  const countText = `${categorias.length} categoria${categorias.length !== 1 ? "s" : ""}`;
 
   return (
     <>
@@ -279,280 +471,267 @@ export default function GestaoCategorias() {
         }}
       />
 
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        {loading ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color={COLORS.primary} size="large" />
-          </View>
-        ) : error ? (
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: COLORS.background }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
+          }
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Inline creation form */}
           <View
             style={{
-              flex: 1,
+              margin: 16,
+              backgroundColor: COLORS.surface,
+              borderRadius: 20,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              gap: 14,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: "#8B5CF618",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Plus size={18} color="#8B5CF6" />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "Outfit_700Bold",
+                  fontSize: 17,
+                  color: COLORS.text,
+                }}
+              >
+                Nova Categoria
+              </Text>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 13,
+                  color: COLORS.text,
+                }}
+              >
+                Nome *
+              </Text>
+              <TextInput
+                value={nome}
+                onChangeText={(t) => {
+                  setNome(t);
+                  setFormError("");
+                }}
+                placeholder="Ex: Entradas"
+                placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle}
+              />
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 13,
+                  color: COLORS.text,
+                }}
+              >
+                Descrição
+              </Text>
+              <TextInput
+                value={descricao}
+                onChangeText={setDescricao}
+                placeholder="Descrição opcional"
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                numberOfLines={2}
+                style={[inputStyle, { minHeight: 68, textAlignVertical: "top" }]}
+              />
+            </View>
+
+            {formError ? (
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 13,
+                  color: COLORS.danger,
+                }}
+              >
+                {formError}
+              </Text>
+            ) : null}
+
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[GestaoCategorias] Adicionar Categoria pressed");
+                handleCreate();
+              }}
+              disabled={submitting}
+              style={{
+                backgroundColor: "#8B5CF6",
+                borderRadius: 14,
+                height: 50,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text
+                  style={{
+                    fontFamily: "Outfit_700Bold",
+                    fontSize: 15,
+                    color: "#fff",
+                  }}
+                >
+                  Adicionar Categoria
+                </Text>
+              )}
+            </AnimatedPressable>
+          </View>
+
+          {/* Section header */}
+          <View
+            style={{
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              padding: 32,
-              gap: 12,
+              justifyContent: "space-between",
+              paddingHorizontal: 20,
+              paddingBottom: 8,
             }}
           >
             <Text
               style={{
-                fontFamily: "Outfit_600SemiBold",
-                fontSize: 17,
+                fontFamily: "Outfit_700Bold",
+                fontSize: 16,
                 color: COLORS.text,
-                textAlign: "center",
               }}
             >
-              {error}
+              Categorias Cadastradas
             </Text>
-            <AnimatedPressable
-              onPress={fetchCategorias}
+            <Text
               style={{
-                backgroundColor: COLORS.primary,
-                borderRadius: 12,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
+                fontFamily: "Outfit_400Regular",
+                fontSize: 13,
+                color: COLORS.textSecondary,
               }}
             >
-              <Text
-                style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}
-              >
-                Tentar novamente
-              </Text>
-            </AnimatedPressable>
+              {countText}
+            </Text>
           </View>
-        ) : (
-          <FlatList
-            data={categorias}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 100 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor={COLORS.primary}
-              />
-            }
-            renderItem={({ item }) => (
-              <CategoriaItem
-                categoria={item}
-                onEdit={openEdit}
-                onDelete={handleDelete}
-              />
-            )}
-            ListEmptyComponent={
-              <View
+
+          {loading ? (
+            <View style={{ alignItems: "center", paddingVertical: 48 }}>
+              <ActivityIndicator color={COLORS.primary} size="large" />
+            </View>
+          ) : error ? (
+            <View style={{ alignItems: "center", padding: 32, gap: 12 }}>
+              <Text
                 style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 48,
-                  gap: 12,
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 15,
+                  color: COLORS.text,
+                  textAlign: "center",
                 }}
               >
-                <View
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 20,
-                    backgroundColor: "#8B5CF618",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Tag size={32} color="#8B5CF6" />
-                </View>
-                <Text
-                  style={{
-                    fontFamily: "Outfit_600SemiBold",
-                    fontSize: 17,
-                    color: COLORS.text,
-                  }}
-                >
-                  Nenhuma categoria encontrada
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "Outfit_400Regular",
-                    fontSize: 14,
-                    color: COLORS.textSecondary,
-                    textAlign: "center",
-                  }}
-                >
-                  Toque no botão + para adicionar categorias
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        {/* FAB */}
-        <AnimatedPressable
-          onPress={openCreate}
-          style={{
-            position: "absolute",
-            bottom: insets.bottom + 24,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: COLORS.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: COLORS.primary,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.4,
-            shadowRadius: 8,
-            elevation: 6,
-          }}
-        >
-          <Plus size={24} color="#fff" />
-        </AnimatedPressable>
-      </View>
-
-      {/* Create / Edit Modal */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "flex-end",
-              backgroundColor: "rgba(0,0,0,0.5)",
-            }}
-          >
-            <View
-              style={{
-                backgroundColor: COLORS.surface,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                padding: 24,
-                paddingBottom: insets.bottom + 24,
-                gap: 16,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "Outfit_700Bold",
-                    fontSize: 20,
-                    color: COLORS.text,
-                  }}
-                >
-                  {modalTitle}
-                </Text>
-                <AnimatedPressable
-                  onPress={() => {
-                    console.log("[GestaoCategorias] Close modal");
-                    setModalVisible(false);
-                  }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: COLORS.surfaceSecondary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <X size={16} color={COLORS.textSecondary} />
-                </AnimatedPressable>
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text
-                  style={{
-                    fontFamily: "Outfit_600SemiBold",
-                    fontSize: 14,
-                    color: COLORS.text,
-                  }}
-                >
-                  Nome *
-                </Text>
-                <TextInput
-                  value={nome}
-                  onChangeText={setNome}
-                  placeholder="Ex: Entradas"
-                  placeholderTextColor={COLORS.textTertiary}
-                  style={inputStyle}
-                />
-              </View>
-
-              <View style={{ gap: 6 }}>
-                <Text
-                  style={{
-                    fontFamily: "Outfit_600SemiBold",
-                    fontSize: 14,
-                    color: COLORS.text,
-                  }}
-                >
-                  Descrição
-                </Text>
-                <TextInput
-                  value={descricao}
-                  onChangeText={setDescricao}
-                  placeholder="Descrição opcional"
-                  placeholderTextColor={COLORS.textTertiary}
-                  multiline
-                  numberOfLines={2}
-                  style={[inputStyle, { minHeight: 70, textAlignVertical: "top" }]}
-                />
-              </View>
-
-              {formError ? (
-                <Text
-                  style={{
-                    fontFamily: "Outfit_400Regular",
-                    fontSize: 13,
-                    color: COLORS.danger,
-                    textAlign: "center",
-                  }}
-                >
-                  {formError}
-                </Text>
-              ) : null}
-
+                {error}
+              </Text>
               <AnimatedPressable
-                onPress={handleSave}
-                disabled={submitting}
+                onPress={fetchCategorias}
                 style={{
                   backgroundColor: COLORS.primary,
-                  borderRadius: 14,
-                  height: 52,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: submitting ? 0.7 : 1,
+                  borderRadius: 12,
+                  paddingHorizontal: 24,
+                  paddingVertical: 12,
                 }}
               >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text
-                    style={{
-                      fontFamily: "Outfit_700Bold",
-                      fontSize: 16,
-                      color: "#fff",
-                    }}
-                  >
-                    {saveLabel}
-                  </Text>
-                )}
+                <Text
+                  style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}
+                >
+                  Tentar novamente
+                </Text>
               </AnimatedPressable>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          ) : categorias.length === 0 ? (
+            <View style={{ alignItems: "center", padding: 48, gap: 12 }}>
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 18,
+                  backgroundColor: "#8B5CF618",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Tag size={28} color="#8B5CF6" />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 16,
+                  color: COLORS.text,
+                }}
+              >
+                Nenhuma categoria encontrada
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 13,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                }}
+              >
+                Use o formulário acima para adicionar categorias
+              </Text>
+            </View>
+          ) : (
+            <View style={{ paddingTop: 4, paddingBottom: 8 }}>
+              {categorias.map((cat) => (
+                <CategoriaRow
+                  key={cat.id}
+                  categoria={cat}
+                  isEditing={editingId === cat.id}
+                  onEdit={(c) => {
+                    console.log("[GestaoCategorias] Start inline edit:", c.id);
+                    setEditingId(c.id);
+                  }}
+                  onCancelEdit={() => {
+                    console.log("[GestaoCategorias] Cancel inline edit");
+                    setEditingId(null);
+                  }}
+                  onSaveEdit={handleSaveEdit}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }
