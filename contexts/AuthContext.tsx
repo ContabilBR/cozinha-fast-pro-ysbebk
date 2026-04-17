@@ -106,7 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("[Auth] Signing in with email:", email);
     let data: any;
     try {
-      data = await apiCall("/api/auth/sign-in", {
+      console.log("[Auth] Calling /api/auth/sign-in/email for:", email);
+      data = await apiCall("/api/auth/sign-in/email", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
@@ -116,21 +117,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (msg === "Sem conexão com o servidor") {
         throw new Error("Sem conexão com o servidor");
       }
-      if (msg.includes("401") || msg.includes("403") || msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("unauthorized")) {
+      if (
+        msg.includes("401") ||
+        msg.includes("403") ||
+        msg.toLowerCase().includes("invalid") ||
+        msg.toLowerCase().includes("incorrect") ||
+        msg.toLowerCase().includes("unauthorized") ||
+        msg.toLowerCase().includes("credenciais") ||
+        msg.toLowerCase().includes("inválid") ||
+        msg.toLowerCase().includes("invalidas") ||
+        msg.toLowerCase().includes("senha") ||
+        msg.toLowerCase().includes("password")
+      ) {
         throw new Error("E-mail ou senha incorretos");
       }
       throw new Error("Erro ao fazer login. Tente novamente.");
     }
 
-    const token: string = data?.token || data?.session?.token || data?.session?.id || "";
+    // Better Auth /sign-in/email returns { token, user } directly
+    // Fallback to session-based shapes for compatibility
+    const token: string =
+      data?.token ||
+      data?.session?.token ||
+      data?.session?.id ||
+      "";
     if (!token) {
       console.error("[Auth] No token in response:", JSON.stringify(data));
       throw new Error("Token não recebido. Tente novamente.");
     }
 
+    // Try /api/auth/me to get full user profile including role
     let meData: any = {};
     try {
       meData = await apiCall("/api/auth/me", { method: "GET" }, token);
+      console.log("[Auth] /api/auth/me response:", JSON.stringify(meData));
     } catch (e) {
       console.warn("[Auth] Could not fetch /api/auth/me, using sign-in data:", e);
     }

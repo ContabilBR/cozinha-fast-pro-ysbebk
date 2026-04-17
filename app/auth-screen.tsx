@@ -18,10 +18,10 @@ import { ChefHat, Mail, Lock, Eye, EyeOff } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEMO_CREDENTIALS = [
-  { role: "Administrador", email: "admin@cozinhafast.com", password: "admin123" },
-  { role: "Gerente", email: "gerente@cozinhafast.com", password: "gerente123" },
-  { role: "Garçom", email: "garcom@cozinhafast.com", password: "garcom123" },
-  { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "cozinheiro123" },
+  { role: "Administrador", email: "admin@cozinhafast.com", password: "123456" },
+  { role: "Gerente", email: "gerente@cozinhafast.com", password: "123456" },
+  { role: "Garçom", email: "garcom@cozinhafast.com", password: "123456" },
+  { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "123456" },
 ];
 
 const ROLE_ROUTES: Record<string, string> = {
