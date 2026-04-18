@@ -40,17 +40,15 @@ const seedAuthUsers = [
 ];
 
 const seedCategorias = [
-  { nome: "Entradas", descricao: "Aperitivos e entradas leves" },
-  { nome: "Pratos Principais", descricao: "Pratos quentes e frios principais" },
-  { nome: "Sobremesas", descricao: "Doces e sobremesas variadas" },
-  { nome: "Bebidas", descricao: "Bebidas quentes, frias e alcoólicas" },
-  { nome: "Lanches", descricao: "Sanduíches, hambúrgueres e lanches rápidos" },
+  { nome: "Entradas", descricao: "Aperitivos e entradas" },
+  { nome: "Pratos Principais", descricao: "Pratos quentes e frios" },
+  { nome: "Bebidas", descricao: "Bebidas quentes e frias" },
 ];
 
 const seedPratos = [
   {
-    nome: "Bruschetta ao Tomate",
-    descricao: "Pão crocante com tomate fresco, alho e manjericão",
+    nome: "Bruschetta Italiana",
+    descricao: "Pão crocante com tomate fresco e manjericão",
     preco: "18.90",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato1/400/300",
@@ -58,88 +56,44 @@ const seedPratos = [
   {
     nome: "Carpaccio de Carne",
     descricao: "Carne bovina cortada finíssima com limão e azeite",
-    preco: "32.50",
+    preco: "32.00",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato2/400/300",
   },
   {
-    nome: "Filé Mignon ao Molho Madeira",
-    descricao: "Filé mignon grelhado com molho madeira de primeira qualidade",
-    preco: "68.90",
+    nome: "Filé ao Molho Madeira",
+    descricao: "Filé mignon grelhado com molho madeira",
+    preco: "58.00",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato3/400/300",
   },
   {
-    nome: "Salmão Grelhado",
-    descricao: "Salmão fresco grelhado com temperos aromáticos",
-    preco: "72.00",
+    nome: "Risoto de Camarão",
+    descricao: "Risoto cremoso com camarões frescos",
+    preco: "65.00",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato4/400/300",
   },
   {
-    nome: "Frango à Parmegiana",
-    descricao: "Frango à milanesa coberto com molho e queijo derretido",
-    preco: "45.90",
-    categoria: "Pratos Principais",
+    nome: "Suco de Laranja Natural",
+    descricao: "Suco natural de laranja fresca",
+    preco: "12.00",
+    categoria: "Bebidas",
     imagemUrl: "https://picsum.photos/seed/prato5/400/300",
   },
   {
-    nome: "Risoto de Funghi",
-    descricao: "Risoto cremoso com cogumelos frescos e vinho tinto",
-    preco: "52.00",
-    categoria: "Pratos Principais",
-    imagemUrl: "https://picsum.photos/seed/prato6/400/300",
-  },
-  {
-    nome: "Petit Gâteau",
-    descricao: "Bolo quentinho de chocolate com calda e sorvete de baunilha",
-    preco: "22.90",
-    categoria: "Sobremesas",
-    imagemUrl: "https://picsum.photos/seed/prato7/400/300",
-  },
-  {
-    nome: "Pudim de Leite",
-    descricao: "Pudim de leite condensado com calda de caramelo caseira",
-    preco: "14.50",
-    categoria: "Sobremesas",
-    imagemUrl: "https://picsum.photos/seed/prato8/400/300",
-  },
-  {
-    nome: "Suco Natural",
-    descricao: "Suco natural de frutas frescas do dia",
-    preco: "12.00",
-    categoria: "Bebidas",
-    imagemUrl: "https://picsum.photos/seed/prato9/400/300",
-  },
-  {
-    nome: "Refrigerante",
-    descricao: "Refrigerante gelado em copo com gelo",
+    nome: "Água com Gás",
+    descricao: "Água mineral com gás gelada",
     preco: "8.00",
     categoria: "Bebidas",
-    imagemUrl: "https://picsum.photos/seed/prato10/400/300",
-  },
-  {
-    nome: "X-Burguer Artesanal",
-    descricao: "Hambúrguer artesanal com pão caseiro, queijo e bacon",
-    preco: "38.90",
-    categoria: "Lanches",
-    imagemUrl: "https://picsum.photos/seed/prato11/400/300",
-  },
-  {
-    nome: "Wrap de Frango",
-    descricao: "Wrap quente com frango grelhado, alface e molho especial",
-    preco: "29.90",
-    categoria: "Lanches",
-    imagemUrl: "https://picsum.photos/seed/prato12/400/300",
+    imagemUrl: "https://picsum.photos/seed/prato6/400/300",
   },
 ];
 
 const seedUsuarios = [
-  { nome: "Administrador", email: "admin@cozinhafast.com", password: "admin123", role: "administrador" },
-  { nome: "Gerente", email: "gerente@cozinhafast.com", password: "123456", role: "gerente" },
-  { nome: "Gerente Teste", email: "gerente@teste.com", password: "123456", role: "gerente" },
-  { nome: "Garçom", email: "garcom@cozinhafast.com", password: "garcom123", role: "garcom" },
-  { nome: "Cozinheiro", email: "cozinheiro@cozinhafast.com", password: "cozinheiro123", role: "cozinheiro" },
+  { nome: "João Garçom", email: "garcom@teste.com", password: "123456", role: "garcom" },
+  { nome: "Maria Cozinha", email: "cozinha@teste.com", password: "123456", role: "cozinha" },
+  { nome: "Carlos Admin", email: "admin@teste.com", password: "123456", role: "admin" },
 ];
 
 export async function cleanupMesasAndComandas(app: App) {
@@ -284,19 +238,19 @@ export async function seedDatabase(app: App) {
       return;
     }
 
-    // Seed mesas (10 tables with different capacidades)
+    // Seed mesas (10 tables with capacidade 4)
     app.logger.info("Seeding mesas");
     const mesasToSeed = [
-      { numero: 1, capacidade: 2 },
-      { numero: 2, capacidade: 2 },
-      { numero: 3, capacidade: 2 },
-      { numero: 4, capacidade: 2 },
+      { numero: 1, capacidade: 4 },
+      { numero: 2, capacidade: 4 },
+      { numero: 3, capacidade: 4 },
+      { numero: 4, capacidade: 4 },
       { numero: 5, capacidade: 4 },
       { numero: 6, capacidade: 4 },
       { numero: 7, capacidade: 4 },
       { numero: 8, capacidade: 4 },
-      { numero: 9, capacidade: 6 },
-      { numero: 10, capacidade: 6 },
+      { numero: 9, capacidade: 4 },
+      { numero: 10, capacidade: 4 },
     ];
     for (const mesa of mesasToSeed) {
       try {
