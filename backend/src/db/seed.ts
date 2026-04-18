@@ -329,70 +329,60 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
-    // Seed usuarios with pre-computed bcrypt hash
-    app.logger.info("Seeding usuarios with pre-computed bcrypt hash");
-
-    // Pre-computed hash of "123456" with bcrypt - NEVER call bcrypt.hash() at runtime for seeding
-    const HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
+    // Seed usuarios with simple Drizzle operations
+    app.logger.info("Seeding usuarios");
 
     try {
-      // Delete all existing usuarios to ensure fresh seed
-      app.logger.info("Clearing existing usuarios for fresh seed");
-      try {
-        await app.db.delete(schema.usuarios);
-        app.logger.info("Existing usuarios cleared");
-      } catch (deleteErr) {
-        app.logger.warn({ err: deleteErr }, 'Failed to delete existing usuarios (table may not exist yet)');
-      }
+      // bcryptjs hash of "123456"
+      const HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
+      app.logger.info('Using pre-computed bcryptjs hash for password 123456');
 
-      // Insert fresh seed usuarios
-      app.logger.info("Inserting fresh seed usuarios");
-      for (const usuario of seedUsuarios) {
-        try {
-          await app.db.insert(schema.usuarios).values({
-            nome: usuario.nome,
-            email: usuario.email,
-            senhaHash: HASH,
-            role: usuario.role,
-          });
-          app.logger.info({ email: usuario.email }, 'Usuario inserted successfully');
-        } catch (insertErr) {
-          app.logger.error({ email: usuario.email, err: insertErr }, 'Failed to insert usuario');
-        }
-      }
+      // Delete all existing usuarios
+      app.logger.info("Deleting all existing usuarios");
+      await app.db.delete(schema.usuarios);
 
-      // Verify: log the stored data for gerente user
-      app.logger.info("Verifying seed data");
-      const gerenteUsers = await app.db
-        .select()
-        .from(schema.usuarios)
-        .where(eq(schema.usuarios.email, 'gerente@cozinhafast.com'));
+      // Insert seed usuarios
+      app.logger.info("Inserting 4 seed usuarios");
+      const seedUsuariosData = [
+        { nome: 'Garçom', email: 'garcom@cozinhafast.com', role: 'garcom' },
+        { nome: 'Cozinheiro', email: 'cozinheiro@cozinhafast.com', role: 'cozinheiro' },
+        { nome: 'Gerente', email: 'gerente@cozinhafast.com', role: 'gerente' },
+        { nome: 'Administrador', email: 'admin@cozinhafast.com', role: 'admin' },
+      ];
 
-      if (gerenteUsers.length > 0) {
-        const gerenteUser = gerenteUsers[0];
-        app.logger.info(
-          {
-            id: gerenteUser.id,
-            nome: gerenteUser.nome,
-            email: gerenteUser.email,
-            role: gerenteUser.role,
-            senhaHashFull: gerenteUser.senhaHash,
-          },
-          'Verification: Gerente user stored successfully'
-        );
+      // Insert all usuarios in one batch
+      const insertedUsuarios = await app.db.insert(schema.usuarios).values(
+        seedUsuariosData.map(u => ({
+          nome: u.nome,
+          email: u.email,
+          senhaHash: HASH,
+          role: u.role,
+        }))
+      ).returning();
+
+      app.logger.info({ count: insertedUsuarios.length }, 'Usuarios inserted');
+
+      // Verify by querying back
+      const verifyUsuarios = await app.db.select().from(schema.usuarios);
+      app.logger.info(
+        {
+          totalCount: verifyUsuarios.length,
+          usuarios: verifyUsuarios.map(u => ({
+            email: u.email,
+            hasHash: !!u.senhaHash,
+            hashLength: u.senhaHash?.length || 0
+          }))
+        },
+        'Verification complete'
+      );
+
+      if (verifyUsuarios.length >= 4) {
+        app.logger.info("Usuarios seeded successfully with all 4 users");
       } else {
-        app.logger.warn('Gerente user not found after seeding - seed may have failed');
+        app.logger.warn(`Only ${verifyUsuarios.length} usuarios found after seeding, expected 4`);
       }
-
-      // Count total usuarios
-      const totalUsuarios = await app.db
-        .select()
-        .from(schema.usuarios);
-      app.logger.info({ count: totalUsuarios.length }, 'Total usuarios in database');
-
-      app.logger.info("Usuarios seeded successfully");
     } catch (err) {
-      app.logger.error({ err }, 'Failed to seed usuarios');
+      app.logger.error({ err, message: (err as Error).message }, 'Error seeding usuarios');
     }
 
     app.logger.info("Database seeded successfully");
