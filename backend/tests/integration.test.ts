@@ -855,6 +855,17 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.comandas)).toBe(true);
   });
 
+  test("List comandas filtered by status", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas?status=aberta",
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
+  });
+
   test("Create comanda", async () => {
     const res = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",

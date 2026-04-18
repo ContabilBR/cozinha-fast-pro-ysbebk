@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import * as schema from "./schema/schema.js";
 import { user as userTable, account as accountTable, session as sessionTable, verification as verificationTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -153,8 +153,8 @@ export async function cleanupMesasAndComandas(app: App) {
 }
 
 // Seed 4 core users that must always exist - using raw database inserts only
-const coreUsers = [
-  { email: "admin@cozinhafast.com", name: "Administrador", role: "administrador", password: "123456" },
+const seedUsers = [
+  { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: "123456" },
   { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "123456" },
   { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: "123456" },
   { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: "123456" },
@@ -172,85 +172,110 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
-    // Step 1: Seed 4 core users using raw database inserts (idempotent)
-    app.logger.info("Seeding core users with raw database inserts");
-    const now = new Date();
+    // Step 1: Ensure all enum values exist using raw SQL
+    app.logger.info("Ensuring user_role enum values exist");
+    try {
+      const enumValues = ["admin", "gerente", "garcom", "cozinheiro", "administrador"];
 
-    for (const user of coreUsers) {
-      try {
-        app.logger.info({ email: user.email }, "Processing core user");
-
-        // Check if user exists by email
-        const existingUser = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.email, user.email))
-          .limit(1);
-
-        let userId: string;
-
-        if (existingUser.length === 0) {
-          // User doesn't exist, create new user
-          userId = randomUUID();
-          app.logger.info({ email: user.email, userId }, "Inserting new user");
-
-          await app.db.insert(userTable).values({
-            id: userId,
-            name: user.name,
-            email: user.email,
-            emailVerified: true,
-            role: user.role as any,
-            active: true,
-            createdAt: now,
-            updatedAt: now,
-          });
-        } else {
-          // User exists, use existing ID and update role if needed
-          userId = existingUser[0].id;
-          app.logger.info({ email: user.email, userId }, "User already exists");
-
-          if (existingUser[0].role !== user.role) {
-            await app.db
-              .update(userTable)
-              .set({ role: user.role as any })
-              .where(eq(userTable.id, userId));
-            app.logger.info({ userId }, "Updated user role");
+      for (const value of enumValues) {
+        try {
+          const query = `
+            DO $$
+            BEGIN
+              ALTER TYPE user_role ADD VALUE IF NOT EXISTS '${value}';
+            EXCEPTION WHEN others THEN NULL;
+            END$$;
+          `;
+          // Try to execute raw SQL if the method exists
+          if (typeof (app.db as any).execute === 'function') {
+            await (app.db as any).execute(query);
           }
+        } catch (err) {
+          app.logger.debug({ value, err }, "Failed to add enum value (may already exist)");
         }
-
-        // Check if account exists for this user with credential provider
-        const existingAccount = await app.db
-          .select()
-          .from(accountTable)
-          .where(eq(accountTable.userId, userId))
-          .limit(1);
-
-        if (existingAccount.length === 0) {
-          // Account doesn't exist, create it
-          const hashedPassword = await bcryptjs.hash(user.password, 10);
-          app.logger.info({ userId }, "Inserting new credential account");
-
-          await app.db.insert(accountTable).values({
-            id: randomUUID(),
-            accountId: user.email,
-            providerId: "credential",
-            userId: userId,
-            password: hashedPassword,
-            createdAt: now,
-            updatedAt: now,
-          });
-        } else {
-          app.logger.info({ userId }, "Account already exists");
-        }
-
-        app.logger.info({ email: user.email, userId }, "Core user processed successfully");
-      } catch (err) {
-        app.logger.error({ email: user.email, err }, "Failed to seed core user");
-        throw err;
       }
+
+      app.logger.info("Enum values ensured");
+    } catch (err) {
+      app.logger.warn({ err }, "Failed to ensure enum values");
     }
 
-    app.logger.info("Core users seeded successfully");
+    // Step 2: Destructive seed - force recreate the 4 seed users on every startup
+    app.logger.info("Destructively seeding the 4 core users");
+    const now = new Date();
+    const seedEmails = seedUsers.map(u => u.email);
+
+    try {
+      // Query for user IDs of the seed emails
+      app.logger.info("Finding existing seed user IDs");
+      const existingUsers = await app.db
+        .select({ id: userTable.id, email: userTable.email })
+        .from(userTable)
+        .where(inArray(userTable.email, seedEmails));
+
+      const userIdsToDelete = existingUsers.map(u => u.id);
+
+      if (userIdsToDelete.length > 0) {
+        app.logger.info({ count: userIdsToDelete.length }, "Deleting existing sessions for seed users");
+        // Delete sessions first (FK constraint)
+        await app.db
+          .delete(sessionTable)
+          .where(inArray(sessionTable.userId, userIdsToDelete));
+
+        app.logger.info("Deleting existing accounts for seed users");
+        // Delete accounts
+        await app.db
+          .delete(accountTable)
+          .where(inArray(accountTable.userId, userIdsToDelete));
+
+        app.logger.info("Deleting existing seed users");
+        // Delete users
+        await app.db
+          .delete(userTable)
+          .where(inArray(userTable.email, seedEmails));
+      }
+
+      // Create new users with fresh UUIDs
+      app.logger.info("Creating new seed users");
+      for (const seedUser of seedUsers) {
+        const userId = randomUUID();
+
+        // Insert into user table
+        await app.db.insert(userTable).values({
+          id: userId,
+          name: seedUser.name,
+          email: seedUser.email,
+          emailVerified: true,
+          role: seedUser.role as any,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        app.logger.info({ email: seedUser.email, userId }, "Created seed user");
+
+        // Hash password and insert into account table
+        const hashedPassword = bcryptjs.hashSync(seedUser.password, 10);
+        const hashPrefix = hashedPassword.substring(0, 10);
+
+        await app.db.insert(accountTable).values({
+          id: randomUUID(),
+          accountId: seedUser.email,
+          providerId: "credential",
+          userId: userId,
+          password: hashedPassword,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        app.logger.info({ email: seedUser.email, hashPrefix }, `Seed user created: ${seedUser.email}`);
+      }
+
+      app.logger.info("Core users destructively seeded successfully");
+    } catch (err) {
+      app.logger.error({ err }, "Failed to destructively seed users");
+      throw err;
+    }
 
     // Check if already seeded (by checking mesas)
     const existingMesas = await app.db.select().from(schema.mesas).limit(1);
