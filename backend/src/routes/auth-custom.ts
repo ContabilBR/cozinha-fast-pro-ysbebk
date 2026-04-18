@@ -2,6 +2,7 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { user as userTable, account as accountTable, session as sessionTable } from '../db/schema/auth-schema.js';
+import * as schema from '../db/schema/schema.js';
 import * as bcryptjs from 'bcryptjs';
 import { randomUUID } from 'crypto';
 
@@ -14,7 +15,8 @@ interface LoginResponse {
   token: string;
   user: {
     id: string;
-    name: string;
+    name?: string;
+    nome?: string;
     email: string;
     role: string | null;
   };
@@ -22,7 +24,8 @@ interface LoginResponse {
 
 interface MeResponse {
   id: string;
-  name: string;
+  name?: string;
+  nome?: string;
   email: string;
   role: string | null;
 }
@@ -72,38 +75,55 @@ export function registerCustomAuthRoutes(app: App) {
     try {
       const { email, password } = request.body;
 
-      // Find user by email in Better Auth user table
-      const users = await app.db
+      // Try Better Auth user table first (for integration tests)
+      let user: any = null;
+      let passwordHash: string | null = null;
+      let isFromBetterAuth = false;
+
+      const betterAuthUsers = await app.db
         .select()
         .from(userTable)
         .where(eq(userTable.email, email));
 
-      if (users.length === 0) {
-        app.logger.warn({ email }, 'User not found in login');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+      if (betterAuthUsers.length > 0) {
+        user = betterAuthUsers[0];
+        isFromBetterAuth = true;
+
+        // Get password from account table
+        const accounts = await app.db
+          .select()
+          .from(accountTable)
+          .where(eq(accountTable.userId, user.id));
+
+        if (accounts.length > 0) {
+          passwordHash = accounts[0].password;
+        }
       }
 
-      const user = users[0];
+      // If not in Better Auth, try usuarios table
+      if (!user) {
+        const usuariosRows = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.email, email));
 
-      // Find credential account for password verification
-      const accounts = await app.db
-        .select()
-        .from(accountTable)
-        .where(eq(accountTable.userId, user.id));
-
-      if (accounts.length === 0) {
-        app.logger.warn({ userId: user.id }, 'No credential account found');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        if (usuariosRows.length > 0) {
+          user = usuariosRows[0];
+          passwordHash = user.senhaHash;
+        }
       }
 
-      const account = accounts[0];
+      if (!user || !passwordHash) {
+        app.logger.warn({ email }, 'User not found or no password hash');
+        return reply.status(401).send({ error: 'E-mail ou senha incorretos' });
+      }
 
       // Verify password
-      const passwordMatch = await bcryptjs.compare(password, account.password || '');
+      const passwordMatch = await bcryptjs.compare(password, passwordHash);
 
       if (!passwordMatch) {
         app.logger.warn({ email }, 'Password mismatch in login');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        return reply.status(401).send({ error: 'E-mail ou senha incorretos' });
       }
 
       // Create session token
@@ -111,7 +131,7 @@ export function registerCustomAuthRoutes(app: App) {
       const now = new Date();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      // Store token in session table
+      // Store token in session table with user ID
       await app.db.insert(sessionTable).values({
         id: randomUUID(),
         token: token,
@@ -123,15 +143,28 @@ export function registerCustomAuthRoutes(app: App) {
 
       app.logger.info({ email, userId: user.id }, 'Login successful');
 
-      return {
-        token,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      };
+      // Return appropriate response based on source
+      if (isFromBetterAuth) {
+        return {
+          token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        };
+      } else {
+        return {
+          token,
+          user: {
+            id: user.id,
+            nome: user.nome,
+            email: user.email,
+            role: user.role,
+          },
+        };
+      }
     } catch (err) {
       app.logger.error({ err, email: request.body.email }, 'Login error');
       throw err;
@@ -187,27 +220,55 @@ export function registerCustomAuthRoutes(app: App) {
 
       const session = sessions[0];
 
-      // Fetch user by id from session
-      const users = await app.db
+      // Try to fetch user from Better Auth first
+      let user: any = null;
+
+      const betterAuthUsers = await app.db
         .select()
         .from(userTable)
         .where(eq(userTable.id, session.userId));
 
-      if (users.length === 0) {
-        app.logger.warn({ userId: session.userId }, 'User not found in GET /api/me');
-        return reply.status(401).send({ error: 'User not found' });
+      if (betterAuthUsers.length > 0) {
+        user = betterAuthUsers[0];
       }
 
-      const user = users[0];
+      // If not in Better Auth, try usuarios table
+      if (!user) {
+        const usuariosRows = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.id, session.userId));
+
+        if (usuariosRows.length > 0) {
+          user = usuariosRows[0];
+        }
+      }
+
+      if (!user) {
+        app.logger.warn({ userId: session.userId }, 'User not found in GET /api/me');
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
 
       app.logger.info({ userId: user.id }, 'User profile fetched from GET /api/me');
 
-      return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      };
+      // Return appropriate response based on which table user came from
+      if (user.name !== undefined) {
+        // Better Auth user
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
+      } else {
+        // usuarios table user
+        return {
+          id: user.id,
+          nome: user.nome,
+          email: user.email,
+          role: user.role,
+        };
+      }
     } catch (err) {
       app.logger.error({ err }, 'GET /api/me error');
       throw err;
