@@ -1,15 +1,14 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Redirect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { UserRole } from "@/types";
 
 export default function HomeRedirect() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const COLORS = useColors();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.background }}>
         <ActivityIndicator color={COLORS.primary} />
@@ -19,9 +18,9 @@ export default function HomeRedirect() {
 
   if (!user) return <Redirect href="/auth-screen" />;
 
-  const role = ((user as any).role as UserRole) || "garcom";
+  const role = user.role || "garcom";
 
-  if (role === "cozinheiro") return <Redirect href="/(tabs)/(cozinha)" />;
-  if (role === "gerente" || role === "administrador") return <Redirect href="/(tabs)/(dashboard)" />;
+  if (role === "cozinheiro" || role === "cozinha") return <Redirect href="/(tabs)/(cozinha)" />;
+  if (role === "gerente" || role === "administrador" || role === "admin") return <Redirect href="/(tabs)/(dashboard)" />;
   return <Redirect href="/(tabs)/(mesas)" />;
 }

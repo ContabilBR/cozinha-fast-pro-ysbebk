@@ -17,7 +17,7 @@ export default function MesaDetailScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const { user } = useAuth();
-  const role = (user as any)?.role;
+  const role = user?.role;
   const canAdmin = isAdmin(role);
 
   const [mesa, setMesa] = useState<Mesa | null>(null);
@@ -55,9 +55,9 @@ export default function MesaDetailScreen() {
     console.log("[Mesa] Abrir comanda pressionado para mesa:", mesa.numero);
     setOpeningComanda(true);
     try {
-      console.log("[Mesa] POST /api/comandas", { mesa_id: mesa.id });
       const payload: any = { mesa_id: mesa.id };
       if (user?.id) payload.garcom_id = user.id;
+      console.log("[Mesa] POST /api/comandas", payload);
       const res = await apiPost<any>("/api/comandas", payload);
       const comanda = res.comanda || res;
       console.log("[Mesa] Comanda aberta:", comanda.id);
@@ -78,6 +78,11 @@ export default function MesaDetailScreen() {
   const statusColor = getMesaStatusColor(mesa?.status ?? "livre");
   const statusLabel = getMesaStatusLabel(mesa?.status ?? "livre");
   const mesaTitle = mesa ? `Mesa ${mesa.numero}` : "Detalhes da Mesa";
+  const mesaNumero = mesa?.numero;
+  const mesaCapacidade = mesa?.capacidade;
+  const mesaStatus = mesa?.status ?? "livre";
+  const comandaId = (mesa as any)?.comanda_id;
+  const garcomName = (mesa as any)?.garcom?.name;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -137,7 +142,7 @@ export default function MesaDetailScreen() {
           <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: COLORS.border, gap: 16 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <View style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: statusColor + "18", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 28, color: statusColor }}>{mesa?.numero}</Text>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 28, color: statusColor }}>{mesaNumero}</Text>
               </View>
               <View style={{ backgroundColor: statusColor + "20", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 }}>
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: statusColor }}>{statusLabel}</Text>
@@ -148,27 +153,27 @@ export default function MesaDetailScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Users size={16} color={COLORS.textSecondary} />
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Capacidade:</Text>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{mesa?.capacidade} pessoas</Text>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{mesaCapacidade} pessoas</Text>
               </View>
-              {(mesa as any)?.garcom && (
+              {garcomName ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Garçom:</Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{(mesa as any).garcom.name}</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{garcomName}</Text>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
 
-          {(mesa as any)?.comanda_id && (
+          {comandaId ? (
             <AnimatedPressable
-              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", (mesa as any).comanda_id); router.push(`/comanda/${(mesa as any).comanda_id}`); }}
+              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", comandaId); router.push(`/comanda/${comandaId}`); }}
               style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary + "30" }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>Ver comanda ativa</Text>
             </AnimatedPressable>
-          )}
+          ) : null}
 
-          {mesa?.status === "livre" && (role === "garcom" || canAdmin) && (
+          {mesaStatus === "livre" && (role === "garcom" || canAdmin) ? (
             <AnimatedPressable
               onPress={() => { console.log("[Mesa] Abrir comanda pressionado"); handleOpenComanda(); }}
               disabled={openingComanda}
@@ -180,7 +185,16 @@ export default function MesaDetailScreen() {
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Abrir comanda</Text>
               )}
             </AnimatedPressable>
-          )}
+          ) : null}
+
+          {mesaStatus === "ocupada" && comandaId ? (
+            <AnimatedPressable
+              onPress={() => { console.log("[Mesa] Fazer pedido pressionado, comanda:", comandaId); router.push({ pathname: "/pedido/novo", params: { comanda_id: comandaId, mesa_id: id } }); }}
+              style={{ backgroundColor: COLORS.surface, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.border }}
+            >
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text }}>Fazer pedido</Text>
+            </AnimatedPressable>
+          ) : null}
         </ScrollView>
       )}
     </SafeAreaView>

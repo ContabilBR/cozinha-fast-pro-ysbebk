@@ -4,12 +4,12 @@ import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayoutIOS() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  if (loading) return null;
+  if (isLoading) return null;
   if (!user) return <Redirect href="/auth-screen" />;
 
-  const role = (user as any).role as string || "garcom";
+  const role = user.role || "garcom";
 
   if (role === "garcom") {
     return (
@@ -34,7 +34,7 @@ export default function TabLayoutIOS() {
     );
   }
 
-  if (role === "cozinheiro") {
+  if (role === "cozinheiro" || role === "cozinha") {
     return (
       <NativeTabs>
         <NativeTabs.Trigger name="(cozinha)">
@@ -53,7 +53,7 @@ export default function TabLayoutIOS() {
     );
   }
 
-  // gerente, administrador, or admin
+  // gerente, administrador, admin
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="(dashboard)">

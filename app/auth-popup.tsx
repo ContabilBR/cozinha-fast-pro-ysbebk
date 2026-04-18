@@ -1,30 +1,11 @@
-import React, { useEffect } from "react";
-import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
-import { Platform } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { authClient } from "@/lib/auth";
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
 
+// OAuth popup not used with custom JWT auth
 export default function AuthPopupScreen() {
-  const { provider } = useLocalSearchParams<{ provider: string }>();
-
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-
-    if (!provider || !"[\"apple\", \"google\"]".includes(provider)) {
-      window.opener?.postMessage({ type: "oauth-error", error: "Invalid provider" }, window.location.origin);
-      return;
-    }
-
-    authClient.signIn.social({
-      provider: provider as any,
-      callbackURL: `${window.location.origin}/auth-callback`,
-    });
-  }, [provider]);
-
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#007AFF" />
-      <Text style={styles.text}>Redirecting to sign in...</Text>
+      <Text style={styles.text}>Autenticação não disponível</Text>
     </View>
   );
 }
@@ -34,11 +15,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#1a1a2e",
   },
   text: {
-    marginTop: 20,
     fontSize: 16,
-    color: "#333",
+    color: "#fff",
   },
 });

@@ -12,29 +12,37 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
-import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { ChefHat, Mail, Lock, Eye, EyeOff } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+const PRIMARY = "#e94560";
+const BG = "#1a1a2e";
+const CARD = "#16213e";
+const BORDER = "rgba(255,255,255,0.10)";
+const TEXT = "#ffffff";
+const TEXT_SECONDARY = "rgba(255,255,255,0.55)";
+const TEXT_TERTIARY = "rgba(255,255,255,0.30)";
+const INPUT_BG = "rgba(255,255,255,0.06)";
+
 const DEMO_CREDENTIALS = [
-  { role: "Administrador", email: "admin@cozinhafast.com" },
-  { role: "Gerente", email: "gerente@cozinhafast.com" },
   { role: "Garçom", email: "garcom@cozinhafast.com" },
   { role: "Cozinheiro", email: "cozinheiro@cozinhafast.com" },
+  { role: "Gerente", email: "gerente@cozinhafast.com" },
+  { role: "Administrador", email: "admin@cozinhafast.com" },
 ];
 
 const ROLE_ROUTES: Record<string, string> = {
   garcom: "/(tabs)/(mesas)",
+  cozinheiro: "/(tabs)/(cozinha)",
+  cozinha: "/(tabs)/(cozinha)",
   admin: "/(tabs)/(dashboard)",
   administrador: "/(tabs)/(dashboard)",
   gerente: "/(tabs)/(dashboard)",
-  cozinheiro: "/(tabs)/(cozinha)",
 };
 
 export default function AuthScreen() {
-  const COLORS = useColors();
-  const { user, loading, signInWithEmail } = useAuth();
+  const { user, isLoading, signIn } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -55,24 +63,24 @@ export default function AuthScreen() {
   }, [fadeAnim, slideAnim]);
 
   useEffect(() => {
-    if (!loading && user) {
-      const role = (user.role as string) || "";
+    if (!isLoading && user) {
+      const role = user.role || "";
       const route = ROLE_ROUTES[role] || "/(tabs)/(mesas)";
       console.log("[AuthScreen] User authenticated, role:", role, "-> redirecting to:", route);
       router.replace(route as any);
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setError("Preencha e-mail e senha.");
       return;
     }
-    console.log("[AuthScreen] Login button pressed for:", email);
+    console.log("[AuthScreen] Entrar button pressed for:", email);
     setError("");
     setSubmitting(true);
     try {
-      await signInWithEmail(email.trim(), password);
+      await signIn(email.trim(), password);
       console.log("[AuthScreen] Login successful");
     } catch (e: any) {
       console.error("[AuthScreen] Login error:", e);
@@ -104,17 +112,17 @@ export default function AuthScreen() {
     setError("");
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.background }}>
-        <ActivityIndicator color={COLORS.primary} size="large" />
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: BG }}>
+        <ActivityIndicator color={PRIMARY} size="large" />
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: COLORS.background }}
+      style={{ flex: 1, backgroundColor: BG }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
@@ -138,32 +146,37 @@ export default function AuthScreen() {
         >
           <View
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: 24,
-              backgroundColor: COLORS.primary,
+              width: 84,
+              height: 84,
+              borderRadius: 26,
+              backgroundColor: PRIMARY,
               alignItems: "center",
               justifyContent: "center",
-              marginBottom: 16,
+              marginBottom: 18,
+              shadowColor: PRIMARY,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              elevation: 8,
             }}
           >
-            <ChefHat size={40} color="#fff" strokeWidth={2} />
+            <ChefHat size={42} color="#fff" strokeWidth={2} />
           </View>
           <Text
             style={{
               fontFamily: "Outfit_700Bold",
-              fontSize: 32,
-              color: COLORS.text,
+              fontSize: 34,
+              color: TEXT,
               letterSpacing: -0.5,
             }}
           >
-            CozinhaFast
+            CozinhaFast Pro
           </Text>
           <Text
             style={{
               fontFamily: "Outfit_400Regular",
               fontSize: 15,
-              color: COLORS.textSecondary,
+              color: TEXT_SECONDARY,
               marginTop: 6,
               textAlign: "center",
             }}
@@ -181,38 +194,38 @@ export default function AuthScreen() {
         >
           <View
             style={{
-              backgroundColor: COLORS.surface,
+              backgroundColor: CARD,
               borderRadius: 20,
               padding: 24,
               borderWidth: 1,
-              borderColor: COLORS.border,
+              borderColor: BORDER,
               gap: 16,
             }}
           >
             {/* Email */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: TEXT }}>
                 E-mail
               </Text>
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: COLORS.surfaceSecondary,
+                  backgroundColor: INPUT_BG,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: COLORS.border,
+                  borderColor: BORDER,
                   paddingHorizontal: 14,
                   height: 52,
                   gap: 10,
                 }}
               >
-                <Mail size={18} color={COLORS.textSecondary} />
+                <Mail size={18} color={TEXT_SECONDARY} />
                 <TextInput
                   value={email}
                   onChangeText={(t) => { setEmail(t); setError(""); }}
                   placeholder="seu@email.com"
-                  placeholderTextColor={COLORS.textTertiary}
+                  placeholderTextColor={TEXT_TERTIARY}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -220,7 +233,7 @@ export default function AuthScreen() {
                     flex: 1,
                     fontFamily: "Outfit_400Regular",
                     fontSize: 15,
-                    color: COLORS.text,
+                    color: TEXT,
                   }}
                 />
               </View>
@@ -228,40 +241,46 @@ export default function AuthScreen() {
 
             {/* Password */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: TEXT }}>
                 Senha
               </Text>
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: COLORS.surfaceSecondary,
+                  backgroundColor: INPUT_BG,
                   borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: COLORS.border,
+                  borderColor: BORDER,
                   paddingHorizontal: 14,
                   height: 52,
                   gap: 10,
                 }}
               >
-                <Lock size={18} color={COLORS.textSecondary} />
+                <Lock size={18} color={TEXT_SECONDARY} />
                 <TextInput
                   value={password}
                   onChangeText={(t) => { setPassword(t); setError(""); }}
                   placeholder="••••••••"
-                  placeholderTextColor={COLORS.textTertiary}
+                  placeholderTextColor={TEXT_TERTIARY}
                   secureTextEntry={!showPassword}
                   style={{
                     flex: 1,
                     fontFamily: "Outfit_400Regular",
                     fontSize: 15,
-                    color: COLORS.text,
+                    color: TEXT,
                   }}
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log("[AuthScreen] Toggle password visibility");
+                    setShowPassword(!showPassword);
+                  }}
+                  hitSlop={8}
+                >
                   {showPassword
-                    ? <EyeOff size={18} color={COLORS.textSecondary} />
-                    : <Eye size={18} color={COLORS.textSecondary} />
+                    ? <EyeOff size={18} color={TEXT_SECONDARY} />
+                    : <Eye size={18} color={TEXT_SECONDARY} />
                   }
                 </TouchableOpacity>
               </View>
@@ -269,7 +288,7 @@ export default function AuthScreen() {
 
             {/* Error */}
             {!!error && (
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: "#ff6b6b" }}>
                 {error}
               </Text>
             )}
@@ -279,13 +298,18 @@ export default function AuthScreen() {
               onPress={handleLogin}
               disabled={submitting}
               style={{
-                backgroundColor: COLORS.primary,
+                backgroundColor: PRIMARY,
                 borderRadius: 14,
                 height: 52,
                 alignItems: "center",
                 justifyContent: "center",
                 marginTop: 4,
                 opacity: submitting ? 0.7 : 1,
+                shadowColor: PRIMARY,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.35,
+                shadowRadius: 10,
+                elevation: 4,
               }}
             >
               {submitting ? (
@@ -300,26 +324,26 @@ export default function AuthScreen() {
         </Animated.View>
 
         {/* Demo credentials */}
-        <Animated.View style={{ marginTop: 24, opacity: fadeAnim }}>
+        <Animated.View style={{ marginTop: 28, opacity: fadeAnim }}>
           <Text
             style={{
               fontFamily: "Outfit_600SemiBold",
-              fontSize: 13,
-              color: COLORS.textSecondary,
+              fontSize: 12,
+              color: TEXT_SECONDARY,
               textAlign: "center",
               marginBottom: 12,
               textTransform: "uppercase",
-              letterSpacing: 0.8,
+              letterSpacing: 1,
             }}
           >
             Credenciais de demonstração
           </Text>
           <View
             style={{
-              backgroundColor: COLORS.surface,
+              backgroundColor: CARD,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: COLORS.border,
+              borderColor: BORDER,
               overflow: "hidden",
             }}
           >
@@ -332,20 +356,20 @@ export default function AuthScreen() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   paddingHorizontal: 16,
-                  paddingVertical: 12,
+                  paddingVertical: 13,
                   borderBottomWidth: i < DEMO_CREDENTIALS.length - 1 ? 1 : 0,
-                  borderBottomColor: COLORS.divider,
+                  borderBottomColor: BORDER,
                 }}
               >
                 <View style={{ gap: 2 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: TEXT }}>
                     {cred.role}
                   </Text>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: TEXT_SECONDARY }}>
                     {cred.email}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.primary }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: PRIMARY }}>
                   Usar
                 </Text>
               </AnimatedPressable>

@@ -52,14 +52,11 @@ export default function RootLayout() {
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                   <Stack.Screen name="auth-screen" options={{ headerShown: false }} />
-                  <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
-                  <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
                   <Stack.Screen name="prato/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="prato/novo" options={{ headerShown: false }} />
                   <Stack.Screen name="prato/editar/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="categoria/index" options={{ headerShown: false }} />
                   <Stack.Screen name="mesa/[id]" options={{ headerShown: false }} />
-                  <Stack.Screen name="mesa/novo" options={{ headerShown: false }} />
                   <Stack.Screen name="usuario/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="usuario/novo" options={{ headerShown: false }} />
                   <Stack.Screen name="comanda/[id]" options={{ headerShown: false }} />

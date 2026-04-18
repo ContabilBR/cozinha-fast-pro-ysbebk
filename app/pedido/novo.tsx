@@ -112,7 +112,7 @@ export default function NovoPedidoScreen() {
     setSubmitting(true);
     setError("");
     try {
-      console.log("[NovoPedido] POST /api/pedidos (múltiplos)");
+      console.log("[NovoPedido] POST /api/pedidos (múltiplos itens)");
       await Promise.all(
         cart.map((item) =>
           apiPost("/api/pedidos", {
@@ -203,11 +203,11 @@ export default function NovoPedidoScreen() {
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.primary }}>{cartTotalStr}</Text>
           </View>
           <AnimatedPressable
-            onPress={() => { console.log("[NovoPedido] Enviar pedido pressionado"); handleSubmit(); }}
+            onPress={() => { console.log("[NovoPedido] Confirmar pedido pressionado"); handleSubmit(); }}
             disabled={submitting || cart.length === 0}
             style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
           >
-            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Enviar pedido</Text>}
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Confirmar Pedido</Text>}
           </AnimatedPressable>
         </View>
       </SafeAreaView>
@@ -314,7 +314,7 @@ export default function NovoPedidoScreen() {
         />
       )}
 
-      {cartCount > 0 && (
+      {cartCount > 0 ? (
         <View style={{ position: "absolute", bottom: 20, left: 16, right: 16 }}>
           <AnimatedPressable
             onPress={() => { console.log("[NovoPedido] Revisar carrinho pressionado, itens:", cartCount); setStep("review"); }}
@@ -327,7 +327,7 @@ export default function NovoPedidoScreen() {
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "rgba(255,255,255,0.85)" }}>{cartTotalStr}</Text>
           </AnimatedPressable>
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }

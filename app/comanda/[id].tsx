@@ -15,7 +15,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { apiGet, apiPut } from "@/utils/api";
+import { apiGet, apiPatch } from "@/utils/api";
 import { formatCurrency, formatDate, getPedidoStatusLabel, getPedidoStatusColor, isAdmin } from "@/utils/helpers";
 import { Plus, X, CheckCircle, ShoppingBag } from "lucide-react-native";
 
@@ -34,7 +34,7 @@ interface ComandaDetail {
   mesa_id: string;
   mesa?: { id: string; numero: number };
   garcom_id: string;
-  garcom?: { id: string; name: string };
+  garcom?: { id: string; name: string; nome?: string };
   status: string;
   total?: number;
   created_at?: string;
@@ -47,7 +47,7 @@ function PedidoRow({ pedido }: { pedido: PedidoItem }) {
   const statusColor = getPedidoStatusColor(pedido.status);
   const statusLabel = getPedidoStatusLabel(pedido.status);
   const pratoNome = pedido.prato?.nome ?? "Prato";
-  const preco = formatCurrency((pedido.prato?.preco ?? 0) * pedido.quantidade);
+  const subtotal = formatCurrency((pedido.prato?.preco ?? 0) * pedido.quantidade);
 
   return (
     <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -59,7 +59,7 @@ function PedidoRow({ pedido }: { pedido: PedidoItem }) {
         {pedido.observacao ? (
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, fontStyle: "italic" }}>{pedido.observacao}</Text>
         ) : null}
-        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary, marginTop: 2 }}>{preco}</Text>
+        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary, marginTop: 2 }}>{subtotal}</Text>
       </View>
       <View style={{ backgroundColor: statusColor + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
         <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>{statusLabel}</Text>
@@ -73,16 +73,14 @@ export default function ComandaDetailScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const { user } = useAuth();
-  const role = (user as any)?.role;
+  const role = user?.role;
   const canAdmin = isAdmin(role);
-  const isGarcom = role === "garcom";
 
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [closing, setClosing] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
 
   const fetchComanda = useCallback(async () => {
     console.log("[Comanda] GET /api/comandas/" + id);
@@ -110,34 +108,31 @@ export default function ComandaDetailScreen() {
 
   const handleClose = async () => {
     console.log("[Comanda] Fechar comanda pressionado:", id);
-    setClosing(true);
-    try {
-      console.log("[Comanda] PUT /api/comandas/" + id + "/fechar");
-      await apiPut(`/api/comandas/${id}/fechar`, {});
-      console.log("[Comanda] Comanda fechada com sucesso");
-      await fetchComanda();
-    } catch (e: any) {
-      console.error("[Comanda] Erro ao fechar:", e);
-      Alert.alert("Erro", "Não foi possível fechar a comanda. Tente novamente.");
-    } finally {
-      setClosing(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    console.log("[Comanda] Cancelar comanda pressionado:", id);
-    setCancelling(true);
-    try {
-      console.log("[Comanda] PUT /api/comandas/" + id + "/cancelar");
-      await apiPut(`/api/comandas/${id}/cancelar`, {});
-      console.log("[Comanda] Comanda cancelada");
-      router.back();
-    } catch (e: any) {
-      console.error("[Comanda] Erro ao cancelar:", e);
-      Alert.alert("Erro", "Não foi possível cancelar a comanda. Tente novamente.");
-    } finally {
-      setCancelling(false);
-    }
+    Alert.alert(
+      "Fechar Comanda",
+      "Tem certeza que deseja fechar esta comanda?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Fechar",
+          style: "destructive",
+          onPress: async () => {
+            setClosing(true);
+            try {
+              console.log("[Comanda] PATCH /api/comandas/" + id + "/fechar");
+              await apiPatch(`/api/comandas/${id}/fechar`, {});
+              console.log("[Comanda] Comanda fechada com sucesso");
+              router.back();
+            } catch (e: any) {
+              console.error("[Comanda] Erro ao fechar:", e);
+              Alert.alert("Erro", "Não foi possível fechar a comanda. Tente novamente.");
+            } finally {
+              setClosing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleAdicionarItem = () => {
@@ -149,17 +144,17 @@ export default function ComandaDetailScreen() {
   const total = formatCurrency(comanda?.total ?? 0);
   const openedAt = formatDate(comanda?.created_at);
   const mesaNum = comanda?.mesa?.numero ?? "?";
-  const garcomName = comanda?.garcom?.name ?? "—";
+  const garcomName = comanda?.garcom?.name || comanda?.garcom?.nome || "—";
+  const pedidos = comanda?.pedidos ?? [];
 
   const statusColorMap: Record<string, string> = {
     aberta: COLORS.success,
     fechada: COLORS.textSecondary,
     cancelada: COLORS.danger,
   };
-  const comandaStatusColor = statusColorMap[comanda?.status ?? "aberta"] ?? COLORS.textSecondary;
-  const comandaStatusLabel = comanda?.status === "aberta" ? "Aberta" : comanda?.status === "fechada" ? "Fechada" : "Cancelada";
-
-  const pedidos = comanda?.pedidos ?? [];
+  const comandaStatus = comanda?.status ?? "aberta";
+  const comandaStatusColor = statusColorMap[comandaStatus] ?? COLORS.textSecondary;
+  const comandaStatusLabel = comandaStatus === "aberta" ? "Aberta" : comandaStatus === "fechada" ? "Fechada" : "Cancelada";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -192,10 +187,9 @@ export default function ComandaDetailScreen() {
           height: 56,
           lineHeight: 56,
         }}>
-          Detalhes da Comanda
+          Comanda
         </Text>
-        {/* Header add button */}
-        {isAberta && (
+        {isAberta ? (
           <TouchableOpacity
             onPress={handleAdicionarItem}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -204,7 +198,7 @@ export default function ComandaDetailScreen() {
             <Plus size={18} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 15, fontWeight: "500" }}>Adicionar</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {loading ? (
@@ -246,12 +240,12 @@ export default function ComandaDetailScreen() {
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Aberta em</Text>
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{openedAt}</Text>
                 </View>
-                {comanda?.closed_at && (
+                {comanda?.closed_at ? (
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Fechada em</Text>
                     <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{formatDate(comanda.closed_at)}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -264,7 +258,7 @@ export default function ComandaDetailScreen() {
             <View>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>Itens ({pedidos.length})</Text>
-                {isAberta && (
+                {isAberta ? (
                   <AnimatedPressable
                     onPress={handleAdicionarItem}
                     style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.primaryMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
@@ -272,7 +266,7 @@ export default function ComandaDetailScreen() {
                     <Plus size={14} color={COLORS.primary} />
                     <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Adicionar item</Text>
                   </AnimatedPressable>
-                )}
+                ) : null}
               </View>
 
               {pedidos.length === 0 ? (
@@ -286,10 +280,9 @@ export default function ComandaDetailScreen() {
             </View>
           </ScrollView>
 
-          {/* Bottom action area */}
-          {isAberta && (
+          {/* Bottom actions */}
+          {isAberta ? (
             <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.background }}>
-              {/* Floating add button */}
               <AnimatedPressable
                 onPress={handleAdicionarItem}
                 style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: COLORS.primary + "30" }}
@@ -298,9 +291,8 @@ export default function ComandaDetailScreen() {
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.primary }}>Adicionar item</Text>
               </AnimatedPressable>
 
-              {/* Fechar comanda — visible to garçom and admin */}
               <AnimatedPressable
-                onPress={() => { console.log("[Comanda] Fechar comanda pressionado"); handleClose(); }}
+                onPress={() => { console.log("[Comanda] Fechar comanda button pressed"); handleClose(); }}
                 disabled={closing}
                 style={{ backgroundColor: COLORS.success, borderRadius: 14, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
               >
@@ -313,26 +305,8 @@ export default function ComandaDetailScreen() {
                   </>
                 )}
               </AnimatedPressable>
-
-              {/* Cancelar comanda — admin only */}
-              {canAdmin && (
-                <AnimatedPressable
-                  onPress={() => { console.log("[Comanda] Cancelar comanda pressionado"); handleCancel(); }}
-                  disabled={cancelling}
-                  style={{ backgroundColor: COLORS.danger + "15", borderRadius: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: COLORS.danger + "30" }}
-                >
-                  {cancelling ? (
-                    <ActivityIndicator color={COLORS.danger} />
-                  ) : (
-                    <>
-                      <X size={18} color={COLORS.danger} />
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.danger }}>Cancelar comanda</Text>
-                    </>
-                  )}
-                </AnimatedPressable>
-              )}
             </View>
-          )}
+          ) : null}
         </View>
       )}
     </SafeAreaView>

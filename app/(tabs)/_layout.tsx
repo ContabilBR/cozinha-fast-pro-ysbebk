@@ -22,6 +22,7 @@ function getTabsForRole(role: string): TabBarItem[] {
         perfilTab,
       ];
     case "cozinheiro":
+    case "cozinha":
       return [
         { name: "cozinha", route: "/(tabs)/(cozinha)", icon: "local-fire-department", label: "Cozinha" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
@@ -47,10 +48,10 @@ function getTabsForRole(role: string): TabBarItem[] {
 }
 
 export default function TabLayout() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const COLORS = useColors();
 
-  if (loading) return null;
+  if (isLoading) return null;
   if (!user) return <Redirect href="/auth-screen" />;
 
   const role = user.role || "garcom";
