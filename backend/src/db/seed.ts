@@ -91,9 +91,10 @@ const seedPratos = [
 ];
 
 const seedUsuarios = [
-  { nome: "João Garçom", email: "garcom@teste.com", password: "123456", role: "garcom" },
-  { nome: "Maria Cozinha", email: "cozinha@teste.com", password: "123456", role: "cozinha" },
-  { nome: "Carlos Admin", email: "admin@teste.com", password: "123456", role: "admin" },
+  { nome: "João Garçom", email: "garcom@cozinhafast.com", password: "123456", role: "garcom" },
+  { nome: "Maria Cozinha", email: "cozinheiro@cozinhafast.com", password: "123456", role: "cozinha" },
+  { nome: "Carlos Gerente", email: "gerente@cozinhafast.com", password: "123456", role: "gerente" },
+  { nome: "Admin Sistema", email: "admin@cozinhafast.com", password: "123456", role: "admin" },
 ];
 
 export async function cleanupMesasAndComandas(app: App) {
@@ -328,23 +329,49 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
-    // Seed usuarios
-    app.logger.info("Seeding usuarios");
+    // Seed usuarios with upsert
+    app.logger.info("Seeding usuarios with upsert");
     for (const usuario of seedUsuarios) {
-      const existing = await app.db
-        .select()
-        .from(schema.usuarios)
-        .where(eq(schema.usuarios.email, usuario.email))
-        .limit(1);
+      const hashedPassword = await bcryptjs.hash(usuario.password, 10);
 
-      if (existing.length === 0) {
-        const hashedPassword = await bcryptjs.hash(usuario.password, 10);
-        await app.db.insert(schema.usuarios).values({
-          nome: usuario.nome,
-          email: usuario.email,
-          senhaHash: hashedPassword,
-          role: usuario.role,
-        });
+      try {
+        // Use raw SQL for upsert to handle ON CONFLICT
+        const query = `
+          INSERT INTO usuarios (id, nome, email, senha_hash, role, created_at)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, now())
+          ON CONFLICT (email) DO UPDATE SET
+            nome = EXCLUDED.nome,
+            role = EXCLUDED.role,
+            senha_hash = EXCLUDED.senha_hash
+          RETURNING id, nome, email, role;
+        `;
+
+        // Execute raw SQL if available
+        if (typeof (app.db as any).execute === 'function') {
+          await (app.db as any).execute(query, [usuario.nome, usuario.email, hashedPassword, usuario.role]);
+          app.logger.info({ email: usuario.email }, 'Usuario upserted successfully');
+        } else {
+          // Fallback to checking and inserting
+          const existing = await app.db
+            .select()
+            .from(schema.usuarios)
+            .where(eq(schema.usuarios.email, usuario.email))
+            .limit(1);
+
+          if (existing.length === 0) {
+            await app.db.insert(schema.usuarios).values({
+              nome: usuario.nome,
+              email: usuario.email,
+              senhaHash: hashedPassword,
+              role: usuario.role,
+            });
+            app.logger.info({ email: usuario.email }, 'Usuario inserted successfully');
+          } else {
+            app.logger.info({ email: usuario.email }, 'Usuario already exists');
+          }
+        }
+      } catch (err) {
+        app.logger.warn({ email: usuario.email, err }, 'Failed to upsert usuario');
       }
     }
     app.logger.info("Usuarios seeded successfully");

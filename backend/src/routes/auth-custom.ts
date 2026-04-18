@@ -14,16 +14,16 @@ interface LoginResponse {
   token: string;
   user: {
     id: string;
-    email: string;
     name: string;
+    email: string;
     role: string | null;
   };
 }
 
 interface MeResponse {
   id: string;
-  email: string;
   name: string;
+  email: string;
   role: string | null;
 }
 
@@ -51,8 +51,8 @@ export function registerCustomAuthRoutes(app: App) {
               type: 'object',
               properties: {
                 id: { type: 'string' },
-                email: { type: 'string' },
                 name: { type: 'string' },
+                email: { type: 'string' },
                 role: { type: 'string' },
               },
             },
@@ -67,12 +67,12 @@ export function registerCustomAuthRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest<{ Body: LoginBody }>, reply: FastifyReply): Promise<LoginResponse | void> => {
-    app.logger.info({ email: request.body.email }, 'Custom login attempt');
+    app.logger.info({ email: request.body.email }, 'Login attempt');
 
     try {
       const { email, password } = request.body;
 
-      // Find user by email
+      // Find user by email in Better Auth user table
       const users = await app.db
         .select()
         .from(userTable)
@@ -85,14 +85,14 @@ export function registerCustomAuthRoutes(app: App) {
 
       const user = users[0];
 
-      // Find credential account
+      // Find credential account for password verification
       const accounts = await app.db
         .select()
         .from(accountTable)
         .where(eq(accountTable.userId, user.id));
 
       if (accounts.length === 0) {
-        app.logger.warn({ userId: user.id }, 'Credential account not found');
+        app.logger.warn({ userId: user.id }, 'No credential account found');
         return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
@@ -106,11 +106,12 @@ export function registerCustomAuthRoutes(app: App) {
         return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
-      // Create session
+      // Create session token
       const token = randomUUID();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
       const now = new Date();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
+      // Store token in session table
       await app.db.insert(sessionTable).values({
         id: randomUUID(),
         token: token,
@@ -120,19 +121,19 @@ export function registerCustomAuthRoutes(app: App) {
         updatedAt: now,
       });
 
-      app.logger.info({ email, userId: user.id }, 'Custom login successful');
+      app.logger.info({ email, userId: user.id }, 'Login successful');
 
       return {
         token,
         user: {
           id: user.id,
-          email: user.email,
           name: user.name,
+          email: user.email,
           role: user.role,
         },
       };
     } catch (err) {
-      app.logger.error({ err }, 'Custom login error');
+      app.logger.error({ err, email: request.body.email }, 'Login error');
       throw err;
     }
   });
@@ -148,8 +149,8 @@ export function registerCustomAuthRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string' },
-            email: { type: 'string' },
             name: { type: 'string' },
+            email: { type: 'string' },
             role: { type: 'string' },
           },
         },
@@ -167,8 +168,8 @@ export function registerCustomAuthRoutes(app: App) {
       const authHeader = request.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        app.logger.warn('Missing or invalid authorization header in /api/me');
-        return reply.status(401).send({ error: 'Missing or invalid authorization header' });
+        app.logger.warn('Missing authorization header in GET /api/me');
+        return reply.status(401).send({ error: 'Token não fornecido' });
       }
 
       const token = authHeader.substring(7); // Remove "Bearer " prefix
@@ -181,40 +182,34 @@ export function registerCustomAuthRoutes(app: App) {
 
       if (sessions.length === 0) {
         app.logger.warn('Session not found for token');
-        return reply.status(401).send({ error: 'Invalid token' });
+        return reply.status(401).send({ error: 'Token inválido' });
       }
 
       const session = sessions[0];
 
-      // Check expiration
-      if (new Date() > session.expiresAt) {
-        app.logger.warn({ sessionId: session.id }, 'Session expired');
-        return reply.status(401).send({ error: 'Token expired' });
-      }
-
-      // Fetch user
+      // Fetch user by id from session
       const users = await app.db
         .select()
         .from(userTable)
         .where(eq(userTable.id, session.userId));
 
       if (users.length === 0) {
-        app.logger.warn({ userId: session.userId }, 'User not found in /api/me');
+        app.logger.warn({ userId: session.userId }, 'User not found in GET /api/me');
         return reply.status(401).send({ error: 'User not found' });
       }
 
       const user = users[0];
 
-      app.logger.info({ userId: user.id }, 'User profile fetched from /api/me');
+      app.logger.info({ userId: user.id }, 'User profile fetched from GET /api/me');
 
       return {
         id: user.id,
-        email: user.email,
         name: user.name,
+        email: user.email,
         role: user.role,
       };
     } catch (err) {
-      app.logger.error({ err }, '/api/me error');
+      app.logger.error({ err }, 'GET /api/me error');
       throw err;
     }
   });
