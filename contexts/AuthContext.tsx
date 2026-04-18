@@ -40,15 +40,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
-      console.log("[Auth] GET /api/auth/me");
-      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+      console.log("[Auth] GET /api/me");
+      const response = await fetch(`${BACKEND_URL}/api/me`, {
         headers: {
           Authorization: `Bearer ${stored}`,
           "Content-Type": "application/json",
         },
       });
       if (!response.ok) {
-        console.warn("[Auth] /api/auth/me returned", response.status, "— clearing token");
+        console.warn("[Auth] /api/me returned", response.status, "— clearing token");
         await deleteBearerToken();
         setIsLoading(false);
         return;
@@ -67,8 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     console.log("[Auth] signIn called for:", email);
-    console.log("[Auth] POST /api/auth/login");
-    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+    console.log("[Auth] POST /api/login");
+    const response = await fetch(`${BACKEND_URL}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
