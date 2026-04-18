@@ -329,35 +329,31 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
-    // Seed usuarios with pre-computed bcrypt hash
-    app.logger.info("Seeding usuarios with pre-computed bcrypt hash");
+    // Seed usuarios with pre-computed bcrypt hash using upsert
+    app.logger.info("Seeding usuarios with pre-computed bcrypt hash (upsert)");
 
-    // Pre-computed hash of "123456" with bcrypt
-    const preComputedHash = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
+    // Pre-computed hash of "123456" with bcrypt - NEVER call bcrypt.hash() at runtime for seeding
+    const HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
 
     try {
-      // First, delete existing seed usuarios to avoid conflicts
-      app.logger.info("Deleting existing seed usuarios");
-      const seedEmails = seedUsuarios.map(u => u.email);
-      await app.db
-        .delete(schema.usuarios)
-        .where(inArray(schema.usuarios.email, seedEmails));
-      app.logger.info("Existing seed usuarios deleted");
-
-      // Insert fresh seed usuarios with pre-computed hash
-      app.logger.info("Inserting fresh seed usuarios with pre-computed hash");
+      // Upsert each seed usuario (INSERT ... ON CONFLICT UPDATE)
+      app.logger.info("Upserting seed usuarios");
       for (const usuario of seedUsuarios) {
-        await app.db.insert(schema.usuarios).values({
-          nome: usuario.nome,
-          email: usuario.email,
-          senhaHash: preComputedHash,
-          role: usuario.role,
-        });
-        app.logger.info({ email: usuario.email }, 'Usuario inserted successfully');
+        await (app.db as any).execute(
+          `INSERT INTO usuarios (id, nome, email, senha_hash, role, created_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, now())
+           ON CONFLICT (email) DO UPDATE SET
+             nome = EXCLUDED.nome,
+             senha_hash = EXCLUDED.senha_hash,
+             role = EXCLUDED.role
+           RETURNING id`,
+          [usuario.nome, usuario.email, HASH, usuario.role]
+        );
+        app.logger.info({ email: usuario.email }, 'Usuario upserted successfully');
       }
 
-      // Diagnostic: log the gerente user details
-      app.logger.info("Running diagnostic query for gerente user");
+      // Verify: log the stored hash for gerente user
+      app.logger.info("Verifying seed data for gerente user");
       const gerenteUsers = await app.db
         .select()
         .from(schema.usuarios)
@@ -371,11 +367,9 @@ export async function seedDatabase(app: App) {
             nome: gerenteUser.nome,
             email: gerenteUser.email,
             role: gerenteUser.role,
-            senhaHashLength: gerenteUser.senhaHash?.length,
             senhaHashFull: gerenteUser.senhaHash,
-            createdAt: gerenteUser.createdAt,
           },
-          'Diagnostic result for gerente user'
+          'Verification: Gerente user stored hash'
         );
       } else {
         app.logger.warn('Gerente user not found after seeding');

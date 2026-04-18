@@ -323,6 +323,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update user with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/users/invalid-uuid", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Delete user as admin", async () => {
     // Create a user for deletion
     const createRes = await authenticatedApi("/api/users", adminToken, {
@@ -355,6 +364,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete user with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/users/not-a-uuid", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   // ==================== Categorias CRUD ====================
@@ -415,6 +431,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update categoria with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/categorias/invalid-uuid", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: "Test" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Delete categoria as admin", async () => {
     const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "DELETE",
@@ -431,6 +456,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete categoria with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/categorias/bad-uuid", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   test("Delete categoria as non-admin returns 403", async () => {
@@ -505,6 +537,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Get prato with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pratos/invalid-uuid", authToken);
+    await expectStatus(res, 400);
+  });
+
   test("Create prato missing required field returns 400", async () => {
     const res = await authenticatedApi("/api/pratos", authToken, {
       method: "POST",
@@ -572,6 +609,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update prato with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pratos/bad-uuid", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: "Test" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Delete prato as admin", async () => {
     const res = await authenticatedApi(
       `/api/pratos/${testDishId}`,
@@ -600,6 +646,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete prato with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pratos/not-uuid", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   test("Delete prato as non-admin returns 403", async () => {
@@ -675,6 +728,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Upload photo to prato with invalid UUID format returns 400", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("prato.jpg", "test image content", "image/jpeg");
+    formData.append("file", testFile);
+
+    const res = await authenticatedApi("/api/pratos/bad-uuid/foto", adminToken, {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Upload photo without file returns 400", async () => {
     const formData = new FormData();
 
@@ -730,6 +795,11 @@ describe("API Integration Tests", () => {
       authToken
     );
     await expectStatus(res, 404);
+  });
+
+  test("Get mesa with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/mesas/invalid-uuid", authToken);
+    await expectStatus(res, 400);
   });
 
   test("Create mesa missing required field returns 400", async () => {
@@ -789,6 +859,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update mesa with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/mesas/bad-uuid", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "livre" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Delete mesa as admin", async () => {
     // Create a mesa for deletion
     const createRes = await authenticatedApi("/api/mesas", adminToken, {
@@ -821,6 +900,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete mesa with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/mesas/not-uuid", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   test("Delete mesa as non-admin returns 403", async () => {
@@ -879,6 +965,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Force delete mesa with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/mesas/invalid-uuid/force", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   test("Force delete mesa as non-admin returns 403", async () => {
@@ -978,6 +1071,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Get comanda with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/comandas/invalid-uuid", authToken);
+    await expectStatus(res, 400);
+  });
+
   test("Close comanda", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}/fechar`, authToken, {
       method: "PUT",
@@ -1000,6 +1098,15 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Close comanda with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/comandas/bad-uuid/fechar", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ total: "10.00" }),
+    });
+    await expectStatus(res, 400);
   });
 
   test("Cancel comanda", async () => {
@@ -1029,6 +1136,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Cancel comanda with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/comandas/not-uuid/cancelar", authToken, {
+      method: "PUT",
+    });
+    await expectStatus(res, 400);
   });
 
   // ==================== Pedidos CRUD (depends on comanda and prato) ====================
@@ -1113,6 +1227,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Get pedido with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pedidos/invalid-uuid", authToken);
+    await expectStatus(res, 400);
+  });
+
   test("Update pedido status", async () => {
     const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
       method: "PUT",
@@ -1135,6 +1254,15 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update pedido status with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pedidos/bad-uuid/status", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "pronto" }),
+    });
+    await expectStatus(res, 400);
   });
 
   test("Update pedido status to pronto", async () => {
@@ -1180,6 +1308,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete pedido with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pedidos/not-uuid", authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   // ==================== Usuarios CRUD ====================
@@ -1245,6 +1380,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update usuario with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/usuarios/invalid-uuid", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: "Test" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Delete usuario as admin", async () => {
     const res = await authenticatedApi(`/api/usuarios/${testUsuarioId}`, adminToken, {
       method: "DELETE",
@@ -1261,6 +1405,13 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete usuario with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/usuarios/bad-uuid", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
   });
 
   test("Delete usuario as non-admin returns 403", async () => {
@@ -1518,6 +1669,30 @@ describe("API Integration Tests", () => {
       body: formData,
     });
     await expectStatus(res, 400);
+  });
+
+  test("Upload image without authentication returns 401", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("test-image.png", "test image content", "image/png");
+    formData.append("file", testFile);
+
+    const res = await api("/api/upload/imagem", {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Upload file without authentication returns 401", async () => {
+    const formData = new FormData();
+    const testFile = createTestFile("test-file.txt", "test file content", "text/plain");
+    formData.append("file", testFile);
+
+    const res = await api("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+    await expectStatus(res, 401);
   });
 
   // ==================== Debug Endpoints ====================
