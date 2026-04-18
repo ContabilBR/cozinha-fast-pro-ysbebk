@@ -3,7 +3,7 @@ import * as schema from "./schema/schema.js";
 import { user as userTable, account as accountTable, session as sessionTable, verification as verificationTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
-import * as bcrypt from "bcrypt";
+import * as bcryptjs from "bcryptjs";
 import { cleanupTables } from "./cleanup.js";
 
 const seedAuthUsers = [
@@ -152,7 +152,7 @@ export async function cleanupMesasAndComandas(app: App) {
   }
 }
 
-// Seed 4 core users that must always exist
+// Seed 4 core users that must always exist - using raw database inserts only
 const coreUsers = [
   { email: "admin@cozinhafast.com", name: "Administrador", role: "administrador", password: "123456" },
   { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "123456" },
@@ -172,186 +172,85 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
-    // Step 1: Ensure core users exist (idempotent)
-    app.logger.info("Seeding core users");
+    // Step 1: Seed 4 core users using raw database inserts (idempotent)
+    app.logger.info("Seeding core users with raw database inserts");
+    const now = new Date();
+
     for (const user of coreUsers) {
       try {
-        app.logger.info({ email: user.email }, "Ensuring user exists");
+        app.logger.info({ email: user.email }, "Processing core user");
 
-        // Check if user exists
-        const existing = await app.db
+        // Check if user exists by email
+        const existingUser = await app.db
           .select()
           .from(userTable)
           .where(eq(userTable.email, user.email))
           .limit(1);
 
-        if (existing.length === 0) {
-          // Create user via Better Auth API
-          try {
-            const result = await app.auth.api.signUpEmail({
-              body: {
-                email: user.email,
-                password: user.password,
-                name: user.name,
-              },
-            });
+        let userId: string;
 
-            if (result.user) {
-              // Update user role
-              await app.db
-                .update(userTable)
-                .set({
-                  role: user.role as any,
-                  emailVerified: true,
-                  active: true,
-                })
-                .where(eq(userTable.id, result.user.id));
+        if (existingUser.length === 0) {
+          // User doesn't exist, create new user
+          userId = randomUUID();
+          app.logger.info({ email: user.email, userId }, "Inserting new user");
 
-              app.logger.info({ email: user.email }, "Core user created via auth API");
-            }
-          } catch (authError) {
-            // Fallback to raw insert if auth API fails
-            app.logger.warn({ email: user.email, err: authError }, "Auth API failed, using raw insert");
-
-            const userId = randomUUID();
-            const now = new Date();
-
-            await app.db.insert(userTable).values({
-              id: userId,
-              name: user.name,
-              email: user.email,
-              emailVerified: true,
-              role: user.role as any,
-              active: true,
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            const hashedPassword = await bcrypt.hash(user.password, 10);
-            await app.db.insert(accountTable).values({
-              id: randomUUID(),
-              accountId: user.email,
-              providerId: "credential",
-              userId: userId,
-              password: hashedPassword,
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            app.logger.info({ email: user.email }, "Core user created via raw insert");
-          }
+          await app.db.insert(userTable).values({
+            id: userId,
+            name: user.name,
+            email: user.email,
+            emailVerified: true,
+            role: user.role as any,
+            active: true,
+            createdAt: now,
+            updatedAt: now,
+          });
         } else {
-          // User exists, ensure account exists
-          const existingAccounts = await app.db
-            .select()
-            .from(accountTable)
-            .where(eq(accountTable.userId, existing[0].id))
-            .limit(1);
+          // User exists, use existing ID and update role if needed
+          userId = existingUser[0].id;
+          app.logger.info({ email: user.email, userId }, "User already exists");
 
-          if (existingAccounts.length === 0) {
-            const hashedPassword = await bcrypt.hash(user.password, 10);
-            await app.db.insert(accountTable).values({
-              id: randomUUID(),
-              accountId: user.email,
-              providerId: "credential",
-              userId: existing[0].id,
-              password: hashedPassword,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-
-            app.logger.info({ email: user.email }, "Account created for existing user");
-          }
-
-          // Ensure role is correct
-          if (existing[0].role !== user.role) {
+          if (existingUser[0].role !== user.role) {
             await app.db
               .update(userTable)
               .set({ role: user.role as any })
-              .where(eq(userTable.id, existing[0].id));
-
-            app.logger.info({ email: user.email }, "User role updated");
+              .where(eq(userTable.id, userId));
+            app.logger.info({ userId }, "Updated user role");
           }
         }
+
+        // Check if account exists for this user with credential provider
+        const existingAccount = await app.db
+          .select()
+          .from(accountTable)
+          .where(eq(accountTable.userId, userId))
+          .limit(1);
+
+        if (existingAccount.length === 0) {
+          // Account doesn't exist, create it
+          const hashedPassword = await bcryptjs.hash(user.password, 10);
+          app.logger.info({ userId }, "Inserting new credential account");
+
+          await app.db.insert(accountTable).values({
+            id: randomUUID(),
+            accountId: user.email,
+            providerId: "credential",
+            userId: userId,
+            password: hashedPassword,
+            createdAt: now,
+            updatedAt: now,
+          });
+        } else {
+          app.logger.info({ userId }, "Account already exists");
+        }
+
+        app.logger.info({ email: user.email, userId }, "Core user processed successfully");
       } catch (err) {
         app.logger.error({ email: user.email, err }, "Failed to seed core user");
+        throw err;
       }
     }
 
     app.logger.info("Core users seeded successfully");
-
-    // Step 1: Clean slate - delete auth-related data
-    app.logger.info("Cleaning auth data (session, verification, account, profiles, user)");
-    try {
-      // Delete in order to respect foreign keys
-      await app.db.delete(sessionTable);
-      await app.db.delete(verificationTable);
-      await app.db.delete(accountTable);
-      await app.db.delete(schema.profiles);
-      await app.db.delete(userTable);
-      app.logger.info("Auth data cleaned successfully");
-    } catch (err) {
-      app.logger.warn({ err }, "Failed to clean auth data (might not exist yet)");
-    }
-
-    // Step 2: Seed auth users using Better Auth API
-    app.logger.info("Seeding auth users via Better Auth API");
-    const userIds: Record<string, string> = {};
-    let garcomUserId = "";
-
-    for (const seedUser of seedAuthUsers) {
-      try {
-        app.logger.info({ email: seedUser.email }, "Creating auth user");
-
-        // Use Better Auth API to create user - this properly handles password hashing
-        const result = await app.auth.api.signUpEmail({
-          body: {
-            email: seedUser.email,
-            password: seedUser.password,
-            name: seedUser.name,
-          },
-        });
-
-        if (!result.user) {
-          throw new Error("Failed to create user via auth API");
-        }
-
-        const userId = result.user.id;
-
-        // Step 3: Set roles and flags
-        app.logger.info({ userId, email: seedUser.email }, "Updating user role and flags");
-        await app.db
-          .update(userTable)
-          .set({
-            role: seedUser.role as any,
-            emailVerified: true,
-            active: true,
-          })
-          .where(eq(userTable.id, userId));
-
-        // Step 5: Create profile
-        app.logger.info({ userId }, "Creating user profile");
-        await app.db.insert(schema.profiles).values({
-          id: randomUUID(),
-          userId: userId,
-          role: seedUser.role,
-          name: seedUser.name,
-          createdAt: new Date(),
-        });
-
-        app.logger.info({ email: seedUser.email, userId }, "Auth user created successfully");
-
-        userIds[seedUser.email] = userId;
-        if (seedUser.role === "garcom") {
-          garcomUserId = userId;
-        }
-      } catch (err) {
-        app.logger.error({ email: seedUser.email, err }, "Failed to seed auth user");
-        throw err; // Re-throw to fail the seed on auth errors
-      }
-    }
-
-    app.logger.info("Auth users seeded successfully");
 
     // Check if already seeded (by checking mesas)
     const existingMesas = await app.db.select().from(schema.mesas).limit(1);
@@ -460,7 +359,7 @@ export async function seedDatabase(app: App) {
         .limit(1);
 
       if (existing.length === 0) {
-        const hashedPassword = await bcrypt.hash(usuario.password, 10);
+        const hashedPassword = await bcryptjs.hash(usuario.password, 10);
         await app.db.insert(schema.usuarios).values({
           nome: usuario.nome,
           email: usuario.email,
