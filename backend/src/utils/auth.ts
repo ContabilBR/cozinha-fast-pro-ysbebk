@@ -3,6 +3,17 @@ import { eq } from "drizzle-orm";
 import { session as sessionTable, user as userTable } from "../db/schema/auth-schema.js";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import jwt from "jsonwebtoken";
+
+// JWT constants (must match auth-custom.ts)
+const JWT_SECRET = process.env.JWT_SECRET || 'cozinhafast_secret_2024';
+
+interface JWTPayload {
+  id: string;
+  email: string;
+  role: string;
+  nome: string;
+}
 
 export async function requireAuth(
   app: App,
@@ -20,7 +31,38 @@ export async function requireAuth(
 
     const token = authHeader.slice(7).trim();
 
-    // Look up token in session table
+    // Try to validate as JWT token first (custom JWT auth)
+    try {
+      const jwtPayload = jwt.verify(token, JWT_SECRET) as JWTPayload;
+
+      // Get user from usuarios table (custom auth)
+      const usuarios = await app.db
+        .select()
+        .from(schema.usuarios)
+        .where(eq(schema.usuarios.id, jwtPayload.id))
+        .limit(1);
+
+      if (!usuarios || usuarios.length === 0) {
+        app.logger.warn({ userId: jwtPayload.id }, "Usuario not found for JWT token");
+        reply.status(401).send({ error: "Unauthorized" });
+        return null;
+      }
+
+      const usuario = usuarios[0];
+
+      app.logger.info({ userId: usuario.id, email: usuario.email }, "JWT token auth validation successful");
+
+      return {
+        userId: usuario.id,
+        user: usuario,
+        profile: { role: usuario.role, name: usuario.nome },
+      };
+    } catch (jwtErr) {
+      // JWT validation failed, try Better Auth session
+      app.logger.debug({ error: (jwtErr as Error).message }, "Not a valid JWT token, trying session lookup");
+    }
+
+    // Try to look up token in Better Auth session table
     const sessions = await app.db
       .select()
       .from(sessionTable)
@@ -28,7 +70,7 @@ export async function requireAuth(
       .limit(1);
 
     if (!sessions || sessions.length === 0) {
-      app.logger.warn({ token: token.substring(0, 10) + "..." }, "Session not found for token");
+      app.logger.warn({ token: token.substring(0, 10) + "..." }, "Session not found for token and JWT validation failed");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
@@ -42,7 +84,7 @@ export async function requireAuth(
       return null;
     }
 
-    // Get user from user table
+    // Get user from user table (Better Auth)
     const users = await app.db
       .select()
       .from(userTable)
@@ -68,7 +110,7 @@ export async function requireAuth(
       ? { role: profiles[0].role, name: profiles[0].name }
       : { role: user.role || "usuario", name: user.name };
 
-    app.logger.info({ userId: user.id }, "Auth validation successful");
+    app.logger.info({ userId: user.id }, "Session auth validation successful");
 
     return {
       userId: user.id,
