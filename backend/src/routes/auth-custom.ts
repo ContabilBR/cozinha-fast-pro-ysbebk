@@ -24,8 +24,7 @@ interface LoginResponse {
 
 interface MeResponse {
   id: string;
-  name?: string;
-  nome?: string;
+  name: string;
   email: string;
   role: string | null;
 }
@@ -53,8 +52,8 @@ export function registerCustomAuthRoutes(app: App) {
             user: {
               type: 'object',
               properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
+                id: { type: 'string', format: 'uuid' },
+                nome: { type: 'string' },
                 email: { type: 'string' },
                 role: { type: 'string' },
               },
@@ -70,16 +69,16 @@ export function registerCustomAuthRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest<{ Body: LoginBody }>, reply: FastifyReply): Promise<LoginResponse | void> => {
-    app.logger.info({ email: request.body.email }, 'Login attempt');
+    const { email, password } = request.body;
+    app.logger.info({ email }, 'Login attempt started');
 
     try {
-      const { email, password } = request.body;
-
-      // Try Better Auth user table first (for integration tests)
       let user: any = null;
       let passwordHash: string | null = null;
       let isFromBetterAuth = false;
 
+      // Try Better Auth user table first (for integration tests)
+      app.logger.info({ email }, 'Checking Better Auth user table');
       const betterAuthUsers = await app.db
         .select()
         .from(userTable)
@@ -88,6 +87,7 @@ export function registerCustomAuthRoutes(app: App) {
       if (betterAuthUsers.length > 0) {
         user = betterAuthUsers[0];
         isFromBetterAuth = true;
+        app.logger.info({ email, userId: user.id }, 'User found in Better Auth user table');
 
         // Get password from account table
         const accounts = await app.db
@@ -97,11 +97,13 @@ export function registerCustomAuthRoutes(app: App) {
 
         if (accounts.length > 0) {
           passwordHash = accounts[0].password;
+          app.logger.info({ email }, 'Password hash found in Better Auth account table');
         }
       }
 
       // If not in Better Auth, try usuarios table
       if (!user) {
+        app.logger.info({ email }, 'Querying usuarios table by email');
         const usuariosRows = await app.db
           .select()
           .from(schema.usuarios)
@@ -110,19 +112,32 @@ export function registerCustomAuthRoutes(app: App) {
         if (usuariosRows.length > 0) {
           user = usuariosRows[0];
           passwordHash = user.senhaHash;
+          app.logger.info({ email, usuarioId: user.id }, 'User found in usuarios table');
         }
       }
 
       if (!user || !passwordHash) {
-        app.logger.warn({ email }, 'User not found or no password hash');
+        app.logger.warn({ email }, 'User not found in any table or no password hash');
         return reply.status(401).send({ error: 'E-mail ou senha incorretos' });
       }
 
-      // Verify password
-      const passwordMatch = await bcryptjs.compare(password, passwordHash);
+      app.logger.info(
+        {
+          email,
+          senhaHashLength: passwordHash?.length,
+          senhaHashFull: passwordHash,
+          passwordLength: password.length,
+          passwordValue: password,
+        },
+        'Password comparison details'
+      );
+
+      // Verify password using bcryptjs
+      const passwordMatch = await bcryptjs.compare(password, passwordHash || '');
+      app.logger.info({ email, passwordMatch }, 'Bcryptjs compare result');
 
       if (!passwordMatch) {
-        app.logger.warn({ email }, 'Password mismatch in login');
+        app.logger.warn({ email }, 'Password mismatch - returning 401');
         return reply.status(401).send({ error: 'E-mail ou senha incorretos' });
       }
 
@@ -131,7 +146,7 @@ export function registerCustomAuthRoutes(app: App) {
       const now = new Date();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      // Store token in session table with user ID
+      // Store token in session table
       await app.db.insert(sessionTable).values({
         id: randomUUID(),
         token: token,
@@ -141,7 +156,7 @@ export function registerCustomAuthRoutes(app: App) {
         updatedAt: now,
       });
 
-      app.logger.info({ email, userId: user.id }, 'Login successful');
+      app.logger.info({ email, userId: user.id, token }, 'Login successful');
 
       // Return appropriate response based on source
       if (isFromBetterAuth) {
@@ -166,7 +181,7 @@ export function registerCustomAuthRoutes(app: App) {
         };
       }
     } catch (err) {
-      app.logger.error({ err, email: request.body.email }, 'Login error');
+      app.logger.error({ err, email }, 'Login error');
       throw err;
     }
   });
@@ -181,8 +196,8 @@ export function registerCustomAuthRoutes(app: App) {
           description: 'User profile',
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            name: { type: 'string' },
+            id: { type: 'string', format: 'uuid' },
+            nome: { type: 'string' },
             email: { type: 'string' },
             role: { type: 'string' },
           },
@@ -221,6 +236,7 @@ export function registerCustomAuthRoutes(app: App) {
       const session = sessions[0];
 
       // Try to fetch user from Better Auth first
+      app.logger.info({ userId: session.userId }, 'Fetching user from Better Auth');
       let user: any = null;
 
       const betterAuthUsers = await app.db
@@ -230,10 +246,12 @@ export function registerCustomAuthRoutes(app: App) {
 
       if (betterAuthUsers.length > 0) {
         user = betterAuthUsers[0];
+        app.logger.info({ userId: user.id }, 'User found in Better Auth');
       }
 
       // If not in Better Auth, try usuarios table
       if (!user) {
+        app.logger.info({ userId: session.userId }, 'Fetching user from usuarios table');
         const usuariosRows = await app.db
           .select()
           .from(schema.usuarios)
@@ -241,6 +259,7 @@ export function registerCustomAuthRoutes(app: App) {
 
         if (usuariosRows.length > 0) {
           user = usuariosRows[0];
+          app.logger.info({ userId: user.id }, 'User found in usuarios table');
         }
       }
 
@@ -249,26 +268,15 @@ export function registerCustomAuthRoutes(app: App) {
         return reply.status(401).send({ error: 'Unauthorized' });
       }
 
-      app.logger.info({ userId: user.id }, 'User profile fetched from GET /api/me');
+      app.logger.info({ userId: user.id, email: user.email }, 'User profile fetched from GET /api/me');
 
-      // Return appropriate response based on which table user came from
-      if (user.name !== undefined) {
-        // Better Auth user
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        };
-      } else {
-        // usuarios table user
-        return {
-          id: user.id,
-          nome: user.nome,
-          email: user.email,
-          role: user.role,
-        };
-      }
+      // Return user data - prefer name (Better Auth), fall back to nome (usuarios)
+      return {
+        id: user.id,
+        name: user.name || user.nome,
+        email: user.email,
+        role: user.role,
+      };
     } catch (err) {
       app.logger.error({ err }, 'GET /api/me error');
       throw err;

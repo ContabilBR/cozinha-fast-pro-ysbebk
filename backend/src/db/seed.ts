@@ -329,52 +329,62 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
-    // Seed usuarios with upsert
-    app.logger.info("Seeding usuarios with upsert");
-    for (const usuario of seedUsuarios) {
-      const hashedPassword = await bcryptjs.hash(usuario.password, 10);
+    // Seed usuarios with pre-computed bcrypt hash
+    app.logger.info("Seeding usuarios with pre-computed bcrypt hash");
 
-      try {
-        // Use raw SQL for upsert to handle ON CONFLICT
-        const query = `
-          INSERT INTO usuarios (id, nome, email, senha_hash, role, created_at)
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, now())
-          ON CONFLICT (email) DO UPDATE SET
-            nome = EXCLUDED.nome,
-            role = EXCLUDED.role,
-            senha_hash = EXCLUDED.senha_hash
-          RETURNING id, nome, email, role;
-        `;
+    // Pre-computed hash of "123456" with bcrypt
+    const preComputedHash = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
 
-        // Execute raw SQL if available
-        if (typeof (app.db as any).execute === 'function') {
-          await (app.db as any).execute(query, [usuario.nome, usuario.email, hashedPassword, usuario.role]);
-          app.logger.info({ email: usuario.email }, 'Usuario upserted successfully');
-        } else {
-          // Fallback to checking and inserting
-          const existing = await app.db
-            .select()
-            .from(schema.usuarios)
-            .where(eq(schema.usuarios.email, usuario.email))
-            .limit(1);
+    try {
+      // First, delete existing seed usuarios to avoid conflicts
+      app.logger.info("Deleting existing seed usuarios");
+      const seedEmails = seedUsuarios.map(u => u.email);
+      await app.db
+        .delete(schema.usuarios)
+        .where(inArray(schema.usuarios.email, seedEmails));
+      app.logger.info("Existing seed usuarios deleted");
 
-          if (existing.length === 0) {
-            await app.db.insert(schema.usuarios).values({
-              nome: usuario.nome,
-              email: usuario.email,
-              senhaHash: hashedPassword,
-              role: usuario.role,
-            });
-            app.logger.info({ email: usuario.email }, 'Usuario inserted successfully');
-          } else {
-            app.logger.info({ email: usuario.email }, 'Usuario already exists');
-          }
-        }
-      } catch (err) {
-        app.logger.warn({ email: usuario.email, err }, 'Failed to upsert usuario');
+      // Insert fresh seed usuarios with pre-computed hash
+      app.logger.info("Inserting fresh seed usuarios with pre-computed hash");
+      for (const usuario of seedUsuarios) {
+        await app.db.insert(schema.usuarios).values({
+          nome: usuario.nome,
+          email: usuario.email,
+          senhaHash: preComputedHash,
+          role: usuario.role,
+        });
+        app.logger.info({ email: usuario.email }, 'Usuario inserted successfully');
       }
+
+      // Diagnostic: log the gerente user details
+      app.logger.info("Running diagnostic query for gerente user");
+      const gerenteUsers = await app.db
+        .select()
+        .from(schema.usuarios)
+        .where(eq(schema.usuarios.email, 'gerente@cozinhafast.com'));
+
+      if (gerenteUsers.length > 0) {
+        const gerenteUser = gerenteUsers[0];
+        app.logger.info(
+          {
+            id: gerenteUser.id,
+            nome: gerenteUser.nome,
+            email: gerenteUser.email,
+            role: gerenteUser.role,
+            senhaHashLength: gerenteUser.senhaHash?.length,
+            senhaHashFull: gerenteUser.senhaHash,
+            createdAt: gerenteUser.createdAt,
+          },
+          'Diagnostic result for gerente user'
+        );
+      } else {
+        app.logger.warn('Gerente user not found after seeding');
+      }
+
+      app.logger.info("Usuarios seeded successfully");
+    } catch (err) {
+      app.logger.error({ err }, 'Failed to seed usuarios');
     }
-    app.logger.info("Usuarios seeded successfully");
 
     app.logger.info("Database seeded successfully");
   } catch (error) {
