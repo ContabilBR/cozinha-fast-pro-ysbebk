@@ -174,42 +174,24 @@ export function registerCustomAuthRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    app.logger.info('GET /api/me - checking Authorization header');
+    app.logger.info('GET /api/me - Fetching current user profile');
     try {
-      // Extract Bearer token from Authorization header
-      const authHeader = request.headers.authorization;
-      app.logger.debug({ hasHeader: !!authHeader }, 'Authorization header check');
+      // Verify JWT and attach user context to request
+      const isAuthenticated = await verifyAndAttachUser(app, request, reply);
+      if (!isAuthenticated) return;
 
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        app.logger.warn('No Bearer token in Authorization header');
-        return reply.status(401).send({ error: 'Não autorizado' });
-      }
-
-      const token = authHeader.substring(7); // Remove "Bearer " prefix
-      app.logger.debug({ tokenLength: token.length }, 'Extracted bearer token');
-
-      // Verify JWT token
-      let payload: JWTPayload;
-      try {
-        payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
-        app.logger.info({ userId: payload.id, email: payload.email }, 'JWT verified successfully');
-      } catch (jwtErr) {
-        app.logger.warn({ jwtError: (jwtErr as Error).message }, 'JWT verification failed');
-        return reply.status(401).send({ error: 'Não autorizado' });
-      }
+      const userId = (request as any).userId;
+      app.logger.debug({ userId }, 'User authenticated, looking up in usuarios table');
 
       // Look up user in usuarios table
-      app.logger.debug({ userId: payload.id }, 'Looking up user in usuarios table');
       const usuarios = await app.db
         .select()
         .from(schema.usuarios)
-        .where(eq(schema.usuarios.id, payload.id));
-
-      app.logger.debug({ usuariosFound: usuarios.length }, 'User lookup result');
+        .where(eq(schema.usuarios.id, userId));
 
       if (usuarios.length === 0) {
-        app.logger.warn({ userId: payload.id }, 'User not found in usuarios table');
-        return reply.status(401).send({ error: 'Não autorizado' });
+        app.logger.warn({ userId }, 'User not found in usuarios table');
+        return reply.status(401).send({ error: 'Invalid or expired token' });
       }
 
       const user = usuarios[0];
@@ -277,4 +259,59 @@ export function registerCustomAuthRoutes(app: App) {
       throw err;
     }
   });
+}
+
+/**
+ * Helper function to protect routes with JWT authentication.
+ * Validates the Bearer token in Authorization header and attaches userId and role to request context.
+ * Should be called at the start of protected route handlers.
+ *
+ * @param request - Fastify request object
+ * @param reply - Fastify reply object
+ * @returns true if authentication succeeds, false if it fails (reply with 401 sent)
+ *
+ * Usage:
+ * app.fastify.get('/api/protected', async (request, reply) => {
+ *   if (!await verifyAndAttachUser(request, reply)) return;
+ *   const userId = (request as any).userId;
+ *   const role = (request as any).role;
+ *   // ... route logic using userId and role
+ * });
+ */
+export async function verifyAndAttachUser(
+  app: App,
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<boolean> {
+  const authHeader = request.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    app.logger.warn('No Bearer token in Authorization header for protected route');
+    reply.status(401).send({ error: 'Invalid or expired token' });
+    return false;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    // Attach user context to request for downstream handlers
+    (request as any).userId = payload.id;
+    (request as any).role = payload.role;
+    (request as any).userEmail = payload.email;
+    (request as any).userName = payload.nome;
+
+    app.logger.debug(
+      { userId: payload.id, role: payload.role },
+      'JWT token validated and user context attached'
+    );
+    return true;
+  } catch (err) {
+    app.logger.warn(
+      { error: (err as Error).message },
+      'JWT token verification failed for protected route'
+    );
+    reply.status(401).send({ error: 'Invalid or expired token' });
+    return false;
+  }
 }
