@@ -54,7 +54,21 @@ function isDisponivel(status: string): boolean {
   return status === "disponivel" || status === "livre" || status === "free";
 }
 
-function TableCard({ mesa, onPress, index }: { mesa: ApiMesa; onPress: () => void; index: number }) {
+function TableCard({
+  mesa,
+  onPress,
+  index,
+  role,
+  onAbrirChamado,
+  onVerComanda,
+}: {
+  mesa: ApiMesa;
+  onPress: () => void;
+  index: number;
+  role?: string;
+  onAbrirChamado?: () => void;
+  onVerComanda?: () => void;
+}) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -69,6 +83,10 @@ function TableCard({ mesa, onPress, index }: { mesa: ApiMesa; onPress: () => voi
   const statusColor = getMesaStatusColor(mesa.status);
   const statusLabel = getMesaStatusLabel(mesa.status);
   const livre = isDisponivel(mesa.status);
+  const isGarcom = role === "garcom";
+
+  const showAbrirChamado = isGarcom && livre;
+  const showVerComanda = isGarcom && !livre && !!mesa.comanda_id;
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
@@ -122,6 +140,48 @@ function TableCard({ mesa, onPress, index }: { mesa: ApiMesa; onPress: () => voi
           </View>
         </View>
 
+        {showAbrirChamado && (
+          <AnimatedPressable
+            onPress={(e) => {
+              console.log("[Mesas] Abrir Chamado pressionado para mesa:", mesa.numero);
+              if (onAbrirChamado) onAbrirChamado();
+            }}
+            style={{
+              marginTop: 10,
+              backgroundColor: COLORS.primary,
+              borderRadius: 10,
+              paddingVertical: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: "#fff" }}>
+              Abrir Chamado
+            </Text>
+          </AnimatedPressable>
+        )}
+
+        {showVerComanda && (
+          <AnimatedPressable
+            onPress={(e) => {
+              console.log("[Mesas] Ver Comanda pressionado para mesa:", mesa.numero, "comanda_id:", mesa.comanda_id);
+              if (onVerComanda) onVerComanda();
+            }}
+            style={{
+              marginTop: 10,
+              backgroundColor: statusColor + "18",
+              borderRadius: 10,
+              paddingVertical: 8,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: statusColor + "40",
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: statusColor }}>
+              Ver Comanda
+            </Text>
+          </AnimatedPressable>
+        )}
+
         <View
           style={{
             position: "absolute",
@@ -143,7 +203,7 @@ export default function MesasScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const role = user?.role;
+  const role = user?.role as string | undefined;
   const canAdmin = role === "admin" || role === "administrador" || role === "gerente";
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
@@ -186,15 +246,22 @@ export default function MesasScreen() {
   const handleMesaPress = (mesa: ApiMesa) => {
     console.log("[Mesas] Mesa pressed:", mesa.numero, "status:", mesa.status, "comanda_id:", mesa.comanda_id);
     if (!isDisponivel(mesa.status) && mesa.comanda_id) {
-      // Mesa ocupada — ir para comanda ativa
       router.push(`/comanda/${mesa.comanda_id}`);
     } else if (isDisponivel(mesa.status) && (role === "garcom" || canAdmin)) {
-      // Mesa livre — abrir nova comanda
       router.push(`/comanda/nova?mesa_id=${mesa.id}`);
     } else {
-      // Fallback: detalhe da mesa
       router.push(`/mesa/${mesa.id}`);
     }
+  };
+
+  const handleAbrirChamado = (mesa: ApiMesa) => {
+    console.log("[Mesas] Abrir Chamado para mesa:", mesa.numero, "id:", mesa.id);
+    router.push(`/comanda/nova?mesa_id=${mesa.id}`);
+  };
+
+  const handleVerComanda = (mesa: ApiMesa) => {
+    console.log("[Mesas] Ver Comanda para mesa:", mesa.numero, "comanda_id:", mesa.comanda_id);
+    router.push(`/comanda/${mesa.comanda_id}`);
   };
 
   const livreCount = mesas.filter((m) => isDisponivel(m.status)).length;
@@ -262,7 +329,14 @@ export default function MesasScreen() {
         <FlatList
           data={mesas}
           renderItem={({ item, index }) => (
-            <TableCard mesa={item} onPress={() => handleMesaPress(item)} index={index} />
+            <TableCard
+              mesa={item}
+              onPress={() => handleMesaPress(item)}
+              index={index}
+              role={role}
+              onAbrirChamado={() => handleAbrirChamado(item)}
+              onVerComanda={() => handleVerComanda(item)}
+            />
           )}
           keyExtractor={(item) => item.id}
           numColumns={2}

@@ -75,6 +75,7 @@ export default function ComandaDetailScreen() {
   const { user } = useAuth();
   const role = (user as any)?.role;
   const canAdmin = isAdmin(role);
+  const isGarcom = role === "garcom";
 
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +140,11 @@ export default function ComandaDetailScreen() {
     }
   };
 
+  const handleAdicionarItem = () => {
+    console.log("[Comanda] Adicionar item pressionado, comanda:", id);
+    router.push({ pathname: "/pedido/novo", params: { comanda_id: id, mesa_id: comanda?.mesa_id } });
+  };
+
   const isAberta = comanda?.status === "aberta";
   const total = formatCurrency(comanda?.total ?? 0);
   const openedAt = formatDate(comanda?.created_at);
@@ -154,7 +160,6 @@ export default function ComandaDetailScreen() {
   const comandaStatusLabel = comanda?.status === "aberta" ? "Aberta" : comanda?.status === "fechada" ? "Fechada" : "Cancelada";
 
   const pedidos = comanda?.pedidos ?? [];
-  const allDone = pedidos.length > 0 && pedidos.every((p) => p.status === "pronto" || p.status === "entregue" || p.status === "cancelado");
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -189,6 +194,17 @@ export default function ComandaDetailScreen() {
         }}>
           Detalhes da Comanda
         </Text>
+        {/* Header add button */}
+        {isAberta && (
+          <TouchableOpacity
+            onPress={handleAdicionarItem}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{ position: "absolute", right: 16, flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <Plus size={18} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 15, fontWeight: "500" }}>Adicionar</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -207,87 +223,98 @@ export default function ComandaDetailScreen() {
           </AnimatedPressable>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 16 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
-        >
-          {/* Info card */}
-          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, gap: 12 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>Mesa {mesaNum}</Text>
-              <View style={{ backgroundColor: comandaStatusColor + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: comandaStatusColor }}>{comandaStatusLabel}</Text>
-              </View>
-            </View>
-
-            <View style={{ gap: 6 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Garçom</Text>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{garcomName}</Text>
-              </View>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Aberta em</Text>
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{openedAt}</Text>
-              </View>
-              {comanda?.closed_at && (
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Fechada em</Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{formatDate(comanda.closed_at)}</Text>
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 16 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          >
+            {/* Info card */}
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, gap: 12 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>Mesa {mesaNum}</Text>
+                <View style={{ backgroundColor: comandaStatusColor + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: comandaStatusColor }}>{comandaStatusLabel}</Text>
                 </View>
-              )}
-            </View>
-
-            <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Total</Text>
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>{total}</Text>
-            </View>
-          </View>
-
-          {/* Pedidos */}
-          <View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>Itens ({pedidos.length})</Text>
-              {isAberta && (
-                <AnimatedPressable
-                  onPress={() => { console.log("[Comanda] Adicionar item pressionado, comanda:", id); router.push({ pathname: "/pedido/novo", params: { comanda_id: id, mesa_id: comanda?.mesa_id } }); }}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.primaryMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
-                >
-                  <Plus size={14} color={COLORS.primary} />
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Adicionar item</Text>
-                </AnimatedPressable>
-              )}
-            </View>
-
-            {pedidos.length === 0 ? (
-              <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
-                <ShoppingBag size={28} color={COLORS.textTertiary} />
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhum item ainda</Text>
               </View>
-            ) : (
-              pedidos.map((pedido) => <PedidoRow key={pedido.id} pedido={pedido} />)
-            )}
-          </View>
 
-          {/* Actions */}
-          {isAberta && (
-            <View style={{ gap: 10 }}>
-              {(allDone || canAdmin) && (
-                <AnimatedPressable
-                  onPress={() => { console.log("[Comanda] Fechar comanda pressionado"); handleClose(); }}
-                  disabled={closing}
-                  style={{ backgroundColor: COLORS.success, borderRadius: 14, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
-                >
-                  {closing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <CheckCircle size={20} color="#fff" />
-                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Fechar comanda</Text>
-                    </>
-                  )}
-                </AnimatedPressable>
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Garçom</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{garcomName}</Text>
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Aberta em</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{openedAt}</Text>
+                </View>
+                {comanda?.closed_at && (
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>Fechada em</Text>
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>{formatDate(comanda.closed_at)}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Total</Text>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>{total}</Text>
+              </View>
+            </View>
+
+            {/* Pedidos */}
+            <View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>Itens ({pedidos.length})</Text>
+                {isAberta && (
+                  <AnimatedPressable
+                    onPress={handleAdicionarItem}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.primaryMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
+                  >
+                    <Plus size={14} color={COLORS.primary} />
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Adicionar item</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+
+              {pedidos.length === 0 ? (
+                <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
+                  <ShoppingBag size={28} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhum item ainda</Text>
+                </View>
+              ) : (
+                pedidos.map((pedido) => <PedidoRow key={pedido.id} pedido={pedido} />)
               )}
+            </View>
+          </ScrollView>
 
+          {/* Bottom action area */}
+          {isAberta && (
+            <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.background }}>
+              {/* Floating add button */}
+              <AnimatedPressable
+                onPress={handleAdicionarItem}
+                style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: COLORS.primary + "30" }}
+              >
+                <Plus size={18} color={COLORS.primary} />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.primary }}>Adicionar item</Text>
+              </AnimatedPressable>
+
+              {/* Fechar comanda — visible to garçom and admin */}
+              <AnimatedPressable
+                onPress={() => { console.log("[Comanda] Fechar comanda pressionado"); handleClose(); }}
+                disabled={closing}
+                style={{ backgroundColor: COLORS.success, borderRadius: 14, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                {closing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <CheckCircle size={20} color="#fff" />
+                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Fechar comanda</Text>
+                  </>
+                )}
+              </AnimatedPressable>
+
+              {/* Cancelar comanda — admin only */}
               {canAdmin && (
                 <AnimatedPressable
                   onPress={() => { console.log("[Comanda] Cancelar comanda pressionado"); handleCancel(); }}
@@ -306,7 +333,7 @@ export default function ComandaDetailScreen() {
               )}
             </View>
           )}
-        </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );

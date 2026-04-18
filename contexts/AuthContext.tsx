@@ -200,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async () => {
     console.log("[Auth] signInWithApple called, platform:", Platform.OS);
     if (Platform.OS === "ios") {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const AppleAuthentication = require("expo-apple-authentication");
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [

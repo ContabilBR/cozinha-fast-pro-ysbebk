@@ -34,7 +34,7 @@ const ROLE_ROUTES: Record<string, string> = {
 
 export default function AuthScreen() {
   const COLORS = useColors();
-  const { user, loading, signInWithEmail, signInWithApple, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithEmail } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -43,7 +43,6 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<"apple" | "google" | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -98,38 +97,6 @@ export default function AuthScreen() {
     }
   };
 
-  const handleApple = async () => {
-    console.log("[AuthScreen] Apple sign-in button pressed");
-    setSocialLoading("apple");
-    setError("");
-    try {
-      await signInWithApple();
-    } catch (e: any) {
-      console.error("[AuthScreen] Apple sign-in error:", e);
-      if (e?.message !== "Authentication cancelled") {
-        setError(e?.message || "Erro ao entrar com Apple.");
-      }
-    } finally {
-      setSocialLoading(null);
-    }
-  };
-
-  const handleGoogle = async () => {
-    console.log("[AuthScreen] Google sign-in button pressed");
-    setSocialLoading("google");
-    setError("");
-    try {
-      await signInWithGoogle();
-    } catch (e: any) {
-      console.error("[AuthScreen] Google sign-in error:", e);
-      if (e?.message !== "Authentication cancelled") {
-        setError(e?.message || "Erro ao entrar com Google.");
-      }
-    } finally {
-      setSocialLoading(null);
-    }
-  };
-
   const fillDemo = (cred: (typeof DEMO_CREDENTIALS)[0]) => {
     console.log("[AuthScreen] Demo credentials selected for:", cred.role);
     setEmail(cred.email);
@@ -144,8 +111,6 @@ export default function AuthScreen() {
       </View>
     );
   }
-
-  const isAnySocialLoading = socialLoading !== null;
 
   return (
     <KeyboardAvoidingView
@@ -312,7 +277,7 @@ export default function AuthScreen() {
             {/* Submit */}
             <AnimatedPressable
               onPress={handleLogin}
-              disabled={submitting || isAnySocialLoading}
+              disabled={submitting}
               style={{
                 backgroundColor: COLORS.primary,
                 borderRadius: 14,
@@ -320,7 +285,7 @@ export default function AuthScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 marginTop: 4,
-                opacity: submitting || isAnySocialLoading ? 0.7 : 1,
+                opacity: submitting ? 0.7 : 1,
               }}
             >
               {submitting ? (
@@ -329,72 +294,6 @@ export default function AuthScreen() {
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
                   Entrar
                 </Text>
-              )}
-            </AnimatedPressable>
-
-            {/* Divider */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                ou continue com
-              </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.border }} />
-            </View>
-
-            {/* Apple Sign In — MUST be first per App Store guidelines */}
-            <AnimatedPressable
-              onPress={handleApple}
-              disabled={submitting || isAnySocialLoading}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: COLORS.text,
-                borderRadius: 14,
-                height: 52,
-                gap: 10,
-                opacity: submitting || isAnySocialLoading ? 0.7 : 1,
-              }}
-            >
-              {socialLoading === "apple" ? (
-                <ActivityIndicator color={COLORS.background} />
-              ) : (
-                <>
-                  <Text style={{ fontSize: 18, color: COLORS.background }}>
-                  </Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.background }}>
-                    Entrar com Apple
-                  </Text>
-                </>
-              )}
-            </AnimatedPressable>
-
-            {/* Google Sign In */}
-            <AnimatedPressable
-              onPress={handleGoogle}
-              disabled={submitting || isAnySocialLoading}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: COLORS.surface,
-                borderRadius: 14,
-                height: 52,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                gap: 10,
-                opacity: submitting || isAnySocialLoading ? 0.7 : 1,
-              }}
-            >
-              {socialLoading === "google" ? (
-                <ActivityIndicator color={COLORS.primary} />
-              ) : (
-                <>
-                  <Text style={{ fontSize: 18 }}>G</Text>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>
-                    Entrar com Google
-                  </Text>
-                </>
               )}
             </AnimatedPressable>
           </View>
