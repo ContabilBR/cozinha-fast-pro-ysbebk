@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 export const BACKEND_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
-export const AUTH_TOKEN_KEY = "auth_token";
+export const AUTH_TOKEN_KEY = "cozinhafast_token";
 
 export const getBearerToken = async (): Promise<string | null> => {
   try {
