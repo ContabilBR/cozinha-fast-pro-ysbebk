@@ -173,7 +173,7 @@ export default function MesaDetailScreen() {
             </AnimatedPressable>
           ) : null}
 
-          {mesaStatus === "livre" && (role === "garcom" || canAdmin) ? (
+          {(mesaStatus === "livre" || (mesaStatus as string) === "disponivel") && (role === "garcom" || canAdmin) ? (
             <AnimatedPressable
               onPress={() => { console.log("[Mesa] Abrir comanda pressionado"); handleOpenComanda(); }}
               disabled={openingComanda}

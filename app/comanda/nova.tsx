@@ -32,7 +32,7 @@ interface ApiGarcom {
 }
 
 function isDisponivel(status: string): boolean {
-  return status === "disponivel" || status === "livre" || status === "free";
+  return status === "disponivel" || status === "livre" || status === "free" || status === "available";
 }
 
 function getGarcomName(g: ApiGarcom): string {
@@ -105,7 +105,7 @@ export default function NovaComandaScreen() {
     setError("");
     setSubmitting(true);
     try {
-      const payload: any = { mesa_id: selectedMesaId };
+      const payload: any = { mesa_id: selectedMesaId, status: "aberta", total: 0 };
       if (selectedGarcomId) payload.garcom_id = selectedGarcomId;
       console.log("[NovaComanda] POST /api/comandas", payload);
       const res = await apiPost<any>("/api/comandas", payload);

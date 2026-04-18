@@ -52,6 +52,7 @@ export default function NovoPratoScreen() {
   const [descricao, setDescricao] = useState("");
   const [preco, setPreco] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
+  const [imagemUrl, setImagemUrl] = useState("");
   const [disponivel, setDisponivel] = useState(true);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [showCatPicker, setShowCatPicker] = useState(false);
@@ -142,6 +143,7 @@ export default function NovoPratoScreen() {
         disponivel,
       };
       if (categoriaId) payload.categoria_id = categoriaId;
+      if (imagemUrl.trim() && !localImageUri) payload.imagem_url = imagemUrl.trim();
       console.log("[NovoPrato] POST /api/pratos");
       const res = await apiPost<any>("/api/pratos", payload);
       const pratoId = res?.prato?.id || res?.id;
@@ -253,7 +255,24 @@ export default function NovoPratoScreen() {
             )}
           </FormField>
 
-          <FormField label="Foto do prato">
+          <FormField label="URL da imagem">
+            <TextInput
+              value={imagemUrl}
+              onChangeText={(t) => { console.log("[NovoPrato] imagem_url alterada"); setImagemUrl(t); }}
+              placeholder="https://exemplo.com/imagem.jpg"
+              placeholderTextColor={COLORS.textTertiary}
+              autoCapitalize="none"
+              keyboardType="url"
+              style={inputStyle}
+            />
+            {imagemUrl.trim() && !localImageUri ? (
+              <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
+                <Image source={resolveImageSource(imagemUrl)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              </View>
+            ) : null}
+          </FormField>
+
+          <FormField label="Foto do prato (câmera/galeria)">
             <View style={{ gap: 10 }}>
               {localImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
@@ -266,9 +285,9 @@ export default function NovoPratoScreen() {
                   </AnimatedPressable>
                 </View>
               ) : (
-                <View style={{ height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>Nenhuma foto selecionada</Text>
+                <View style={{ height: 80, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <UtensilsCrossed size={22} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Nenhuma foto selecionada</Text>
                 </View>
               )}
               <View style={{ flexDirection: "row", gap: 10 }}>

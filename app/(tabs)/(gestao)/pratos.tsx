@@ -76,6 +76,7 @@ export default function GestaoPratos() {
   const [disponivel, setDisponivel] = useState(true);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [imagemUrl, setImagemUrl] = useState("");
+  const [imagemUrlInput, setImagemUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -115,7 +116,7 @@ export default function GestaoPratos() {
     console.log("[GestaoPratos] Abrir modal de criação");
     setEditingPrato(null);
     setNome(""); setDescricao(""); setPreco(""); setCategoriaId("");
-    setDisponivel(true); setLocalImageUri(null); setImagemUrl("");
+    setDisponivel(true); setLocalImageUri(null); setImagemUrl(""); setImagemUrlInput("");
     setModalError(""); setShowCatPicker(false);
     setShowModal(true);
   };
@@ -130,6 +131,7 @@ export default function GestaoPratos() {
     setDisponivel(p.disponivel !== false);
     setLocalImageUri(null);
     setImagemUrl(p.imagem_url ?? "");
+    setImagemUrlInput(p.imagem_url ?? "");
     setModalError(""); setShowCatPicker(false);
     setShowModal(true);
   };
@@ -199,6 +201,7 @@ export default function GestaoPratos() {
         disponivel,
       };
       if (categoriaId) payload.categoria_id = categoriaId;
+      if (imagemUrlInput.trim() && !localImageUri) payload.imagem_url = imagemUrlInput.trim();
 
       if (editingPrato) {
         console.log("[GestaoPratos] PUT /api/pratos/" + editingPrato.id);
@@ -260,8 +263,6 @@ export default function GestaoPratos() {
   };
 
   const selectedCat = categorias.find((c) => c.id === categoriaId);
-  const displayImageUri = localImageUri ?? (imagemUrl || null);
-  const imageSource = resolveImageSource(displayImageUri ?? undefined);
 
   const searchLower = search.toLowerCase();
   const filteredPratos = search.trim()
@@ -422,12 +423,37 @@ export default function GestaoPratos() {
 
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
               <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
-                {/* Foto */}
+                {/* URL da imagem */}
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>URL da imagem</Text>
+                  <TextInput
+                    value={imagemUrlInput}
+                    onChangeText={(t) => { console.log("[GestaoPratos] imagem_url alterada"); setImagemUrlInput(t); setLocalImageUri(null); }}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                    placeholderTextColor={COLORS.textTertiary}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    style={inputStyle}
+                  />
+                  {imagemUrlInput.trim() && !localImageUri ? (
+                    <View style={{ height: 120, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                      <Image source={resolveImageSource(imagemUrlInput)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                      <TouchableOpacity
+                        onPress={() => { console.log("[GestaoPratos] Remover URL pressionado"); setImagemUrlInput(""); }}
+                        style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Ionicons name="close" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Foto câmera/galeria */}
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Foto do prato</Text>
-                  {displayImageUri ? (
-                    <View style={{ height: 140, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                      <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Foto (câmera/galeria)</Text>
+                  {localImageUri ? (
+                    <View style={{ height: 120, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                      <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                       {uploading && (
                         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
                           <ActivityIndicator color="#fff" />
@@ -435,16 +461,16 @@ export default function GestaoPratos() {
                         </View>
                       )}
                       <TouchableOpacity
-                        onPress={() => { console.log("[GestaoPratos] Remover foto pressionado"); setLocalImageUri(null); setImagemUrl(""); }}
+                        onPress={() => { console.log("[GestaoPratos] Remover foto pressionado"); setLocalImageUri(null); }}
                         style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                       >
                         <Ionicons name="close" size={16} color="#fff" />
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <View style={{ height: 100, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
-                      <UtensilsCrossed size={24} color={COLORS.textTertiary} />
-                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Nenhuma foto</Text>
+                    <View style={{ height: 72, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 4 }}>
+                      <UtensilsCrossed size={20} color={COLORS.textTertiary} />
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textTertiary }}>Nenhuma foto</Text>
                     </View>
                   )}
                   <View style={{ flexDirection: "row", gap: 10 }}>

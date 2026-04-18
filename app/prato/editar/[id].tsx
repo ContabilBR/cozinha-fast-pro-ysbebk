@@ -144,6 +144,8 @@ export default function EditarPratoScreen() {
 
   const handleSave = async () => {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
+    const precoNum = parseFloat(preco.replace(",", "."));
+    if (isNaN(precoNum) || precoNum < 0) { setError("Preço inválido."); return; }
     console.log("[EditarPrato] Salvar alterações pressionado:", id, "nome:", nome);
     setSubmitting(true);
     setError("");
@@ -151,10 +153,11 @@ export default function EditarPratoScreen() {
       const payload: any = {
         nome: nome.trim(),
         descricao: descricao.trim() || undefined,
-        preco: Number(preco.replace(",", ".")),
+        preco: precoNum,
         disponivel,
       };
       if (categoriaId) payload.categoria_id = categoriaId;
+      if (imagemUrl.trim() && !localImageUri) payload.imagem_url = imagemUrl.trim();
       console.log("[EditarPrato] PUT /api/pratos/" + id);
       await apiPut(`/api/pratos/${id}`, payload);
       console.log("[EditarPrato] Prato atualizado com sucesso");
@@ -181,8 +184,7 @@ export default function EditarPratoScreen() {
     borderColor: COLORS.border,
   };
 
-  const displayImageUri = localImageUri ?? (imagemUrl || null);
-  const imageSource = resolveImageSource(displayImageUri ?? undefined);
+  // imageSource kept for backward compat but individual fields now use resolveImageSource directly
 
   if (loading) {
     return (
@@ -277,27 +279,48 @@ export default function EditarPratoScreen() {
             )}
           </FormField>
 
-          <FormField label="Foto do prato">
+          <FormField label="URL da imagem">
+            <TextInput
+              value={imagemUrl}
+              onChangeText={(t) => { console.log("[EditarPrato] imagem_url alterada"); setImagemUrl(t); setLocalImageUri(null); }}
+              placeholder="https://exemplo.com/imagem.jpg"
+              placeholderTextColor={COLORS.textTertiary}
+              autoCapitalize="none"
+              keyboardType="url"
+              style={inputStyle}
+            />
+            {imagemUrl.trim() && !localImageUri ? (
+              <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
+                <Image source={resolveImageSource(imagemUrl)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                <AnimatedPressable
+                  onPress={() => { console.log("[EditarPrato] Remover URL pressionado"); setImagemUrl(""); }}
+                  style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Ionicons name="close" size={16} color="#fff" />
+                </AnimatedPressable>
+              </View>
+            ) : null}
+          </FormField>
+
+          <FormField label="Foto do prato (câmera/galeria)">
             <View style={{ gap: 10 }}>
-              {displayImageUri ? (
+              {localImageUri ? (
                 <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                  <Image source={imageSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                   <AnimatedPressable
-                    onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); setImagemUrl(""); }}
+                    onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); }}
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="close" size={16} color="#fff" />
                   </AnimatedPressable>
-                  {localImageUri && (
-                    <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
-                    </View>
-                  )}
+                  <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
+                  </View>
                 </View>
               ) : (
-                <View style={{ height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textTertiary }}>Nenhuma foto</Text>
+                <View style={{ height: 80, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <UtensilsCrossed size={22} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Nenhuma foto selecionada</Text>
                 </View>
               )}
               <View style={{ flexDirection: "row", gap: 10 }}>

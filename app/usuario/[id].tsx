@@ -46,13 +46,12 @@ export default function EditarUsuarioScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    console.log("[EditarUsuario] GET /api/usuarios — buscando id:", id);
-    apiGet<any>("/api/usuarios")
+    console.log("[EditarUsuario] GET /api/usuarios/" + id);
+    apiGet<any>(`/api/usuarios/${id}`)
       .then((res) => {
-        const list: any[] = Array.isArray(res) ? res : (res.usuarios || res.users || []);
-        const u = list.find((x: any) => x.id === id) || list[0];
-        if (u) {
-          console.log("[EditarUsuario] Usuário encontrado:", u.name ?? u.nome);
+        const u = res.usuario || res.user || res;
+        if (u && u.id) {
+          console.log("[EditarUsuario] Usuário carregado:", u.name ?? u.nome);
           setNome(u.name ?? u.nome ?? "");
           setEmail(u.email ?? "");
           setRole(u.role ?? "garcom");

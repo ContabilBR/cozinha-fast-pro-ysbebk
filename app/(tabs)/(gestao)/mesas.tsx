@@ -29,7 +29,7 @@ interface ApiMesa {
 }
 
 const STATUS_OPTIONS = [
-  { value: "livre", label: "Livre" },
+  { value: "disponivel", label: "Disponível" },
   { value: "ocupada", label: "Ocupada" },
   { value: "reservada", label: "Reservada" },
 ];
@@ -86,7 +86,7 @@ export default function GestaoMesasScreen() {
   const openCreate = () => {
     console.log("[GestaoMesas] Abrir modal de criação");
     setEditingMesa(null);
-    setNumero(""); setCapacidade("4"); setStatus("livre"); setModalError("");
+    setNumero(""); setCapacidade("4"); setStatus("disponivel"); setModalError("");
     setShowModal(true);
   };
 
