@@ -40,7 +40,7 @@ function RootLayoutNav() {
       console.log("[Layout] User authenticated — redirecting to /(tabs)/");
       router.replace("/(tabs)/");
     }
-  }, [user, isLoading, segments]);
+  }, [user, isLoading, segments, router]);
 
   if (isLoading) {
     return (
