@@ -851,8 +851,8 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/comandas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.data).toBeDefined();
-    expect(Array.isArray(data.data)).toBe(true);
+    expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
   });
 
   test("Create comanda", async () => {
@@ -866,7 +866,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    testCommandaId = data.id;
+    testCommandaId = data.comanda.id;
   });
 
   test("Create comanda missing required field returns 400", async () => {
@@ -930,7 +930,7 @@ describe("API Integration Tests", () => {
     await expectStatus(createRes, 201);
     const createData = await createRes.json();
 
-    const res = await authenticatedApi(`/api/comandas/${createData.id}/cancelar`, authToken, {
+    const res = await authenticatedApi(`/api/comandas/${createData.comanda.id}/cancelar`, authToken, {
       method: "PUT",
     });
     await expectStatus(res, 200);
@@ -976,7 +976,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    pedidoCommandaId = data.id;
+    pedidoCommandaId = data.comanda.id;
   });
 
   test("List all pedidos", async () => {
@@ -992,16 +992,15 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        comandaId: pedidoCommandaId,
-        pratoId: pedidoPratoId,
-        precoUnitario: "12.99",
+        comanda_id: pedidoCommandaId,
+        prato_id: pedidoPratoId,
         quantidade: 2,
         observacao: "Extra dressing",
       }),
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    testPedidoId = data.id;
+    testPedidoId = data.pedido.id;
   });
 
   test("Create pedido missing required field returns 400", async () => {
@@ -1009,9 +1008,9 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        comandaId: pedidoCommandaId,
+        comanda_id: pedidoCommandaId,
         quantidade: 1,
-        // missing required pratoId and precoUnitario
+        // missing required prato_id
       }),
     });
     await expectStatus(res, 400);

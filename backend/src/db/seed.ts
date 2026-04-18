@@ -152,6 +152,14 @@ export async function cleanupMesasAndComandas(app: App) {
   }
 }
 
+// Seed 4 core users that must always exist
+const coreUsers = [
+  { email: "admin@cozinhafast.com", name: "Administrador", role: "administrador", password: "123456" },
+  { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "123456" },
+  { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: "123456" },
+  { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: "123456" },
+];
+
 export async function seedDatabase(app: App) {
   try {
     // Check if cleanup-only mode is enabled
@@ -163,6 +171,114 @@ export async function seedDatabase(app: App) {
     }
 
     app.logger.info("Starting database seed");
+
+    // Step 1: Ensure core users exist (idempotent)
+    app.logger.info("Seeding core users");
+    for (const user of coreUsers) {
+      try {
+        app.logger.info({ email: user.email }, "Ensuring user exists");
+
+        // Check if user exists
+        const existing = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.email, user.email))
+          .limit(1);
+
+        if (existing.length === 0) {
+          // Create user via Better Auth API
+          try {
+            const result = await app.auth.api.signUpEmail({
+              body: {
+                email: user.email,
+                password: user.password,
+                name: user.name,
+              },
+            });
+
+            if (result.user) {
+              // Update user role
+              await app.db
+                .update(userTable)
+                .set({
+                  role: user.role as any,
+                  emailVerified: true,
+                  active: true,
+                })
+                .where(eq(userTable.id, result.user.id));
+
+              app.logger.info({ email: user.email }, "Core user created via auth API");
+            }
+          } catch (authError) {
+            // Fallback to raw insert if auth API fails
+            app.logger.warn({ email: user.email, err: authError }, "Auth API failed, using raw insert");
+
+            const userId = randomUUID();
+            const now = new Date();
+
+            await app.db.insert(userTable).values({
+              id: userId,
+              name: user.name,
+              email: user.email,
+              emailVerified: true,
+              role: user.role as any,
+              active: true,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            const hashedPassword = await bcrypt.hash(user.password, 10);
+            await app.db.insert(accountTable).values({
+              id: randomUUID(),
+              accountId: user.email,
+              providerId: "credential",
+              userId: userId,
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            app.logger.info({ email: user.email }, "Core user created via raw insert");
+          }
+        } else {
+          // User exists, ensure account exists
+          const existingAccounts = await app.db
+            .select()
+            .from(accountTable)
+            .where(eq(accountTable.userId, existing[0].id))
+            .limit(1);
+
+          if (existingAccounts.length === 0) {
+            const hashedPassword = await bcrypt.hash(user.password, 10);
+            await app.db.insert(accountTable).values({
+              id: randomUUID(),
+              accountId: user.email,
+              providerId: "credential",
+              userId: existing[0].id,
+              password: hashedPassword,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+
+            app.logger.info({ email: user.email }, "Account created for existing user");
+          }
+
+          // Ensure role is correct
+          if (existing[0].role !== user.role) {
+            await app.db
+              .update(userTable)
+              .set({ role: user.role as any })
+              .where(eq(userTable.id, existing[0].id));
+
+            app.logger.info({ email: user.email }, "User role updated");
+          }
+        }
+      } catch (err) {
+        app.logger.error({ email: user.email, err }, "Failed to seed core user");
+      }
+    }
+
+    app.logger.info("Core users seeded successfully");
 
     // Step 1: Clean slate - delete auth-related data
     app.logger.info("Cleaning auth data (session, verification, account, profiles, user)");

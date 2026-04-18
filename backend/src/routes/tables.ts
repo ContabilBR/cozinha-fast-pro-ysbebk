@@ -53,7 +53,26 @@ export function registerTableRoutes(app: App) {
 
       try {
         app.logger.info({}, "Listing mesas");
-        const mesas = await app.db.select().from(schema.mesas).orderBy(schema.mesas.numero);
+
+        // Get all mesas with their active comanda (if any)
+        const mesas = await app.db
+          .select({
+            id: schema.mesas.id,
+            numero: schema.mesas.numero,
+            status: schema.mesas.status,
+            capacidade: schema.mesas.capacidade,
+            createdAt: schema.mesas.createdAt,
+            comandaId: schema.comandas.id,
+          })
+          .from(schema.mesas)
+          .leftJoin(
+            schema.comandas,
+            and(
+              eq(schema.mesas.id, schema.comandas.mesaId),
+              eq(schema.comandas.status, "aberta")
+            )
+          )
+          .orderBy(schema.mesas.numero);
 
         return reply.code(200).send({
           mesas: mesas.map((m) => ({
@@ -61,7 +80,7 @@ export function registerTableRoutes(app: App) {
             numero: m.numero,
             status: m.status,
             capacidade: m.capacidade,
-            createdAt: m.createdAt.toISOString(),
+            comanda_id: m.comandaId,
           })),
         });
       } catch (error) {

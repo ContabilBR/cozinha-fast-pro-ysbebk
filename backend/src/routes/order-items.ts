@@ -5,10 +5,11 @@ import type { App } from "../index.js";
 import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 interface CreatePedidoBody {
-  comandaId: string;
-  pratoId: string;
+  comanda_id?: string;
+  comandaId?: string;
+  prato_id?: string;
+  pratoId?: string;
   quantidade?: number;
-  precoUnitario: string;
   observacao?: string;
 }
 
@@ -101,12 +102,13 @@ export function registerOrderItemRoutes(app: App) {
         tags: ["pedidos"],
         body: {
           type: "object",
-          required: ["comandaId", "pratoId", "precoUnitario"],
+          required: ["comanda_id", "prato_id"],
           properties: {
+            comanda_id: { type: "string", format: "uuid" },
             comandaId: { type: "string", format: "uuid" },
+            prato_id: { type: "string", format: "uuid" },
             pratoId: { type: "string", format: "uuid" },
             quantidade: { type: "number" },
-            precoUnitario: { type: "string" },
             observacao: { type: ["string", "null"] },
           },
         },
@@ -114,17 +116,23 @@ export function registerOrderItemRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              id: { type: "string" },
-              comandaId: { type: "string" },
-              pratoId: { type: "string" },
-              quantidade: { type: "number" },
-              precoUnitario: { type: "string" },
-              observacao: { type: ["string", "null"] },
-              status: { type: "string" },
-              createdAt: { type: "string" },
+              pedido: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  comanda_id: { type: "string" },
+                  prato_id: { type: "string" },
+                  quantidade: { type: "number" },
+                  preco_unitario: { type: "string" },
+                  observacao: { type: ["string", "null"] },
+                  status: { type: "string" },
+                  created_at: { type: "string" },
+                },
+              },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -133,53 +141,73 @@ export function registerOrderItemRoutes(app: App) {
       if (!session) return;
 
       try {
-        if (!request.body.comandaId || !request.body.pratoId || !request.body.precoUnitario) {
-          return reply.code(400).send({ error: "comandaId, pratoId, and precoUnitario are required" });
+        const comandaId = request.body.comanda_id || request.body.comandaId;
+        const pratoId = request.body.prato_id || request.body.pratoId;
+
+        if (!comandaId || !pratoId) {
+          return reply.code(400).send({ error: "comanda_id and prato_id are required" });
         }
 
-        app.logger.info({ comandaId: request.body.comandaId }, "Creating pedido");
+        app.logger.info({ comandaId, pratoId }, "Creating pedido");
+
+        // Look up prato to get price
+        const prato = await app.db
+          .select()
+          .from(schema.pratos)
+          .where(eq(schema.pratos.id, pratoId))
+          .limit(1);
+
+        if (!prato.length) {
+          return reply.code(404).send({ error: "Prato not found" });
+        }
+
+        // Check if comanda exists
+        const comanda = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, comandaId))
+          .limit(1);
+
+        if (!comanda.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
+        }
 
         const quantidade = request.body.quantidade || 1;
-        const itemTotal = parseFloat(request.body.precoUnitario) * quantidade;
+        const precoUnitario = prato[0].preco;
+        const itemTotal = parseFloat(precoUnitario) * quantidade;
 
         const [pedido] = await app.db
           .insert(schema.pedidos)
           .values({
-            comandaId: request.body.comandaId,
-            pratoId: request.body.pratoId,
-            quantidade: quantidade,
-            precoUnitario: request.body.precoUnitario,
+            comandaId,
+            pratoId,
+            quantidade,
+            precoUnitario,
             observacao: request.body.observacao,
             status: "pendente",
           })
           .returning();
 
         // Update comanda total
-        const comanda = await app.db
-          .select()
-          .from(schema.comandas)
-          .where(eq(schema.comandas.id, request.body.comandaId))
-          .limit(1);
-
-        if (comanda.length > 0) {
-          const newTotal = (parseFloat(comanda[0].total) + itemTotal).toFixed(2);
-          await app.db
-            .update(schema.comandas)
-            .set({ total: newTotal })
-            .where(eq(schema.comandas.id, request.body.comandaId));
-        }
+        const newTotal = (parseFloat(comanda[0].total) + itemTotal).toFixed(2);
+        await app.db
+          .update(schema.comandas)
+          .set({ total: newTotal })
+          .where(eq(schema.comandas.id, comandaId));
 
         app.logger.info({ pedidoId: pedido.id }, "Pedido created successfully");
 
         return reply.code(201).send({
-          id: pedido.id,
-          comandaId: pedido.comandaId,
-          pratoId: pedido.pratoId,
-          quantidade: pedido.quantidade,
-          precoUnitario: pedido.precoUnitario,
-          observacao: pedido.observacao,
-          status: pedido.status,
-          createdAt: pedido.createdAt.toISOString(),
+          pedido: {
+            id: pedido.id,
+            comanda_id: pedido.comandaId,
+            prato_id: pedido.pratoId,
+            quantidade: pedido.quantidade,
+            preco_unitario: pedido.precoUnitario,
+            observacao: pedido.observacao,
+            status: pedido.status,
+            created_at: pedido.createdAt.toISOString(),
+          },
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create pedido");
