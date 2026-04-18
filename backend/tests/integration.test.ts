@@ -1409,6 +1409,86 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ==================== Debug Endpoints ====================
+  test("Debug sign-in with valid credentials", async () => {
+    const testEmail = `debug-signin-${Date.now()}@example.com`;
+    const testPassword = "debugPassword123456";
+
+    // Create a user first
+    const signUpRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+        name: "Debug Test User",
+      }),
+    });
+    await expectStatus(signUpRes, 201);
+
+    // Test debug signin
+    const res = await api("/api/debug/signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.userFound).toBeDefined();
+    expect(data.accountFound).toBeDefined();
+    expect(data.passwordMatch).toBeDefined();
+  });
+
+  test("Debug sign-in with invalid password", async () => {
+    const testEmail = `debug-invalid-${Date.now()}@example.com`;
+    const testPassword = "correctPassword123456";
+
+    // Create a user first
+    const signUpRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+        name: "Debug Invalid Test User",
+      }),
+    });
+    await expectStatus(signUpRes, 201);
+
+    // Test debug signin with wrong password
+    const res = await api("/api/debug/signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: "wrongPassword123456",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.userFound).toBeDefined();
+    expect(data.accountFound).toBeDefined();
+    expect(data.passwordMatch).toBe(false);
+  });
+
+  test("Debug sign-in with non-existent user", async () => {
+    const res = await api("/api/debug/signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-debug@example.com",
+        password: "anyPassword123456",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.userFound).toBeDefined();
+    expect(data.userFound).toBe(false);
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing

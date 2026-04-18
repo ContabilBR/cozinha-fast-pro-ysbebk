@@ -154,10 +154,10 @@ export async function cleanupMesasAndComandas(app: App) {
 
 // Seed 4 core users that must always exist - using raw database inserts only
 const seedUsers = [
-  { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: "123456" },
-  { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "123456" },
-  { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: "123456" },
-  { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: "123456" },
+  { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: "admin123" },
+  { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "gerente123" },
+  { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: "garcom123" },
+  { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: "cozinheiro123" },
 ];
 
 export async function seedDatabase(app: App) {
