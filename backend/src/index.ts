@@ -1,6 +1,7 @@
 import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
+import { registerCustomAuthRoutes } from './routes/auth-custom.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerDishRoutes } from './routes/dishes.js';
@@ -74,6 +75,8 @@ try {
 }
 
 // Register routes - IMPORTANT: Always use registration functions to avoid circular dependency issues
+// Register custom auth routes FIRST so they take priority
+registerCustomAuthRoutes(app);
 registerAuthRoutes(app);
 registerUserRoutes(app);
 registerDishRoutes(app);
