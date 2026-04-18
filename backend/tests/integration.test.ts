@@ -1314,7 +1314,7 @@ describe("API Integration Tests", () => {
   const usuarioEmail = `usuario-${Date.now()}@example.com`;
 
   test("List all usuarios", async () => {
-    const res = await api("/api/usuarios");
+    const res = await authenticatedApi("/api/usuarios", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();

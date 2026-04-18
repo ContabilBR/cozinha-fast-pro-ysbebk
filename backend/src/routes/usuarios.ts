@@ -26,7 +26,7 @@ export function registerUsuariosRoutes(app: App) {
     "/api/usuarios",
     {
       schema: {
-        description: "List all usuarios",
+        description: "List all usuarios (requires authentication)",
         tags: ["usuarios"],
         response: {
           200: {
@@ -47,10 +47,14 @@ export function registerUsuariosRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         app.logger.info({}, "Listing usuarios");
 
