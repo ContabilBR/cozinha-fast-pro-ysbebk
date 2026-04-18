@@ -141,28 +141,16 @@ describe("API Integration Tests", () => {
   });
 
   test("Login with valid credentials via /api/login", async () => {
-    // Create a test user for login
-    const testEmail = `login-test-${Date.now()}@example.com`;
-    const testPassword = "loginPassword123456";
+    // Use a seeded user from the database (custom /api/login works with usuarios table)
+    const testEmail = "garcom@cozinhafast.com";
+    const testPassword = "123456";
 
-    const signUpRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: "Login Test User",
-      }),
-    });
-    await expectStatus(signUpRes, 201);
-
-    // Now login with /api/login
     const loginRes = await api("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: testEmail,
-        password: testPassword,
+        senha: testPassword,
       }),
     });
     await expectStatus(loginRes, 200);
@@ -173,38 +161,43 @@ describe("API Integration Tests", () => {
   });
 
   test("Login with invalid password via /api/login returns 401", async () => {
-    const testEmail = `login-fail-${Date.now()}@example.com`;
-    const testPassword = "correctPassword123456";
-
-    const signUpRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: "Login Fail Test User",
-      }),
-    });
-    await expectStatus(signUpRes, 201);
+    // Use a seeded user but with wrong password
+    const testEmail = "garcom@cozinhafast.com";
+    const wrongPassword = "wrongPassword123456";
 
     const loginRes = await api("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: testEmail,
-        password: "wrongPassword123456",
+        senha: wrongPassword,
       }),
     });
     await expectStatus(loginRes, 401);
   });
 
   test("Get current user via /api/me with authentication", async () => {
-    const res = await authenticatedApi("/api/me", authToken);
+    // Login with a seeded user (gerente@cozinhafast.com with password 123456)
+    const loginRes = await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "gerente@cozinhafast.com",
+        senha: "123456",
+      }),
+    });
+    await expectStatus(loginRes, 200);
+    const loginData = await loginRes.json();
+    const jwtToken = loginData.token;
+    expect(jwtToken).toBeDefined();
+
+    // Now use the JWT token with /api/me
+    const res = await authenticatedApi("/api/me", jwtToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBeDefined();
     expect(data.email).toBeDefined();
-    expect(data.name).toBeDefined();
+    expect(data.nome).toBeDefined(); // Custom endpoint returns 'nome' not 'name'
     expect(data.role).toBeDefined();
   });
 
