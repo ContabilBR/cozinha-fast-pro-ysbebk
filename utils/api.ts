@@ -4,12 +4,31 @@ import * as SecureStore from "expo-secure-store";
 export const BACKEND_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 export const AUTH_TOKEN_KEY = "cozinhafast_token";
 
+// In-memory token cache — set immediately on login/restore so every
+// apiRequest has the token without waiting for async storage reads.
+let _memoryToken: string | null = null;
+
+export const setMemoryToken = (token: string | null): void => {
+  _memoryToken = token;
+  console.log("[API] Memory token", token ? "set" : "cleared");
+};
+
 export const getBearerToken = async (): Promise<string | null> => {
+  // Return in-memory token first — fastest and most reliable path.
+  if (_memoryToken) return _memoryToken;
+
   try {
+    let stored: string | null = null;
     if (Platform.OS === "web") {
-      return localStorage.getItem(AUTH_TOKEN_KEY);
+      stored = localStorage.getItem(AUTH_TOKEN_KEY);
+    } else {
+      stored = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
     }
-    return await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    if (stored) {
+      // Warm the cache so subsequent calls skip storage.
+      _memoryToken = stored;
+    }
+    return stored;
   } catch (error) {
     console.error("[API] Error retrieving bearer token:", error);
     return null;
@@ -17,24 +36,29 @@ export const getBearerToken = async (): Promise<string | null> => {
 };
 
 export const saveBearerToken = async (token: string): Promise<void> => {
+  // Always update memory cache first so the token is available immediately.
+  _memoryToken = token;
   try {
     if (Platform.OS === "web") {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
     } else {
       await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
     }
+    console.log("[API] Token saved to storage");
   } catch (error) {
     console.error("[API] Error saving bearer token:", error);
   }
 };
 
 export const deleteBearerToken = async (): Promise<void> => {
+  _memoryToken = null;
   try {
     if (Platform.OS === "web") {
       localStorage.removeItem(AUTH_TOKEN_KEY);
     } else {
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
     }
+    console.log("[API] Token deleted from storage");
   } catch (error) {
     console.error("[API] Error deleting bearer token:", error);
   }
@@ -54,9 +78,11 @@ export const apiRequest = async <T = any>(
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    console.warn(`[API] No token available for ${options?.method ?? "GET"} ${path}`);
   }
 
-  console.log(`[API] ${options?.method ?? "GET"} ${path}`);
+  console.log(`[API] ${options?.method ?? "GET"} ${path}${token ? "" : " (unauthenticated)"}`);
 
   const response = await fetch(url, { ...options, headers });
 

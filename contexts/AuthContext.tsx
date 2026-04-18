@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { BACKEND_URL, saveBearerToken, deleteBearerToken, getBearerToken } from "@/utils/api";
+import { BACKEND_URL, saveBearerToken, deleteBearerToken, getBearerToken, setMemoryToken } from "@/utils/api";
 
 export type User = {
   id: string;
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restoreSession = async () => {
-    console.log("[Auth] Restoring session from SecureStore");
+    console.log("[Auth] Restoring session from storage");
     try {
       const stored = await getBearerToken();
       if (!stored) {
@@ -40,6 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
+      // Warm the in-memory cache immediately so any concurrent API calls work.
+      setMemoryToken(stored);
       console.log("[Auth] GET /api/me");
       const response = await fetch(`${BACKEND_URL}/api/me`, {
         headers: {
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         console.warn("[Auth] /api/me returned", response.status, "— clearing token");
         await deleteBearerToken();
+        setMemoryToken(null);
         setIsLoading(false);
         return;
       }
@@ -60,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("[Auth] Failed to restore session:", error);
       await deleteBearerToken();
+      setMemoryToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +94,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await response.json();
     const { token: newToken, user: newUser } = data;
 
+    if (!newToken) {
+      console.error("[Auth] Login response missing token:", JSON.stringify(data));
+      throw new Error("Resposta de login inválida — token ausente.");
+    }
+
     console.log("[Auth] Login successful for:", newUser?.email, "role:", newUser?.role);
+    // Set memory token first so any immediate API calls after login work.
+    setMemoryToken(newToken);
     await saveBearerToken(newToken);
     setToken(newToken);
     setUser(newUser);
@@ -98,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log("[Auth] signOut called");
+    setMemoryToken(null);
     await deleteBearerToken();
     setToken(null);
     setUser(null);
