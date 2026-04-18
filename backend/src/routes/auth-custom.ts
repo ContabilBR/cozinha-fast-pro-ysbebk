@@ -80,23 +80,43 @@ export function registerCustomAuthRoutes(app: App) {
     try {
       // Normalize email
       const normalizedEmail = email.toLowerCase().trim();
+      app.logger.debug({ normalizedEmail }, 'Normalized email for lookup');
 
       // Query usuarios table
+      app.logger.debug('Querying usuarios table');
       const usuarios = await app.db
         .select()
         .from(schema.usuarios)
         .where(eq(schema.usuarios.email, normalizedEmail));
 
+      app.logger.debug({ usuariosFound: usuarios.length }, 'Query result');
+
       if (usuarios.length === 0) {
-        app.logger.warn({ email: normalizedEmail }, 'User not found');
+        app.logger.warn({ email: normalizedEmail }, 'User not found in usuarios table');
         return reply.status(401).send({ error: 'Credenciais inválidas' });
       }
 
       const user = usuarios[0];
       const senhaHash = user.senhaHash;
 
+      app.logger.debug({
+        userId: user.id,
+        email: user.email,
+        hasHash: !!senhaHash,
+        hashLength: senhaHash?.length || 0
+      }, 'User found, checking password hash');
+
+      // Verify password hash exists
+      if (!senhaHash) {
+        app.logger.warn({ email: normalizedEmail }, 'User has no password hash');
+        return reply.status(401).send({ error: 'Credenciais inválidas' });
+      }
+
       // Verify password
+      app.logger.debug({ senhaLength: senha.length }, 'Comparing password');
       const passwordMatch = await bcryptjs.compare(senha, senhaHash);
+
+      app.logger.debug({ passwordMatch }, 'Password comparison result');
 
       if (!passwordMatch) {
         app.logger.warn({ email: normalizedEmail }, 'Password mismatch');
@@ -112,7 +132,7 @@ export function registerCustomAuthRoutes(app: App) {
       };
 
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-      app.logger.info({ userId: user.id }, 'JWT token generated');
+      app.logger.info({ userId: user.id, email: user.email }, 'JWT token generated successfully');
 
       return {
         token,
@@ -154,40 +174,46 @@ export function registerCustomAuthRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    app.logger.info('GET /api/me - checking Authorization header');
     try {
       // Extract Bearer token from Authorization header
       const authHeader = request.headers.authorization;
+      app.logger.debug({ hasHeader: !!authHeader }, 'Authorization header check');
 
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         app.logger.warn('No Bearer token in Authorization header');
-        return reply.status(401).send({ error: 'Token não fornecido' });
+        return reply.status(401).send({ error: 'Não autorizado' });
       }
 
       const token = authHeader.substring(7); // Remove "Bearer " prefix
+      app.logger.debug({ tokenLength: token.length }, 'Extracted bearer token');
 
       // Verify JWT token
       let payload: JWTPayload;
       try {
         payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
-        app.logger.info({ userId: payload.id }, 'JWT verified');
+        app.logger.info({ userId: payload.id, email: payload.email }, 'JWT verified successfully');
       } catch (jwtErr) {
         app.logger.warn({ jwtError: (jwtErr as Error).message }, 'JWT verification failed');
-        return reply.status(401).send({ error: 'Token inválido' });
+        return reply.status(401).send({ error: 'Não autorizado' });
       }
 
       // Look up user in usuarios table
+      app.logger.debug({ userId: payload.id }, 'Looking up user in usuarios table');
       const usuarios = await app.db
         .select()
         .from(schema.usuarios)
         .where(eq(schema.usuarios.id, payload.id));
 
+      app.logger.debug({ usuariosFound: usuarios.length }, 'User lookup result');
+
       if (usuarios.length === 0) {
         app.logger.warn({ userId: payload.id }, 'User not found in usuarios table');
-        return reply.status(401).send({ error: 'Usuário não encontrado' });
+        return reply.status(401).send({ error: 'Não autorizado' });
       }
 
       const user = usuarios[0];
-      app.logger.info({ userId: user.id, email: user.email }, 'User profile fetched');
+      app.logger.info({ userId: user.id, email: user.email }, 'User profile fetched successfully');
 
       return {
         id: user.id,

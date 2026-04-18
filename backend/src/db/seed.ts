@@ -232,6 +232,55 @@ export async function seedDatabase(app: App) {
       throw err;
     }
 
+    // Step 2b: Destructively seed usuarios on every startup (BEFORE checking if already seeded)
+    app.logger.info("Seeding usuarios");
+
+    try {
+      // Hash password "123456" at runtime
+      const senhaHash = bcryptjs.hashSync('123456', 10);
+      app.logger.info({ hashLength: senhaHash.length, hashStart: senhaHash.substring(0, 20) }, 'Password hashed for seed');
+
+      // Delete all usuarios (destructive seed)
+      app.logger.info("Clearing usuarios table");
+      const deleteResult = await app.db.delete(schema.usuarios);
+      app.logger.info("Usuarios table cleared");
+
+      // Prepare seed data
+      const seedUsuariosData = [
+        { nome: 'Administrador', email: 'admin@cozinhafast.com', role: 'admin' },
+        { nome: 'Gerente', email: 'gerente@cozinhafast.com', role: 'gerente' },
+        { nome: 'Garçom', email: 'garcom@cozinhafast.com', role: 'garcom' },
+        { nome: 'Cozinheiro', email: 'cozinheiro@cozinhafast.com', role: 'cozinheiro' },
+      ];
+
+      // Insert all usuarios
+      app.logger.info({ count: seedUsuariosData.length }, "Inserting seed usuarios");
+      await app.db.insert(schema.usuarios).values(
+        seedUsuariosData.map(u => ({
+          nome: u.nome,
+          email: u.email,
+          senhaHash: senhaHash,
+          role: u.role,
+        }))
+      );
+      app.logger.info("Seed usuarios inserted successfully");
+
+      // Verify
+      const allUsuarios = await app.db.select().from(schema.usuarios);
+      app.logger.info({ count: allUsuarios.length }, 'Usuarios seeded - verifying');
+
+      allUsuarios.forEach((u, idx) => {
+        app.logger.debug({
+          index: idx,
+          email: u.email,
+          hasPassword: !!u.senhaHash,
+          hashLength: u.senhaHash?.length || 0
+        }, 'Seeded usuario');
+      });
+    } catch (err) {
+      app.logger.error({ err }, 'Failed to seed usuarios');
+    }
+
     // Check if already seeded (by checking mesas)
     const existingMesas = await app.db.select().from(schema.mesas).limit(1);
     if (existingMesas.length > 0) {
@@ -328,62 +377,6 @@ export async function seedDatabase(app: App) {
       }
     }
     app.logger.info("Pratos seeded successfully");
-
-    // Seed usuarios with simple Drizzle operations
-    app.logger.info("Seeding usuarios");
-
-    try {
-      // bcryptjs hash of "123456"
-      const HASH = '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhu';
-      app.logger.info('Using pre-computed bcryptjs hash for password 123456');
-
-      // Delete all existing usuarios
-      app.logger.info("Deleting all existing usuarios");
-      await app.db.delete(schema.usuarios);
-
-      // Insert seed usuarios
-      app.logger.info("Inserting 4 seed usuarios");
-      const seedUsuariosData = [
-        { nome: 'Garçom', email: 'garcom@cozinhafast.com', role: 'garcom' },
-        { nome: 'Cozinheiro', email: 'cozinheiro@cozinhafast.com', role: 'cozinheiro' },
-        { nome: 'Gerente', email: 'gerente@cozinhafast.com', role: 'gerente' },
-        { nome: 'Administrador', email: 'admin@cozinhafast.com', role: 'admin' },
-      ];
-
-      // Insert all usuarios in one batch
-      const insertedUsuarios = await app.db.insert(schema.usuarios).values(
-        seedUsuariosData.map(u => ({
-          nome: u.nome,
-          email: u.email,
-          senhaHash: HASH,
-          role: u.role,
-        }))
-      ).returning();
-
-      app.logger.info({ count: insertedUsuarios.length }, 'Usuarios inserted');
-
-      // Verify by querying back
-      const verifyUsuarios = await app.db.select().from(schema.usuarios);
-      app.logger.info(
-        {
-          totalCount: verifyUsuarios.length,
-          usuarios: verifyUsuarios.map(u => ({
-            email: u.email,
-            hasHash: !!u.senhaHash,
-            hashLength: u.senhaHash?.length || 0
-          }))
-        },
-        'Verification complete'
-      );
-
-      if (verifyUsuarios.length >= 4) {
-        app.logger.info("Usuarios seeded successfully with all 4 users");
-      } else {
-        app.logger.warn(`Only ${verifyUsuarios.length} usuarios found after seeding, expected 4`);
-      }
-    } catch (err) {
-      app.logger.error({ err, message: (err as Error).message }, 'Error seeding usuarios');
-    }
 
     app.logger.info("Database seeded successfully");
   } catch (error) {

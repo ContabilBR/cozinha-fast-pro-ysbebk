@@ -1768,6 +1768,14 @@ describe("API Integration Tests", () => {
     expect(data.userFound).toBe(false);
   });
 
+  test("Get debug usuarios list", async () => {
+    const res = await api("/api/debug/usuarios");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.usuarios).toBeDefined();
+    expect(Array.isArray(data.usuarios)).toBe(true);
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing
