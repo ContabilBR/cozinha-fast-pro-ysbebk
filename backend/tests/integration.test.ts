@@ -1280,6 +1280,19 @@ describe("API Integration Tests", () => {
     await expectStatus(dupRes, 409);
   });
 
+  test("Create garcon as non-admin returns 403", async () => {
+    const res = await authenticatedApi("/api/garcons", regularUserToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Garcon 403",
+        email: `garcom-no-admin-${Date.now()}@example.com`,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(res, 403);
+  });
+
   test("Update garcon", async () => {
     const res = await authenticatedApi(`/api/garcons/${testGarcomId}`, adminToken, {
       method: "PUT",
@@ -1302,6 +1315,31 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update garcon as non-admin returns 403", async () => {
+    // Create a garcon first
+    const createRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Garcon Update 403",
+        email: `garcom-update-403-${Date.now()}@example.com`,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const createData = await createRes.json();
+
+    // Try to update with non-admin user
+    const res = await authenticatedApi(`/api/garcons/${createData.id}`, regularUserToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated Garcon",
+      }),
+    });
+    await expectStatus(res, 403);
   });
 
   test("Delete garcon as admin", async () => {

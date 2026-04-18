@@ -23,6 +23,8 @@ export const app = await createApplication(schema);
 app.withStorage();
 
 // Configure Better Auth with minimal settings
+// The framework version doesn't expose additionalFields config
+// Better Auth will auto-detect the user table columns (role, active)
 app.withAuth();
 
 // Export App type for use in route files
@@ -36,28 +38,39 @@ app.fastify.setErrorHandler((error: any, request, reply) => {
   }
 
   // Log unexpected 5xx errors with full stack trace
-  app.logger.error({ err: error, stack: error.stack }, 'Global error handler');
+  app.logger.error(
+    {
+      err: error,
+      stack: error.stack,
+      url: request.url,
+      method: request.method,
+    },
+    'Global error handler'
+  );
   console.error('Full error stack:', error.stack);
   reply.status(500).send({ error: error.message });
 });
 
-// Run startup SQL migration to ensure user table columns have correct constraints
-app.logger.info('Running startup SQL migration');
+// Run startup SQL migrations - convert role column to TEXT type first
+app.logger.info('Running startup SQL migrations');
 try {
-  const migrationSQL = `
-    ALTER TABLE "user" ALTER COLUMN role SET DEFAULT 'garcom';
-    ALTER TABLE "user" ALTER COLUMN active SET DEFAULT true;
-    ALTER TABLE "user" ALTER COLUMN role DROP NOT NULL;
-    ALTER TABLE "user" ALTER COLUMN active DROP NOT NULL;
-  `;
-  // Execute each statement separately
+  // First, ensure role column is TEXT type (safety measure)
+  app.logger.info('Converting role column to TEXT type');
+  try {
+    await (app.db as any).execute(`ALTER TABLE "user" ALTER COLUMN role TYPE text USING role::text;`);
+    app.logger.info('Role column converted to TEXT');
+  } catch (err) {
+    app.logger.debug({ err }, 'Role column conversion failed (may already be TEXT)');
+  }
+
+  // Execute column default and constraint statements
   await (app.db as any).execute(`ALTER TABLE "user" ALTER COLUMN role SET DEFAULT 'garcom';`);
   await (app.db as any).execute(`ALTER TABLE "user" ALTER COLUMN active SET DEFAULT true;`);
   await (app.db as any).execute(`ALTER TABLE "user" ALTER COLUMN role DROP NOT NULL;`);
   await (app.db as any).execute(`ALTER TABLE "user" ALTER COLUMN active DROP NOT NULL;`);
-  app.logger.info('Startup SQL migration completed');
+  app.logger.info('Startup SQL migrations completed');
 } catch (err) {
-  app.logger.warn({ err }, 'Startup SQL migration failed (may already be applied)');
+  app.logger.warn({ err }, 'Startup SQL migrations failed (may already be applied)');
 }
 
 // Register routes - IMPORTANT: Always use registration functions to avoid circular dependency issues
