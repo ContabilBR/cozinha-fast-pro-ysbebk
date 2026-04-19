@@ -294,4 +294,61 @@ export function registerUsuariosRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/usuarios/garcons - List all garcons (waiters)
+  app.fastify.get(
+    "/api/usuarios/garcons",
+    {
+      schema: {
+        description: "List all usuarios with role='garcom' (requires authentication)",
+        tags: ["usuarios"],
+        response: {
+          200: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nome: { type: "string" },
+                email: { type: "string" },
+                role: { type: "string" },
+              },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      try {
+        app.logger.info({}, "Listing garcons (usuarios with role=garcom)");
+
+        const garcons = await app.db
+          .select({
+            id: schema.usuarios.id,
+            nome: schema.usuarios.nome,
+            email: schema.usuarios.email,
+            role: schema.usuarios.role,
+          })
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.role, "garcom"))
+          .orderBy(schema.usuarios.nome);
+
+        return reply.code(200).send(
+          garcons.map((g) => ({
+            id: g.id,
+            nome: g.nome,
+            email: g.email,
+            role: g.role,
+          }))
+        );
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to list garcons");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }

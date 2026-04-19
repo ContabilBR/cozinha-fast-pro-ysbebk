@@ -17,6 +17,13 @@ interface UpdatePedidoStatusBody {
   status: string;
 }
 
+// Helper function to normalize decimal values (comma to dot)
+function normalizeDecimal(value: any): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseFloat(value.replace(',', '.'));
+  return value;
+}
+
 export function registerOrderItemRoutes(app: App) {
   // GET /api/pedidos - List all pedidos
   app.fastify.get(

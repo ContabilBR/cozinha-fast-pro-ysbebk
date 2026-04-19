@@ -62,7 +62,7 @@ export const pratos = pgTable("pratos", {
 export const comandas = pgTable("comandas", {
   id: uuid("id").primaryKey().defaultRandom(),
   mesaId: uuid("mesa_id").notNull().references(() => mesas.id, { onDelete: "restrict" }),
-  garcomId: text("garcom_id").references(() => user.id, { onDelete: "set null" }),
+  garcomId: text("garcom_id"),
   status: comandaStatusEnum("status").default("aberta").notNull(),
   total: numeric("total", { precision: 10, scale: 2 }).default("0").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

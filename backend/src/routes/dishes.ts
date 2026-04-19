@@ -23,6 +23,13 @@ interface UpdatePratoBody {
   disponivel?: boolean;
 }
 
+// Helper function to normalize decimal values (comma to dot)
+function normalizeDecimal(value: any): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseFloat(value.replace(',', '.'));
+  return value;
+}
+
 export function registerDishRoutes(app: App) {
   // GET /api/pratos - List all pratos
   app.fastify.get(
@@ -169,12 +176,14 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ nome: request.body.nome }, "Creating prato");
 
+        const normalizedPreco = normalizeDecimal(request.body.preco);
+
         const [prato] = await app.db
           .insert(schema.pratos)
           .values({
             nome: request.body.nome,
             descricao: request.body.descricao,
-            preco: request.body.preco,
+            preco: normalizedPreco.toString(),
             categoriaId: request.body.categoriaId,
             imagemUrl: request.body.imagemUrl,
             disponivel: request.body.disponivel !== false,
@@ -369,7 +378,7 @@ export function registerDishRoutes(app: App) {
         const updates: any = {};
         if (request.body.nome !== undefined) updates.nome = request.body.nome;
         if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
-        if (request.body.preco !== undefined) updates.preco = request.body.preco;
+        if (request.body.preco !== undefined) updates.preco = normalizeDecimal(request.body.preco).toString();
         if (request.body.categoriaId !== undefined) updates.categoriaId = request.body.categoriaId;
         const imagemUrl = request.body.imagemUrl || request.body.imagem_url;
         if (imagemUrl !== undefined) updates.imagemUrl = imagemUrl;
