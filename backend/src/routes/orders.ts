@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -12,8 +12,29 @@ interface CreateComandaBody {
   garcom_id?: string;
 }
 
+interface CreatePedidosBody {
+  items: Array<{
+    prato_id: string;
+    quantidade: number;
+    observacao?: string;
+    preco_unitario: number;
+  }>;
+}
+
 interface FecharComandaBody {
   total?: string;
+}
+
+// Helper function to resolve garcom_id
+async function resolveGarcomId(app: App, authUserEmail: string, authUserId: string): Promise<string> {
+  // Look up the usuarios table to get the UUID if this user was created via custom auth
+  const usuarioRecords = await app.db
+    .select()
+    .from(schema.usuarios)
+    .where(eq(schema.usuarios.email, authUserEmail))
+    .limit(1);
+
+  return usuarioRecords.length > 0 ? usuarioRecords[0].id : authUserId;
 }
 
 export function registerOrderRoutes(app: App) {
@@ -108,20 +129,20 @@ export function registerOrderRoutes(app: App) {
     }
   );
 
-  // POST /api/comandas - Create a new comanda
+  // POST /api/comandas - Open a new comanda for a table
   app.fastify.post<{ Body: CreateComandaBody }>(
     "/api/comandas",
     {
       schema: {
-        description: "Create a new comanda",
+        description: "Open a new comanda for a table (requires authentication)",
         tags: ["comandas"],
         body: {
           type: "object",
           properties: {
-            mesa_id: { type: ["string", "null"], format: "uuid" },
-            mesaId: { type: ["string", "null"], format: "uuid" },
-            garcom_id: { type: ["string", "null"] },
-            garcomId: { type: ["string", "null"] },
+            mesa_id: { type: "string", format: "uuid" },
+            mesaId: { type: "string", format: "uuid" },
+            garcom_id: { type: "string" },
+            garcomId: { type: "string" },
           },
         },
         response: {
@@ -131,17 +152,18 @@ export function registerOrderRoutes(app: App) {
               comanda: {
                 type: "object",
                 properties: {
-                  id: { type: "string" },
-                  mesa_id: { type: "string" },
-                  garcom_id: { type: ["string", "null"] },
+                  id: { type: "string", format: "uuid" },
+                  mesa_id: { type: "string", format: "uuid" },
+                  garcom_id: { type: "string" },
                   status: { type: "string" },
                   total: { type: "string" },
-                  created_at: { type: "string" },
+                  created_at: { type: "string", format: "date-time" },
                 },
               },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -152,24 +174,28 @@ export function registerOrderRoutes(app: App) {
 
       try {
         const mesaId = request.body.mesa_id || request.body.mesaId;
-        const garcomId = request.body.garcom_id || request.body.garcomId;
 
         if (!mesaId) {
           return reply.code(400).send({ error: "mesa_id is required" });
         }
 
         // Check if mesa exists
-        const mesa = await app.db
+        const mesaRecords = await app.db
           .select()
           .from(schema.mesas)
           .where(eq(schema.mesas.id, mesaId))
           .limit(1);
 
-        if (!mesa.length) {
+        if (!mesaRecords.length) {
           return reply.code(404).send({ error: "Mesa not found" });
         }
 
-        app.logger.info({ mesaId }, "Creating comanda");
+        const mesa = mesaRecords[0];
+
+        // Resolve garcom_id: lookup usuarios by email
+        const garcomId = await resolveGarcomId(app, session.user.email, session.userId);
+
+        app.logger.info({ mesaId, garcomId }, "Creating comanda");
 
         const [comanda] = await app.db
           .insert(schema.comandas)
@@ -187,7 +213,7 @@ export function registerOrderRoutes(app: App) {
           .set({ status: "ocupada" })
           .where(eq(schema.mesas.id, mesaId));
 
-        app.logger.info({ comandaId: comanda.id }, "Comanda created successfully");
+        app.logger.info({ comandaId: comanda.id, mesaId }, "Comanda created successfully");
 
         return reply.code(201).send({
           comanda: {
@@ -197,6 +223,9 @@ export function registerOrderRoutes(app: App) {
             status: comanda.status,
             total: comanda.total,
             created_at: comanda.createdAt.toISOString(),
+            mesa: {
+              numero: mesa.numero,
+            },
           },
         });
       } catch (error) {
@@ -206,12 +235,12 @@ export function registerOrderRoutes(app: App) {
     }
   );
 
-  // GET /api/comandas/:id - Get a comanda by ID with full relations
+  // GET /api/comandas/:id - Get a comanda by ID with pedidos and mesa info
   app.fastify.get<{ Params: { id: string } }>(
     "/api/comandas/:id",
     {
       schema: {
-        description: "Get a comanda by ID with relations",
+        description: "Get a comanda by ID with pedidos and mesa info (requires authentication)",
         tags: ["comandas"],
         params: {
           type: "object",
@@ -219,7 +248,46 @@ export function registerOrderRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              mesa_id: { type: "string", format: "uuid" },
+              garcom_id: { type: "string" },
+              status: { type: "string" },
+              total: { type: "string" },
+              created_at: { type: "string", format: "date-time" },
+              mesa: {
+                type: "object",
+                properties: {
+                  numero: { type: "number" },
+                },
+              },
+              pedidos: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    prato_id: { type: "string", format: "uuid" },
+                    quantidade: { type: "number" },
+                    preco_unitario: { type: "string" },
+                    observacao: { type: ["string", "null"] },
+                    status: { type: "string" },
+                    created_at: { type: "string", format: "date-time" },
+                    prato: {
+                      type: "object",
+                      properties: {
+                        nome: { type: "string" },
+                        imagem_url: { type: ["string", "null"] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -231,22 +299,19 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
-        // Get comanda with mesa and garcom
+        // Get comanda with mesa
         const comandas = await app.db
           .select({
             id: schema.comandas.id,
             mesaId: schema.comandas.mesaId,
             mesaNumero: schema.mesas.numero,
             garcomId: schema.comandas.garcomId,
-            garcomName: user.name,
             status: schema.comandas.status,
             total: schema.comandas.total,
             createdAt: schema.comandas.createdAt,
-            closedAt: schema.comandas.closedAt,
           })
           .from(schema.comandas)
           .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
-          .leftJoin(user, eq(schema.comandas.garcomId, user.id))
           .where(eq(schema.comandas.id, request.params.id));
 
         if (!comandas.length) {
@@ -261,8 +326,9 @@ export function registerOrderRoutes(app: App) {
             id: schema.pedidos.id,
             pratoId: schema.pedidos.pratoId,
             pratoNome: schema.pratos.nome,
-            preco: schema.pratos.preco,
+            imagemUrl: schema.pratos.imagemUrl,
             quantidade: schema.pedidos.quantidade,
+            precoUnitario: schema.pedidos.precoUnitario,
             observacao: schema.pedidos.observacao,
             status: schema.pedidos.status,
             createdAt: schema.pedidos.createdAt,
@@ -271,37 +337,200 @@ export function registerOrderRoutes(app: App) {
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
           .where(eq(schema.pedidos.comandaId, request.params.id));
 
+        app.logger.info({ comandaId: request.params.id, itemsCount: pedidos_data.length }, "Comanda retrieved successfully");
+
         return reply.code(200).send({
-          comanda: {
-            id: c.id,
-            mesa_id: c.mesaId,
-            mesa: {
-              id: c.mesaId,
-              numero: c.mesaNumero,
-            },
-            garcom_id: c.garcomId,
-            garcom: c.garcomId ? { id: c.garcomId, name: c.garcomName } : null,
-            status: c.status,
-            total: c.total,
-            created_at: c.createdAt.toISOString(),
-            closed_at: c.closedAt?.toISOString() || null,
-            pedidos: pedidos_data.map((p) => ({
-              id: p.id,
-              prato_id: p.pratoId,
-              prato: {
-                id: p.pratoId,
-                nome: p.pratoNome,
-                preco: parseFloat(p.preco),
-              },
-              quantidade: p.quantidade,
-              observacao: p.observacao,
-              status: p.status,
-              created_at: p.createdAt.toISOString(),
-            })),
+          id: c.id,
+          mesa_id: c.mesaId,
+          garcom_id: c.garcomId,
+          status: c.status,
+          total: c.total,
+          created_at: c.createdAt.toISOString(),
+          mesa: {
+            numero: c.mesaNumero,
           },
+          pedidos: pedidos_data.map((p) => ({
+            id: p.id,
+            prato_id: p.pratoId,
+            quantidade: p.quantidade,
+            preco_unitario: p.precoUnitario,
+            observacao: p.observacao,
+            status: p.status,
+            created_at: p.createdAt.toISOString(),
+            prato: {
+              nome: p.pratoNome,
+              imagem_url: p.imagemUrl,
+            },
+          })),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get comanda");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // POST /api/comandas/:id/pedidos - Add multiple pedidos to a comanda
+  app.fastify.post<{ Params: { id: string }; Body: CreatePedidosBody }>(
+    "/api/comandas/:id/pedidos",
+    {
+      schema: {
+        description: "Add multiple pedidos to a comanda (requires authentication)",
+        tags: ["comandas"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          required: ["items"],
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["prato_id", "quantidade", "preco_unitario"],
+                properties: {
+                  prato_id: { type: "string", format: "uuid" },
+                  quantidade: { type: "number" },
+                  observacao: { type: ["string", "null"] },
+                  preco_unitario: { type: "number" },
+                },
+              },
+            },
+          },
+        },
+        response: {
+          201: {
+            type: "object",
+            properties: {
+              pedidos: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    comanda_id: { type: "string", format: "uuid" },
+                    prato_id: { type: "string", format: "uuid" },
+                    quantidade: { type: "number" },
+                    preco_unitario: { type: "string" },
+                    observacao: { type: ["string", "null"] },
+                    status: { type: "string" },
+                    created_at: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: CreatePedidosBody }>,
+      reply: FastifyReply
+    ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      try {
+        const comandaId = request.params.id;
+
+        if (!request.body.items || !Array.isArray(request.body.items) || request.body.items.length === 0) {
+          return reply.code(400).send({ error: "items array is required and must not be empty" });
+        }
+
+        // Verify comanda exists
+        const comandas = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, comandaId))
+          .limit(1);
+
+        if (!comandas.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
+        }
+
+        const comanda = comandas[0];
+
+        // Resolve garcom_id and verify ownership
+        const resolvedGarcomId = await resolveGarcomId(app, session.user.email, session.userId);
+
+        if (comanda.garcomId !== resolvedGarcomId) {
+          app.logger.warn(
+            { comandaId, expectedGarcomId: resolvedGarcomId, actualGarcomId: comanda.garcomId },
+            "Unauthorized access to comanda"
+          );
+          return reply.code(403).send({ error: "Unauthorized access to this comanda" });
+        }
+
+        // Verify all pratos exist
+        const uniquePratoIds = Array.from(new Set(request.body.items.map((item) => item.prato_id)));
+        const pratos = await app.db
+          .select({ id: schema.pratos.id })
+          .from(schema.pratos)
+          .where(inArray(schema.pratos.id, uniquePratoIds));
+
+        if (pratos.length !== uniquePratoIds.length) {
+          return reply.code(404).send({ error: "One or more pratos not found" });
+        }
+
+        app.logger.info({ comandaId, itemsCount: request.body.items.length }, "Adding pedidos to comanda");
+
+        // Insert all items
+        const insertedPedidos = await app.db
+          .insert(schema.pedidos)
+          .values(
+            request.body.items.map((item) => ({
+              comandaId,
+              pratoId: item.prato_id,
+              quantidade: item.quantidade,
+              precoUnitario: item.preco_unitario.toString(),
+              observacao: item.observacao || null,
+              status: "pendente" as any,
+            }))
+          )
+          .returning();
+
+        // Recalculate total: SUM(quantidade * preco_unitario)
+        const allPedidos = await app.db
+          .select()
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.comandaId, comandaId));
+
+        const total = allPedidos.reduce((sum, p) => {
+          return sum + parseFloat(p.precoUnitario) * p.quantidade;
+        }, 0);
+
+        // Update comanda total
+        await app.db
+          .update(schema.comandas)
+          .set({ total: total.toString() })
+          .where(eq(schema.comandas.id, comandaId));
+
+        app.logger.info(
+          { comandaId, insertedCount: insertedPedidos.length, newTotal: total },
+          "Pedidos added successfully"
+        );
+
+        return reply.code(201).send({
+          pedidos: insertedPedidos.map((p) => ({
+            id: p.id,
+            comanda_id: p.comandaId,
+            prato_id: p.pratoId,
+            quantidade: p.quantidade,
+            preco_unitario: p.precoUnitario,
+            observacao: p.observacao,
+            status: p.status,
+            created_at: p.createdAt.toISOString(),
+          })),
+        });
+      } catch (error) {
+        app.logger.error({ err: error, body: request.body }, "Failed to add pedidos to comanda");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

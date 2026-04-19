@@ -497,7 +497,8 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/pratos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.pratos).toBeDefined();
+    expect(Array.isArray(data.pratos)).toBe(true);
   });
 
   test("Create prato", async () => {
@@ -554,7 +555,8 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.pratos).toBeDefined();
+    expect(Array.isArray(data.pratos)).toBe(true);
   });
 
   test("List pratos filtered by disponivel=true", async () => {
@@ -564,7 +566,8 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.pratos).toBeDefined();
+    expect(Array.isArray(data.pratos)).toBe(true);
   });
 
   test("List pratos filtered by disponivel=false", async () => {
@@ -574,7 +577,8 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
+    expect(data.pratos).toBeDefined();
+    expect(Array.isArray(data.pratos)).toBe(true);
   });
 
   test("Update prato", async () => {
@@ -1067,6 +1071,152 @@ describe("API Integration Tests", () => {
   test("Get comanda with invalid UUID format returns 400", async () => {
     const res = await authenticatedApi("/api/comandas/invalid-uuid", authToken);
     await expectStatus(res, 400);
+  });
+
+  // ==================== Comandas Add Pedidos ====================
+  let addPedidosPratoId: string;
+  let addPedidosCommandaId: string;
+
+  test("Create prato for add pedidos test", async () => {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Prato for Bulk Add",
+        preco: "15.99",
+        categoriaId: pratoCategoryId,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    addPedidosPratoId = data.prato.id;
+  });
+
+  test("Create comanda for add pedidos test", async () => {
+    const res = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    addPedidosCommandaId = data.comanda.id;
+  });
+
+  test("Add multiple pedidos to comanda", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${addPedidosCommandaId}/pedidos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              prato_id: addPedidosPratoId,
+              quantidade: 2,
+              preco_unitario: 15.99,
+              observacao: "Well done",
+            },
+            {
+              prato_id: addPedidosPratoId,
+              quantidade: 1,
+              preco_unitario: 15.99,
+            },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.pedidos).toBeDefined();
+    expect(Array.isArray(data.pedidos)).toBe(true);
+    expect(data.pedidos.length).toBe(2);
+  });
+
+  test("Add pedidos to non-existent comanda returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas/00000000-0000-0000-0000-000000000000/pedidos",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              prato_id: addPedidosPratoId,
+              quantidade: 1,
+              preco_unitario: 15.99,
+            },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Add pedidos with invalid comanda UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas/invalid-uuid/pedidos",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              prato_id: addPedidosPratoId,
+              quantidade: 1,
+              preco_unitario: 15.99,
+            },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add pedidos missing required field returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${addPedidosCommandaId}/pedidos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              prato_id: addPedidosPratoId,
+              // missing required quantidade and preco_unitario
+            },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add pedidos with non-existent prato returns 404", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${addPedidosCommandaId}/pedidos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: [
+            {
+              prato_id: "00000000-0000-0000-0000-000000000000",
+              quantidade: 1,
+              preco_unitario: 15.99,
+            },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 404);
   });
 
   test("Close comanda", async () => {
