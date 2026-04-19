@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { BACKEND_URL, getBearerToken } from "@/utils/api";
+import { apiGet } from "@/utils/api";
 
 // ─── API response types ───────────────────────────────────────────────────────
 
@@ -397,24 +397,8 @@ export default function PedidosGarcomScreen() {
   const fetchPedidos = useCallback(async () => {
     console.log("[Pedidos Garçom] Fetching GET /api/garcom/pedidos");
     try {
-      const token = await getBearerToken();
-      console.log("[Pedidos Garçom] Token available:", !!token);
-
-      const res = await fetch(`${BACKEND_URL}/api/garcom/pedidos`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("[Pedidos Garçom] HTTP error", res.status, errText);
-        throw new Error(`Erro ${res.status}: ${errText}`);
-      }
-
-      const data = await res.json();
-      console.log("[Pedidos Garçom] raw response:", JSON.stringify(data));
+      const data = await apiGet<any>("/api/garcom/pedidos");
+      console.log("[Pedidos] raw:", JSON.stringify(data).slice(0, 500));
 
       const list = normaliseComandas(data);
       console.log("[Pedidos Garçom] Loaded", list.length, "comandas");

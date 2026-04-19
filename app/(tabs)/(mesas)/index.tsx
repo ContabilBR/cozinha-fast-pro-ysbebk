@@ -248,7 +248,7 @@ export default function MesasScreen() {
     if (!isDisponivel(mesa.status) && mesa.comanda_id) {
       router.push(`/comanda/${mesa.comanda_id}`);
     } else if (isDisponivel(mesa.status) && (role === "garcom" || canAdmin)) {
-      router.push(`/comanda/nova?mesa_id=${mesa.id}`);
+      router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
     } else {
       router.push(`/mesa/${mesa.id}`);
     }
@@ -256,7 +256,7 @@ export default function MesasScreen() {
 
   const handleAbrirChamado = (mesa: ApiMesa) => {
     console.log("[Mesas] Abrir Chamado para mesa:", mesa.numero, "id:", mesa.id);
-    router.push(`/comanda/nova?mesa_id=${mesa.id}`);
+    router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
   };
 
   const handleVerComanda = (mesa: ApiMesa) => {

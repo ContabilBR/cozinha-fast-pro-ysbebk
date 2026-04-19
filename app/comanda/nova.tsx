@@ -18,13 +18,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Minus, Plus, Trash2, ShoppingCart, UtensilsCrossed } from "lucide-react-native";
 import { useColors } from "@/hooks/useColors";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const API_BASE = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -409,20 +409,9 @@ export default function CardapioNovaComandaScreen() {
     setSubmitting(true);
 
     try {
-      // Step 1: Create comanda
+      // Step 1: Create comanda (apiPost handles Bearer token automatically)
       console.log("[Cardápio] POST /api/comandas — mesa_id:", mesaId);
-      const comandaRes = await fetch(`${API_BASE}/api/comandas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mesa_id: mesaId }),
-      });
-
-      if (!comandaRes.ok) {
-        const err = await comandaRes.text();
-        throw new Error(`Erro ao abrir comanda: ${err}`);
-      }
-
-      const comandaData = await comandaRes.json();
+      const comandaData = await apiPost<any>("/api/comandas", { mesa_id: mesaId });
       const comandaId = comandaData?.comanda?.id || comandaData?.id;
       console.log("[Cardápio] Comanda criada, id:", comandaId);
 
@@ -430,7 +419,7 @@ export default function CardapioNovaComandaScreen() {
         throw new Error("Comanda criada mas sem ID na resposta.");
       }
 
-      // Step 2: Send pedidos
+      // Step 2: Send pedidos (apiPost handles Bearer token automatically)
       const items = cart.map((c) => ({
         prato_id: c.id,
         quantidade: c.quantidade,
@@ -438,28 +427,19 @@ export default function CardapioNovaComandaScreen() {
       }));
       console.log("[Cardápio] POST /api/comandas/" + comandaId + "/pedidos — items:", items.length, JSON.stringify(items));
 
-      const pedidosRes = await fetch(`${API_BASE}/api/comandas/${comandaId}/pedidos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      });
-
-      if (!pedidosRes.ok) {
-        const err = await pedidosRes.text();
-        throw new Error(`Erro ao enviar pedidos: ${err}`);
-      }
+      await apiPost<any>(`/api/comandas/${comandaId}/pedidos`, { items });
 
       console.log("[Cardápio] Pedido enviado com sucesso para comanda:", comandaId);
       setCart([]);
       Alert.alert(
         "✅ Pedido enviado!",
-        "Seu pedido foi enviado para a cozinha com sucesso.",
+        "Pedido enviado para a cozinha com sucesso.",
         [
           {
             text: "OK",
             onPress: () => {
-              console.log("[Cardápio] Navegar para mesas após sucesso");
-              router.replace("/(tabs)/(mesas)");
+              console.log("[Cardápio] Navegar para cardápio após sucesso");
+              router.replace("/(tabs)/(cardapio)");
             },
           },
         ]
@@ -799,7 +779,7 @@ export default function CardapioNovaComandaScreen() {
           }}
           disabled={submitting || cartIsEmpty}
           style={({ pressed }) => ({
-            backgroundColor: cartIsEmpty ? "#ccc" : "#22c55e",
+            backgroundColor: "#22c55e",
             borderRadius: 14,
             height: 56,
             alignItems: "center",
@@ -811,7 +791,7 @@ export default function CardapioNovaComandaScreen() {
             elevation: 4,
             flexDirection: "row",
             gap: 8,
-            opacity: pressed && !cartIsEmpty ? 0.85 : 1,
+            opacity: cartIsEmpty || submitting ? 0.5 : pressed ? 0.85 : 1,
           })}
         >
           {submitting ? (
