@@ -6,6 +6,7 @@ import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { resolveGarcomId } from "../utils/garcom.js";
 
 interface CreateGarconBody {
   name: string;
@@ -379,28 +380,14 @@ export function registerGarconRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      const garcomId = session.userId;
-      const garcomEmail = session.user.email;
-      app.logger.info({ garcomId, garcomEmail }, "Fetching pedidos for garcom");
+      app.logger.info({ userId: session.userId, email: session.user.email }, "Fetching pedidos for garcom");
+
+      let garcomId: string = "";
 
       try {
-        // Look up the usuarios table to get the UUID if this user was created via custom auth
-        const usuarioRecords = await app.db
-          .select()
-          .from(schema.usuarios)
-          .where(eq(schema.usuarios.email, garcomEmail))
-          .limit(1);
-
-        const usuarioId = usuarioRecords.length > 0 ? usuarioRecords[0].id : null;
-        app.logger.debug({ garcomId, usuarioId }, "Usuario lookup result");
-
-        // Build where clause with OR condition to match both user table and usuarios table IDs
-        const whereCondition = usuarioId
-          ? or(
-              eq(schema.comandas.garcomId, garcomId),
-              eq(schema.comandas.garcomId, usuarioId)
-            )
-          : eq(schema.comandas.garcomId, garcomId);
+        // Use unified garcom_id resolution
+        const resolution = await resolveGarcomId(app, session.user.email, session.userId);
+        garcomId = resolution.garcomId;
 
         // Query all pedidos for this garcom's comandas
         const pedidosData = await app.db
@@ -419,10 +406,10 @@ export function registerGarconRoutes(app: App) {
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
           .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-          .where(whereCondition)
+          .where(eq(schema.comandas.garcomId, garcomId))
           .orderBy(schema.pedidos.createdAt);
 
-        app.logger.debug({ pedidosCount: pedidosData.length }, "Pedidos fetched from database");
+        app.logger.debug({ garcomId, pedidosCount: pedidosData.length }, "Pedidos fetched from database");
 
         // Group by comanda and compute earliest created_at per comanda
         const comandasMap = new Map<

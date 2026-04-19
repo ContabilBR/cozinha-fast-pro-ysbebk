@@ -4,6 +4,7 @@ import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { resolveGarcomId } from "../utils/garcom.js";
 
 interface CreateComandaBody {
   mesaId?: string;
@@ -23,18 +24,6 @@ interface CreatePedidosBody {
 
 interface FecharComandaBody {
   total?: string;
-}
-
-// Helper function to resolve garcom_id
-async function resolveGarcomId(app: App, authUserEmail: string, authUserId: string): Promise<string> {
-  // Look up the usuarios table to get the UUID if this user was created via custom auth
-  const usuarioRecords = await app.db
-    .select()
-    .from(schema.usuarios)
-    .where(eq(schema.usuarios.email, authUserEmail))
-    .limit(1);
-
-  return usuarioRecords.length > 0 ? usuarioRecords[0].id : authUserId;
 }
 
 export function registerOrderRoutes(app: App) {
@@ -193,7 +182,7 @@ export function registerOrderRoutes(app: App) {
         const mesa = mesaRecords[0];
 
         // Resolve garcom_id: lookup usuarios by email
-        const garcomId = await resolveGarcomId(app, session.user.email, session.userId);
+        const { garcomId } = await resolveGarcomId(app, session.user.email, session.userId);
 
         app.logger.info({ mesaId, garcomId }, "Creating comanda");
 
@@ -458,7 +447,7 @@ export function registerOrderRoutes(app: App) {
         const comanda = comandas[0];
 
         // Resolve garcom_id and verify ownership
-        const resolvedGarcomId = await resolveGarcomId(app, session.user.email, session.userId);
+        const { garcomId: resolvedGarcomId } = await resolveGarcomId(app, session.user.email, session.userId);
 
         if (comanda.garcomId !== resolvedGarcomId) {
           app.logger.warn(
