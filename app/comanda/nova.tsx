@@ -61,19 +61,20 @@ export default function NovaComandaScreen() {
   const [error, setError] = useState("");
 
   const fetchData = useCallback(async () => {
-    console.log("[NovaComanda] GET /api/mesas e /api/usuarios");
+    console.log("[NovaComanda] GET /api/mesas e /api/usuarios/garcons");
     try {
-      const [mesasRes, usuariosRes] = await Promise.all([
+      const [mesasRes, garConsRes] = await Promise.all([
         apiGet<any>("/api/mesas"),
-        apiGet<any>("/api/usuarios"),
+        apiGet<any>("/api/usuarios/garcons"),
       ]);
       const allMesas: ApiMesa[] = Array.isArray(mesasRes) ? mesasRes : (mesasRes.mesas || []);
       const livres = allMesas.filter((m) => isDisponivel(m.status));
       console.log("[NovaComanda] Encontradas", livres.length, "mesas disponíveis");
       setMesas(livres);
 
-      const allUsuarios: ApiGarcom[] = Array.isArray(usuariosRes) ? usuariosRes : (usuariosRes.usuarios || usuariosRes.users || []);
-      const garcomList = allUsuarios.filter((u) => u.role === "garcom" || u.role === "garçom" || !u.role);
+      const garcomList: ApiGarcom[] = Array.isArray(garConsRes)
+        ? garConsRes
+        : (garConsRes.garcons || garConsRes.usuarios || garConsRes.users || []);
       console.log("[NovaComanda] Encontrados", garcomList.length, "garçons");
       setGarcons(garcomList);
     } catch (e) {
@@ -105,8 +106,13 @@ export default function NovaComandaScreen() {
     setError("");
     setSubmitting(true);
     try {
-      const payload: any = { mesa_id: selectedMesaId, status: "aberta", total: 0 };
-      if (selectedGarcomId) payload.garcom_id = selectedGarcomId;
+      const garcomId = selectedGarcomId || (user as any)?.id || "";
+      const payload: any = {
+        mesa_id: selectedMesaId,
+        garcom_id: garcomId,
+        status: "aberta",
+        total: 0,
+      };
       console.log("[NovaComanda] POST /api/comandas", payload);
       const res = await apiPost<any>("/api/comandas", payload);
       const comandaId = res?.comanda?.id || res?.id;

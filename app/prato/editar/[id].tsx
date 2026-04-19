@@ -74,7 +74,8 @@ export default function EditarPratoScreen() {
       console.log("[EditarPrato] Carregado prato:", p.nome, "categorias:", cats.length);
       setNome(p.nome ?? "");
       setDescricao(p.descricao ?? "");
-      setPreco(String(p.preco ?? ""));
+      const precoRaw = p.preco != null ? Number(p.preco).toFixed(2).replace(".", ",") : "";
+      setPreco(precoRaw);
       setCategoriaId(p.categoria_id ?? "");
       setImagemUrl(p.imagem_url ?? "");
       setDisponivel(p.disponivel ?? true);
