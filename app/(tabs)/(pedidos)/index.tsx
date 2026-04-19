@@ -5,14 +5,15 @@ import {
   ScrollView,
   RefreshControl,
   Animated,
+  Pressable,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { CardSkeleton } from "@/components/SkeletonLoader";
+import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { ClipboardList, Clock, ChefHat } from "lucide-react-native";
 
 interface GarcomPedidoItem {
   id: string;
@@ -32,21 +33,21 @@ interface GarcomPedido {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  aguardando: { label: "Aguardando", bg: "#FEF3C7", text: "#D97706" },
-  preparando: { label: "Preparando", bg: "#DBEAFE", text: "#2563EB" },
-  pronto:     { label: "Pronto",     bg: "#DCFCE7", text: "#16A34A" },
+  aguardando: { label: "Aguardando", bg: "#F59E0B", text: "#fff" },
+  preparando: { label: "Em Preparação", bg: "#3B82F6", text: "#fff" },
+  pronto: { label: "Pronto", bg: "#10B981", text: "#fff" },
 };
 
 function getStatusConfig(status: string) {
-  return STATUS_CONFIG[status] ?? { label: status, bg: "#F1F5F9", text: "#64748B" };
+  return STATUS_CONFIG[status] ?? { label: status, bg: "#94A3B8", text: "#fff" };
 }
 
 function formatDateTime(iso: string): string {
   try {
     const d = new Date(iso);
-    const date = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const day = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
     const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    return `${date} às ${time}`;
+    return `${day}, ${time}`;
   } catch {
     return iso;
   }
@@ -64,15 +65,29 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
         flexDirection: "row",
         alignItems: "flex-start",
         justifyContent: "space-between",
-        paddingVertical: 8,
+        paddingVertical: 10,
       }}
     >
-      <View style={{ flex: 1, marginRight: 10 }}>
+      <View style={{ flex: 1, marginRight: 12 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 14,
+              color: COLORS.primary,
+              minWidth: 24,
+            }}
+          >
             {quantLabel}
           </Text>
-          <Text style={{ fontFamily: "Outfit_500Medium", fontSize: 13, color: COLORS.text, flex: 1 }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_500Medium",
+              fontSize: 14,
+              color: COLORS.text,
+              flex: 1,
+            }}
+          >
             {item.prato_nome}
           </Text>
         </View>
@@ -80,11 +95,11 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
           <Text
             style={{
               fontFamily: "Outfit_400Regular",
-              fontSize: 11,
+              fontSize: 12,
               color: COLORS.textSecondary,
               fontStyle: "italic",
-              marginTop: 2,
-              marginLeft: 22,
+              marginTop: 3,
+              marginLeft: 30,
             }}
           >
             {item.observacao}
@@ -95,12 +110,18 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
         style={{
           backgroundColor: cfg.bg,
           borderRadius: 20,
-          paddingHorizontal: 9,
-          paddingVertical: 3,
+          paddingHorizontal: 10,
+          paddingVertical: 4,
           alignSelf: "flex-start",
         }}
       >
-        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: cfg.text }}>
+        <Text
+          style={{
+            fontFamily: "Outfit_600SemiBold",
+            fontSize: 11,
+            color: cfg.text,
+          }}
+        >
           {cfg.label}
         </Text>
       </View>
@@ -111,12 +132,22 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
 function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 70, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 70, useNativeDriver: true }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 380,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 380,
+        delay: index * 60,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [index, opacity, translateY]);
 
@@ -127,17 +158,26 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
   const mesaLabel = `Mesa ${pedido.mesa_numero}`;
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+    <Animated.View
+      style={{
+        opacity,
+        transform: [{ translateY }],
+        marginHorizontal: 16,
+        marginBottom: 14,
+      }}
+    >
       <View
         style={{
           backgroundColor: COLORS.surface,
           borderRadius: 16,
-          marginHorizontal: 16,
-          marginBottom: 12,
           borderWidth: 1,
           borderColor: COLORS.border,
           overflow: "hidden",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          elevation: 2,
         }}
       >
         {/* Card header */}
@@ -153,38 +193,48 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
             borderBottomColor: COLORS.border,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View
+          {/* Left: order number + date */}
+          <View>
+            <Text
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                backgroundColor: COLORS.primaryMuted,
-                alignItems: "center",
-                justifyContent: "center",
+                fontFamily: "Outfit_700Bold",
+                fontSize: 17,
+                color: COLORS.text,
+                letterSpacing: -0.2,
               }}
             >
-              <ChefHat size={18} color={COLORS.primary} />
-            </View>
-            <View>
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                {pedidoLabel}
-              </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-                {itemCountLabel}
-              </Text>
-            </View>
+              {pedidoLabel}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 12,
+                color: COLORS.textSecondary,
+                marginTop: 2,
+              }}
+            >
+              {dateStr}
+            </Text>
           </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
+
+          {/* Right: Mesa pill */}
+          <View
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 20,
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 13,
+                color: "#fff",
+              }}
+            >
               {mesaLabel}
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-              <Clock size={11} color={COLORS.textSecondary} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
-                {dateStr}
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -194,19 +244,97 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
             <View key={item.id}>
               <ItemRow item={item} />
               {i < pedido.itens.length - 1 && (
-                <View style={{ height: 1, backgroundColor: COLORS.divider }} />
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: COLORS.divider,
+                  }}
+                />
               )}
             </View>
           ))}
+        </View>
+
+        {/* Card footer */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderTopWidth: 1,
+            borderTopColor: COLORS.divider,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Ionicons name="receipt-outline" size={13} color={COLORS.textSecondary} />
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 12,
+              color: COLORS.textSecondary,
+            }}
+          >
+            {itemCountLabel}
+          </Text>
         </View>
       </View>
     </Animated.View>
   );
 }
 
+function SkeletonCard() {
+  const COLORS = useColors();
+  return (
+    <View
+      style={{
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        marginHorizontal: 16,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header skeleton */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          backgroundColor: COLORS.surfaceSecondary,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <View style={{ gap: 6 }}>
+          <SkeletonLine width={110} height={16} />
+          <SkeletonLine width={80} height={12} />
+        </View>
+        <SkeletonLine width={72} height={32} borderRadius={20} />
+      </View>
+      {/* Body skeleton */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 14, gap: 10 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <SkeletonLine width={160} height={14} />
+          <SkeletonLine width={80} height={24} borderRadius={20} />
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <SkeletonLine width={130} height={14} />
+          <SkeletonLine width={70} height={24} borderRadius={20} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function PedidosGarcomScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [pedidos, setPedidos] = useState<GarcomPedido[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,14 +342,14 @@ export default function PedidosGarcomScreen() {
   const [error, setError] = useState("");
 
   const fetchPedidos = useCallback(async () => {
-    console.log("[Pedidos Garçom] Fetching from GET /api/garcom/pedidos");
+    console.log("[Pedidos Garçom] Fetching GET /api/garcom/pedidos");
     try {
       const res = await apiGet<GarcomPedido[]>("/api/garcom/pedidos");
       const list: GarcomPedido[] = Array.isArray(res) ? res : [];
       console.log("[Pedidos Garçom] Loaded", list.length, "pedidos");
       setPedidos(list);
       setError("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Pedidos Garçom] Fetch error:", msg);
       setError("Não foi possível carregar os pedidos.");
@@ -233,6 +361,7 @@ export default function PedidosGarcomScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setLoading(true);
       fetchPedidos();
     }, [fetchPedidos])
   );
@@ -250,51 +379,123 @@ export default function PedidosGarcomScreen() {
     fetchPedidos();
   };
 
+  const handleBack = () => {
+    console.log("[Pedidos Garçom] Back button pressed");
+    router.back();
+  };
+
   const pedidoCount = pedidos.length;
   const pedidoCountLabel = `${pedidoCount} ${pedidoCount === 1 ? "pedido" : "pedidos"}`;
+  const subtitleText = loading ? "Carregando..." : pedidoCountLabel;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      {/* Header */}
+      {/* Custom header */}
       <View
         style={{
-          paddingTop: insets.top + 12,
-          paddingHorizontal: 20,
-          paddingBottom: 16,
+          paddingTop: insets.top + 8,
+          paddingBottom: 14,
+          paddingHorizontal: 16,
           backgroundColor: COLORS.surface,
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
+          flexDirection: "row",
+          alignItems: "center",
         }}
       >
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Meus Pedidos
-        </Text>
-        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {loading ? "Carregando..." : pedidoCountLabel}
-        </Text>
+        {/* Back button */}
+        <Pressable
+          onPress={handleBack}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            paddingVertical: 4,
+            paddingRight: 8,
+            opacity: pressed ? 0.6 : 1,
+          })}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 15,
+              color: COLORS.primary,
+            }}
+          >
+            Voltar
+          </Text>
+        </Pressable>
+
+        {/* Title centered */}
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 17,
+              color: COLORS.text,
+              letterSpacing: -0.2,
+            }}
+          >
+            Meus Pedidos
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 12,
+              color: COLORS.textSecondary,
+              marginTop: 1,
+            }}
+          >
+            {subtitleText}
+          </Text>
+        </View>
+
+        {/* Spacer to balance back button */}
+        <View style={{ width: 70 }} />
       </View>
 
+      {/* Content */}
       {loading ? (
-        <View style={{ paddingTop: 16 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
+          scrollEnabled={false}
+        >
           {[0, 1, 2].map((i) => (
-            <CardSkeleton key={i} />
+            <SkeletonCard key={i} />
           ))}
-        </View>
+        </ScrollView>
       ) : error ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 32,
+            gap: 14,
+          }}
+        >
           <View
             style={{
               width: 72,
               height: 72,
               borderRadius: 20,
-              backgroundColor: "rgba(239,68,68,0.1)",
+              backgroundColor: "rgba(239,68,68,0.10)",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <ClipboardList size={32} color={COLORS.danger} />
+            <Ionicons name="alert-circle-outline" size={34} color={COLORS.danger} />
           </View>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 17,
+              color: COLORS.text,
+              textAlign: "center",
+            }}
+          >
             Erro ao carregar pedidos
           </Text>
           <Text
@@ -303,6 +504,7 @@ export default function PedidosGarcomScreen() {
               fontSize: 14,
               color: COLORS.textSecondary,
               textAlign: "center",
+              lineHeight: 20,
             }}
           >
             {error}
@@ -312,42 +514,70 @@ export default function PedidosGarcomScreen() {
             style={{
               backgroundColor: COLORS.primary,
               borderRadius: 12,
-              paddingHorizontal: 24,
-              paddingVertical: 12,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+              marginTop: 4,
             }}
           >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 15,
+                color: "#fff",
+              }}
+            >
               Tentar novamente
             </Text>
           </AnimatedPressable>
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
-          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            paddingTop: 16,
+            paddingBottom: 120,
+            flexGrow: 1,
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
             />
           }
         >
           {pedidos.length === 0 ? (
-            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 40,
+                paddingTop: 80,
+                gap: 14,
+              }}
+            >
               <View
                 style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 20,
+                  width: 80,
+                  height: 80,
+                  borderRadius: 24,
                   backgroundColor: COLORS.primaryMuted,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <ClipboardList size={32} color={COLORS.primary} />
+                <Ionicons name="clipboard-outline" size={38} color={COLORS.primary} />
               </View>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 18,
+                  color: COLORS.text,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
                 Nenhum pedido encontrado
               </Text>
               <Text
@@ -356,6 +586,7 @@ export default function PedidosGarcomScreen() {
                   fontSize: 14,
                   color: COLORS.textSecondary,
                   textAlign: "center",
+                  lineHeight: 21,
                 }}
               >
                 Os pedidos que você registrar aparecerão aqui
@@ -363,7 +594,11 @@ export default function PedidosGarcomScreen() {
             </View>
           ) : (
             pedidos.map((pedido, index) => (
-              <PedidoCard key={pedido.comanda_id + pedido.numero_sequencial} pedido={pedido} index={index} />
+              <PedidoCard
+                key={`${pedido.comanda_id}-${pedido.numero_sequencial}`}
+                pedido={pedido}
+                index={index}
+              />
             ))
           )}
         </ScrollView>
