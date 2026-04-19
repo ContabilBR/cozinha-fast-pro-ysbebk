@@ -13,7 +13,31 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet } from "@/utils/api";
+import { BACKEND_URL, getBearerToken } from "@/utils/api";
+
+// ─── API response types ───────────────────────────────────────────────────────
+
+interface ApiPedidoItem {
+  id: string;
+  prato?: { nome: string; imagem_url?: string };
+  prato_nome?: string;
+  quantidade: number;
+  preco_unitario?: number;
+  observacao?: string;
+  status: "aguardando" | "preparando" | "pronto" | string;
+  created_at?: string;
+}
+
+interface ApiComanda {
+  id: string;
+  mesa?: { numero: number };
+  mesa_numero?: number;
+  created_at: string;
+  pedidos?: ApiPedidoItem[];
+  itens?: ApiPedidoItem[];
+}
+
+// ─── Internal display types ───────────────────────────────────────────────────
 
 interface GarcomPedidoItem {
   id: string;
@@ -30,6 +54,35 @@ interface GarcomPedido {
   mesa_numero: number;
   created_at: string;
   itens: GarcomPedidoItem[];
+}
+
+// ─── Normalise raw API response into display shape ────────────────────────────
+
+function normaliseComandas(raw: any): GarcomPedido[] {
+  // Handle both { comandas: [...] } and direct array
+  const list: ApiComanda[] = Array.isArray(raw) ? raw : (raw?.comandas ?? []);
+
+  return list.map((comanda, idx) => {
+    const mesaNumero = comanda.mesa?.numero ?? comanda.mesa_numero ?? 0;
+    const rawItems: ApiPedidoItem[] = comanda.pedidos ?? comanda.itens ?? [];
+
+    const itens: GarcomPedidoItem[] = rawItems.map((item) => ({
+      id: item.id,
+      prato_nome: item.prato?.nome ?? item.prato_nome ?? "Prato",
+      quantidade: item.quantidade,
+      observacao: item.observacao,
+      status: item.status ?? "aguardando",
+      created_at: item.created_at ?? comanda.created_at,
+    }));
+
+    return {
+      numero_sequencial: idx + 1,
+      comanda_id: comanda.id,
+      mesa_numero: mesaNumero,
+      created_at: comanda.created_at,
+      itens,
+    };
+  });
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
@@ -344,9 +397,27 @@ export default function PedidosGarcomScreen() {
   const fetchPedidos = useCallback(async () => {
     console.log("[Pedidos Garçom] Fetching GET /api/garcom/pedidos");
     try {
-      const res = await apiGet<GarcomPedido[]>("/api/garcom/pedidos");
-      const list: GarcomPedido[] = Array.isArray(res) ? res : [];
-      console.log("[Pedidos Garçom] Loaded", list.length, "pedidos");
+      const token = await getBearerToken();
+      console.log("[Pedidos Garçom] Token available:", !!token);
+
+      const res = await fetch(`${BACKEND_URL}/api/garcom/pedidos`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[Pedidos Garçom] HTTP error", res.status, errText);
+        throw new Error(`Erro ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+      console.log("[Pedidos Garçom] raw response:", JSON.stringify(data));
+
+      const list = normaliseComandas(data);
+      console.log("[Pedidos Garçom] Loaded", list.length, "comandas");
       setPedidos(list);
       setError("");
     } catch (e: unknown) {

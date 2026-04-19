@@ -651,6 +651,228 @@ function DishManagementScreen({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+// ─── Garçom: Read-only Cardápio (pratos grouped by category) ─────────────────
+
+interface PratoGroup {
+  categoria: string;
+  pratos: ApiPrato[];
+}
+
+function GarcomCardapioScreen() {
+  const COLORS = useColors();
+  const insets = useSafeAreaInsets();
+
+  const [groups, setGroups] = useState<PratoGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const fetchPratos = useCallback(async () => {
+    console.log("[Cardapio/Garcom] GET /api/pratos");
+    try {
+      const res = await apiGet<any>("/api/pratos");
+      const list: ApiPrato[] = Array.isArray(res) ? res : (res.pratos ?? []);
+      console.log("[Cardapio/Garcom] Pratos carregados:", list.length);
+
+      // Group by categoria.nome
+      const map = new Map<string, ApiPrato[]>();
+      for (const p of list) {
+        const key = p.categoria?.nome ?? "Sem categoria";
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(p);
+      }
+      const grouped: PratoGroup[] = Array.from(map.entries()).map(([categoria, pratos]) => ({ categoria, pratos }));
+      setGroups(grouped);
+      setError("");
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Cardapio/Garcom] Erro:", msg);
+      setError("Não foi possível carregar o cardápio.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { fetchPratos(); }, [fetchPratos]));
+
+  const handleRefresh = () => {
+    console.log("[Cardapio/Garcom] Refresh manual");
+    setRefreshing(true);
+    fetchPratos();
+  };
+
+  const totalPratos = groups.reduce((sum, g) => sum + g.pratos.length, 0);
+  const totalLabel = `${totalPratos} ${totalPratos === 1 ? "prato" : "pratos"}`;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingTop: insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 14,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+          Cardápio
+        </Text>
+        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
+          {loading ? "Carregando..." : totalLabel}
+        </Text>
+      </View>
+
+      {loading ? (
+        <View style={{ padding: 16, gap: 12 }}>
+          {[0, 1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 14 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text, textAlign: "center" }}>
+            Erro ao carregar cardápio
+          </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+            {error}
+          </Text>
+          <Pressable
+            onPress={() => { console.log("[Cardapio/Garcom] Tentar novamente pressionado"); setLoading(true); fetchPratos(); }}
+            style={({ pressed }) => ({
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          contentInsetAdjustmentBehavior="automatic"
+        >
+          {groups.length === 0 ? (
+            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12, marginTop: 40 }}>
+              <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+                <UtensilsCrossed size={32} color={COLORS.primary} />
+              </View>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+                Nenhum prato disponível
+              </Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                O cardápio está vazio no momento
+              </Text>
+            </View>
+          ) : (
+            groups.map((group) => (
+              <View key={group.categoria}>
+                {/* Section header */}
+                <View
+                  style={{
+                    paddingHorizontal: 20,
+                    paddingTop: 20,
+                    paddingBottom: 10,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, letterSpacing: -0.2 }}>
+                    {group.categoria}
+                  </Text>
+                  <View style={{ height: 2, width: 32, backgroundColor: COLORS.primary, borderRadius: 2, marginTop: 4 }} />
+                </View>
+
+                {/* Prato rows */}
+                {group.pratos.map((prato) => {
+                  const imageUri = prato.imagem_url || "";
+                  const imageSource = resolveImageSource(imageUri);
+                  const price = formatCurrency(prato.preco);
+                  const descricao = prato.descricao ?? "";
+                  const disponivel = prato.disponivel ?? true;
+
+                  return (
+                    <View
+                      key={prato.id}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginHorizontal: 16,
+                        marginBottom: 10,
+                        backgroundColor: COLORS.surface,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                        padding: 12,
+                        gap: 12,
+                        opacity: disponivel ? 1 : 0.55,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 4,
+                        elevation: 1,
+                      }}
+                    >
+                      {/* Image */}
+                      {imageUri ? (
+                        <Image
+                          source={imageSource}
+                          style={{ width: 68, height: 68, borderRadius: 10 }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: 68,
+                            height: 68,
+                            borderRadius: 10,
+                            backgroundColor: COLORS.surfaceSecondary,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <UtensilsCrossed size={24} color={COLORS.textTertiary} />
+                        </View>
+                      )}
+
+                      {/* Info */}
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <Text numberOfLines={1} style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
+                          {prato.nome}
+                        </Text>
+                        {!!descricao && (
+                          <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                            {descricao}
+                          </Text>
+                        )}
+                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "#22C55E" }}>
+                          {price}
+                        </Text>
+                      </View>
+
+                      {!disponivel && (
+                        <View style={{ backgroundColor: COLORS.danger + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: COLORS.danger }}>
+                            Indisponível
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 // ─── Root export ──────────────────────────────────────────────────────────────
 
 export default function CardapioScreen() {
@@ -660,7 +882,7 @@ export default function CardapioScreen() {
   const canEdit = role === "admin" || role === "administrador" || role === "gerente";
 
   if (isGarcom) {
-    return <GarcomMesaList />;
+    return <GarcomCardapioScreen />;
   }
 
   return <DishManagementScreen canEdit={canEdit} />;

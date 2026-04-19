@@ -450,9 +450,20 @@ export default function CardapioNovaComandaScreen() {
       }
 
       console.log("[Cardápio] Pedido enviado com sucesso para comanda:", comandaId);
-      Alert.alert("Pedido enviado!", "O pedido foi enviado para a cozinha.", [
-        { text: "OK", onPress: () => { console.log("[Cardápio] Navegar de volta após sucesso"); router.back(); } },
-      ]);
+      setCart([]);
+      Alert.alert(
+        "✅ Pedido enviado!",
+        "Seu pedido foi enviado para a cozinha com sucesso.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              console.log("[Cardápio] Navegar para mesas após sucesso");
+              router.replace("/(tabs)/(mesas)");
+            },
+          },
+        ]
+      );
     } catch (e: any) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Cardápio] Erro ao enviar pedido:", msg);
