@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
@@ -72,14 +72,14 @@ export default function PratoDetailScreen() {
         borderBottomColor: COLORS.border,
         backgroundColor: COLORS.surface,
       }}>
-        <TouchableOpacity
+        <Pressable
           onPress={() => { console.log("[PratoDetail] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+          style={{ flexDirection: "row", alignItems: "center", padding: 8, zIndex: 10 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
+          <Ionicons name="arrow-back" size={22} color="#22c55e" />
+          <Text style={{ color: "#22c55e", marginLeft: 6, fontSize: 16, fontWeight: "500" }}>Voltar</Text>
+        </Pressable>
         <Text style={{
           position: "absolute",
           left: 0,
@@ -95,12 +95,12 @@ export default function PratoDetailScreen() {
         </Text>
         {canEdit && (
           <View style={{ flex: 1, alignItems: "flex-end" }}>
-            <TouchableOpacity
+            <Pressable
               onPress={() => { console.log("[PratoDetail] Editar pressionado:", id); router.push(`/prato/editar/${id}`); }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Pencil size={20} color="#007AFF" />
-            </TouchableOpacity>
+              <Pencil size={20} color="#22c55e" />
+            </Pressable>
           </View>
         )}
       </View>

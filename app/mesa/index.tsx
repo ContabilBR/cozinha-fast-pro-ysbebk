@@ -5,6 +5,7 @@ import {
   FlatList,
   RefreshControl,
   Animated,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -185,13 +186,14 @@ export default function MesaIndexScreen() {
         borderBottomColor: COLORS.border,
         backgroundColor: COLORS.surface,
       }}>
-        <AnimatedPressable
+        <Pressable
           onPress={() => { console.log("[Mesa/Index] Botão voltar pressionado"); router.back(); }}
-          style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingRight: 8 }}
+          style={{ flexDirection: "row", alignItems: "center", padding: 8, zIndex: 10 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.primary }}>Voltar</Text>
-        </AnimatedPressable>
+          <Ionicons name="arrow-back" size={22} color="#22c55e" />
+          <Text style={{ color: "#22c55e", marginLeft: 6, fontSize: 16, fontWeight: "500" }}>Voltar</Text>
+        </Pressable>
         <Text style={{
           position: "absolute",
           left: 0,

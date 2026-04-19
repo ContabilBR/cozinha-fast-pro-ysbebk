@@ -17,6 +17,7 @@ function getTabsForRole(role: string): TabBarItem[] {
     case "garcom":
       return [
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
+        { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
         { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "list-alt", label: "Pedidos" },
         perfilTab,

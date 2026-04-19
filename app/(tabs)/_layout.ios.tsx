@@ -18,6 +18,10 @@ export default function TabLayoutIOS() {
           <Icon sf="table.furniture" />
           <Label>Mesas</Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="(cardapio)">
+          <Icon sf="fork.knife" />
+          <Label>Cardápio</Label>
+        </NativeTabs.Trigger>
         <NativeTabs.Trigger name="(comandas)">
           <Icon sf="receipt" />
           <Label>Comandas</Label>

@@ -130,9 +130,9 @@ export default function EditarUsuarioScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
-          <Pressable onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}>
-            <Ionicons name="arrow-back" size={22} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          <Pressable onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", padding: 8, zIndex: 10 }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={22} color="#22c55e" />
+            <Text style={{ color: "#22c55e", marginLeft: 6, fontSize: 16, fontWeight: "500" }}>Voltar</Text>
           </Pressable>
           <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: COLORS.text, height: 56, lineHeight: 56 }}>Editar Usuário</Text>
         </View>
@@ -161,10 +161,11 @@ export default function EditarUsuarioScreen() {
         }}>
           <Pressable
             onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado"); router.back(); }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingRight: 12 }}
+            style={{ flexDirection: "row", alignItems: "center", padding: 8, zIndex: 10 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="arrow-back" size={22} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+            <Ionicons name="arrow-back" size={22} color="#22c55e" />
+            <Text style={{ color: "#22c55e", marginLeft: 6, fontSize: 16, fontWeight: "500" }}>Voltar</Text>
           </Pressable>
           <Text style={{
             position: "absolute",

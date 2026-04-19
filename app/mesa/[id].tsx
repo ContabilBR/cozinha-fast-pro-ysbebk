@@ -81,10 +81,11 @@ export default function MesaDetailScreen() {
       }}>
         <Pressable
           onPress={() => { console.log("[Mesa] Botão voltar pressionado"); router.back(); }}
-          style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
+          style={{ flexDirection: "row", alignItems: "center", padding: 8, zIndex: 10 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
-          <Text style={{ fontFamily: "Outfit_600SemiBold", color: COLORS.primary, fontSize: 15, marginLeft: 2 }}>Voltar</Text>
+          <Ionicons name="arrow-back" size={22} color="#22c55e" />
+          <Text style={{ color: "#22c55e", marginLeft: 6, fontSize: 16, fontWeight: "500" }}>Voltar</Text>
         </Pressable>
         <Text style={{
           position: "absolute",

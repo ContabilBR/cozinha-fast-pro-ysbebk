@@ -7,9 +7,11 @@ import {
   RefreshControl,
   Animated,
   Switch,
+  Pressable,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,7 +19,7 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPut } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
-import { Plus, UtensilsCrossed, Pencil } from "lucide-react-native";
+import { Plus, UtensilsCrossed, Pencil, Users } from "lucide-react-native";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -27,10 +29,11 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 function getPlaceholderUrl(id: string): string {
-  // Use a deterministic picsum seed based on dish id
   const seed = id ? id.slice(0, 8) : "prato";
   return `https://picsum.photos/seed/${seed}/400/300`;
 }
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ApiPrato {
   id: string;
@@ -48,6 +51,251 @@ interface ApiCategoria {
   nome: string;
   descricao?: string;
 }
+
+interface ApiMesa {
+  id: string;
+  numero: number;
+  capacidade: number;
+  status: string;
+  comanda_id?: string;
+}
+
+// ─── Mesa helpers ─────────────────────────────────────────────────────────────
+
+function getMesaStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    disponivel: "Disponível",
+    livre: "Disponível",
+    free: "Disponível",
+    ocupada: "Ocupada",
+    occupied: "Ocupada",
+    reservada: "Reservada",
+    reserved: "Reservada",
+  };
+  return labels[status] || String(status);
+}
+
+function getMesaStatusColor(status: string): string {
+  const map: Record<string, string> = {
+    disponivel: "#22C55E",
+    livre: "#22C55E",
+    free: "#22C55E",
+    ocupada: "#E8521A",
+    occupied: "#E8521A",
+    reservada: "#F59E0B",
+    reserved: "#F59E0B",
+  };
+  return map[status] || "#94A3B8";
+}
+
+function isDisponivel(status: string): boolean {
+  return status === "disponivel" || status === "livre" || status === "free";
+}
+
+// ─── Mesa Card ────────────────────────────────────────────────────────────────
+
+function MesaCard({ mesa, onPress, index }: { mesa: ApiMesa; onPress: () => void; index: number }) {
+  const COLORS = useColors();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(14)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 320, delay: index * 50, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 320, delay: index * 50, useNativeDriver: true }),
+    ]).start();
+  }, [index, opacity, translateY]);
+
+  const statusColor = getMesaStatusColor(mesa.status);
+  const statusLabel = getMesaStatusLabel(mesa.status);
+  const livre = isDisponivel(mesa.status);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
+      <AnimatedPressable
+        onPress={onPress}
+        style={{
+          backgroundColor: COLORS.surface,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 2,
+          borderColor: livre ? COLORS.border : statusColor + "50",
+          minHeight: 130,
+          justifyContent: "space-between",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+          elevation: 1,
+        }}
+      >
+        <View style={{ position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
+
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: statusColor + "18", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: statusColor }}>
+              {mesa.numero}
+            </Text>
+          </View>
+          <View style={{ backgroundColor: statusColor + "20", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: statusColor }}>
+              {statusLabel}
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ gap: 4, marginTop: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Users size={13} color={COLORS.textSecondary} />
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+              {mesa.capacidade} lugares
+            </Text>
+          </View>
+        </View>
+      </AnimatedPressable>
+    </Animated.View>
+  );
+}
+
+// ─── Garçom: Mesa List ────────────────────────────────────────────────────────
+
+function GarcomMesaList() {
+  const COLORS = useColors();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const [mesas, setMesas] = useState<ApiMesa[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const fetchMesas = useCallback(async () => {
+    console.log("[Cardapio/Garcom] GET /api/mesas");
+    try {
+      const res = await apiGet<any>("/api/mesas");
+      const list: ApiMesa[] = Array.isArray(res) ? res : (res.mesas || []);
+      console.log("[Cardapio/Garcom] Mesas carregadas:", list.length);
+      setMesas(list);
+      setError("");
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Cardapio/Garcom] Erro:", msg);
+      setError("Não foi possível carregar as mesas.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { fetchMesas(); }, [fetchMesas]));
+
+  const handleRefresh = () => {
+    console.log("[Cardapio/Garcom] Refresh manual");
+    setRefreshing(true);
+    fetchMesas();
+  };
+
+  const handleMesaPress = (mesa: ApiMesa) => {
+    console.log("[Cardapio/Garcom] Mesa pressionada:", mesa.numero, "status:", mesa.status);
+    router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
+  };
+
+  const livreCount = mesas.filter((m) => isDisponivel(m.status)).length;
+  const ocupadaCount = mesas.filter((m) => !isDisponivel(m.status)).length;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingTop: insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 12,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+          Cardápio
+        </Text>
+        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
+          Selecione uma mesa para abrir o cardápio
+        </Text>
+
+        {/* Stats */}
+        <View style={{ flexDirection: "row", marginTop: 10, gap: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22C55E" }} />
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+              {livreCount} disponíveis
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#E8521A" }} />
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+              {ocupadaCount} ocupadas
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {loading ? (
+        <View style={{ padding: 12, gap: 8 }}>
+          {[0, 1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+        </View>
+      ) : error ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 14 }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text, textAlign: "center" }}>
+            Erro ao carregar mesas
+          </Text>
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+            {error}
+          </Text>
+          <Pressable
+            onPress={() => { console.log("[Cardapio/Garcom] Tentar novamente pressionado"); setLoading(true); fetchMesas(); }}
+            style={({ pressed }) => ({
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={mesas}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          contentContainerStyle={{ padding: 6, paddingBottom: 120 }}
+          contentInsetAdjustmentBehavior="automatic"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          renderItem={({ item, index }) => (
+            <MesaCard mesa={item} onPress={() => handleMesaPress(item)} index={index} />
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+              <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+                <Users size={32} color={COLORS.primary} />
+              </View>
+              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+                Nenhuma mesa cadastrada
+              </Text>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                As mesas do restaurante aparecerão aqui
+              </Text>
+            </View>
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── Dish Card (for cozinheiro/admin) ─────────────────────────────────────────
 
 function DishCard({
   prato,
@@ -181,14 +429,12 @@ function DishCard({
   );
 }
 
-export default function CardapioScreen() {
+// ─── Admin/Cozinheiro: Dish Management ────────────────────────────────────────
+
+function DishManagementScreen({ canEdit }: { canEdit: boolean }) {
   const COLORS = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-
-  const role = user?.role;
-  const canEdit = role === "admin" || role === "administrador" || role === "gerente";
 
   const [pratos, setPratos] = useState<ApiPrato[]>([]);
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
@@ -241,6 +487,8 @@ export default function CardapioScreen() {
     ? pratos.filter((p) => p.categoria_id === selectedCategoria)
     : pratos;
 
+  const pratosCount = pratos.length;
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View
@@ -259,7 +507,7 @@ export default function CardapioScreen() {
               Cardápio
             </Text>
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-              {pratos.length} pratos
+              {pratosCount} pratos
             </Text>
           </View>
         </View>
@@ -401,4 +649,19 @@ export default function CardapioScreen() {
       )}
     </View>
   );
+}
+
+// ─── Root export ──────────────────────────────────────────────────────────────
+
+export default function CardapioScreen() {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isGarcom = role === "garcom";
+  const canEdit = role === "admin" || role === "administrador" || role === "gerente";
+
+  if (isGarcom) {
+    return <GarcomMesaList />;
+  }
+
+  return <DishManagementScreen canEdit={canEdit} />;
 }

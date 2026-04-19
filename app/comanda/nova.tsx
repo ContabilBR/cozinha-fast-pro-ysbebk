@@ -18,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Minus, Plus, Trash2, ShoppingCart, UtensilsCrossed } from "lucide-react-native";
 import { useColors } from "@/hooks/useColors";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet } from "@/utils/api";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -399,10 +399,7 @@ export default function CardapioNovaComandaScreen() {
 
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (cartIsEmpty) {
-      Alert.alert("Carrinho vazio", "Adicione pelo menos um item antes de enviar.");
-      return;
-    }
+    if (cart.length === 0) return;
     if (!mesaId) {
       Alert.alert("Erro", "Mesa não identificada. Volte e tente novamente.");
       return;
@@ -412,35 +409,54 @@ export default function CardapioNovaComandaScreen() {
     setSubmitting(true);
 
     try {
-      // Step 1: open comanda
+      // Step 1: Create comanda
       console.log("[Cardápio] POST /api/comandas — mesa_id:", mesaId);
-      const comandaRes = await apiPost<any>("/api/comandas", { mesa_id: mesaId });
-      const comandaId = comandaRes?.comanda?.id || comandaRes?.id;
+      const comandaRes = await fetch(`${API_BASE}/api/comandas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mesa_id: mesaId }),
+      });
+
+      if (!comandaRes.ok) {
+        const err = await comandaRes.text();
+        throw new Error(`Erro ao abrir comanda: ${err}`);
+      }
+
+      const comandaData = await comandaRes.json();
+      const comandaId = comandaData?.comanda?.id || comandaData?.id;
       console.log("[Cardápio] Comanda criada, id:", comandaId);
 
       if (!comandaId) {
         throw new Error("Comanda criada mas sem ID na resposta.");
       }
 
-      // Step 2: send items
+      // Step 2: Send pedidos
       const items = cart.map((c) => ({
         prato_id: c.id,
         quantidade: c.quantidade,
         preco_unitario: c.preco,
       }));
       console.log("[Cardápio] POST /api/comandas/" + comandaId + "/pedidos — items:", items.length, JSON.stringify(items));
-      await apiPost<any>(`/api/comandas/${comandaId}/pedidos`, { items });
-      console.log("[Cardápio] Pedido enviado com sucesso para comanda:", comandaId);
 
-      Alert.alert(
-        "Sucesso",
-        "Pedido enviado para a cozinha!",
-        [{ text: "OK", onPress: () => { console.log("[Cardápio] Navegar de volta após sucesso"); router.back(); } }]
-      );
+      const pedidosRes = await fetch(`${API_BASE}/api/comandas/${comandaId}/pedidos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+
+      if (!pedidosRes.ok) {
+        const err = await pedidosRes.text();
+        throw new Error(`Erro ao enviar pedidos: ${err}`);
+      }
+
+      console.log("[Cardápio] Pedido enviado com sucesso para comanda:", comandaId);
+      Alert.alert("Pedido enviado!", "O pedido foi enviado para a cozinha.", [
+        { text: "OK", onPress: () => { console.log("[Cardápio] Navegar de volta após sucesso"); router.back(); } },
+      ]);
     } catch (e: any) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Cardápio] Erro ao enviar pedido:", msg);
-      Alert.alert("Erro", "Não foi possível enviar o pedido. Tente novamente.");
+      Alert.alert("Erro", msg || "Não foi possível enviar o pedido.");
     } finally {
       setSubmitting(false);
     }
