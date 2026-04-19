@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable, Alert } from "react-native";
+import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { Mesa } from "@/types";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet } from "@/utils/api";
 import { getMesaStatusLabel, getMesaStatusColor, isAdmin } from "@/utils/helpers";
 import { Users } from "lucide-react-native";
 
@@ -24,7 +24,6 @@ export default function MesaDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [openingComanda, setOpeningComanda] = useState(false);
 
   const fetchMesa = useCallback(async () => {
     console.log("[Mesa] GET /api/mesas/" + id);
@@ -50,29 +49,13 @@ export default function MesaDetailScreen() {
     fetchMesa();
   };
 
-  const handleOpenComanda = async () => {
+  const handleOpenComanda = () => {
     if (!mesa) return;
-    console.log("[Mesa] Abrir comanda pressionado para mesa:", mesa.numero);
-    setOpeningComanda(true);
-    try {
-      const payload: any = { mesa_id: mesa.id };
-      if (user?.id) payload.garcom_id = user.id;
-      console.log("[Mesa] POST /api/comandas", payload);
-      const res = await apiPost<any>("/api/comandas", payload);
-      const comanda = res.comanda || res;
-      console.log("[Mesa] Comanda aberta:", comanda.id);
-      if (comanda.id) {
-        router.replace(`/comanda/${comanda.id}`);
-      } else {
-        console.warn("[Mesa] Comanda criada mas sem ID na resposta:", JSON.stringify(res));
-        Alert.alert("Aviso", "Comanda criada, mas não foi possível navegar para ela.");
-      }
-    } catch (e: any) {
-      console.error("[Mesa] Erro ao abrir comanda:", e instanceof Error ? e.message : String(e));
-      Alert.alert("Erro", "Não foi possível abrir a comanda. Tente novamente.");
-    } finally {
-      setOpeningComanda(false);
-    }
+    console.log("[Mesa] Abrir Comanda (cardápio) pressionado para mesa:", mesa.numero, "id:", mesa.id);
+    router.push({
+      pathname: "/comanda/nova",
+      params: { mesa_id: mesa.id, mesa_numero: String(mesa.numero) },
+    });
   };
 
   const statusColor = getMesaStatusColor(mesa?.status ?? "livre");
@@ -100,16 +83,16 @@ export default function MesaDetailScreen() {
           onPress={() => { console.log("[Mesa] Botão voltar pressionado"); router.back(); }}
           style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
         >
-          <Ionicons name="arrow-back" size={22} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
+          <Text style={{ fontFamily: "Outfit_600SemiBold", color: COLORS.primary, fontSize: 15, marginLeft: 2 }}>Voltar</Text>
         </Pressable>
         <Text style={{
           position: "absolute",
           left: 0,
           right: 0,
           textAlign: "center",
+          fontFamily: "Outfit_700Bold",
           fontSize: 17,
-          fontWeight: "700",
           color: COLORS.text,
           height: 56,
           lineHeight: 56,
@@ -174,15 +157,10 @@ export default function MesaDetailScreen() {
 
           {(mesaStatus === "livre" || (mesaStatus as string) === "disponivel") && (role === "garcom" || canAdmin) ? (
             <AnimatedPressable
-              onPress={() => { console.log("[Mesa] Abrir comanda pressionado"); handleOpenComanda(); }}
-              disabled={openingComanda}
+              onPress={() => { console.log("[Mesa] Abrir Comanda pressionado"); handleOpenComanda(); }}
               style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
             >
-              {openingComanda ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Abrir comanda</Text>
-              )}
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Abrir Comanda</Text>
             </AnimatedPressable>
           ) : null}
 

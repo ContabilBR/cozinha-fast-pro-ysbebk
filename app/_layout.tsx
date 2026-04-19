@@ -60,6 +60,7 @@ function RootLayoutNav() {
       <Stack.Screen name="prato/novo" options={{ headerShown: false }} />
       <Stack.Screen name="prato/editar/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="categoria/index" options={{ headerShown: false }} />
+      <Stack.Screen name="mesa/index" options={{ headerShown: false }} />
       <Stack.Screen name="mesa/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="usuario/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="usuario/novo" options={{ headerShown: false }} />
