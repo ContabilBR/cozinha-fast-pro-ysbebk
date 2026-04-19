@@ -7,23 +7,45 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  TextInput,
+  Modal,
+  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
-import { apiGet, apiPatch } from "@/utils/api";
-import { formatCurrency, formatDate, getPedidoStatusLabel, getPedidoStatusColor, isAdmin } from "@/utils/helpers";
-import { Plus, X, CheckCircle, ShoppingBag } from "lucide-react-native";
+import { apiGet, apiPost, apiPatch } from "@/utils/api";
+import { formatCurrency, formatDate, getPedidoStatusLabel, getPedidoStatusColor } from "@/utils/helpers";
+import { Plus, Minus, X, CheckCircle, ShoppingBag, UtensilsCrossed } from "lucide-react-native";
+import type { ImageSourcePropType } from "react-native";
+
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+interface ApiPrato {
+  id: string;
+  nome: string;
+  descricao?: string;
+  preco: number;
+  imagem_url?: string;
+  disponivel?: boolean;
+  categoria?: { id: string; nome: string };
+}
 
 interface PedidoItem {
   id: string;
   prato_id: string;
   prato?: { id: string; nome: string; preco: number };
   quantidade: number;
+  preco_unitario?: number;
   observacao?: string;
   status: string;
   created_at?: string;
@@ -47,12 +69,13 @@ function PedidoRow({ pedido }: { pedido: PedidoItem }) {
   const statusColor = getPedidoStatusColor(pedido.status);
   const statusLabel = getPedidoStatusLabel(pedido.status);
   const pratoNome = pedido.prato?.nome ?? "Prato";
-  const subtotal = formatCurrency((pedido.prato?.preco ?? 0) * pedido.quantidade);
+  const unitPrice = pedido.preco_unitario ?? pedido.prato?.preco ?? 0;
+  const subtotal = formatCurrency(unitPrice * pedido.quantidade);
 
   return (
     <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <View style={{ width: 24, height: 24, borderRadius: 6, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 12, color: COLORS.primary }}>{pedido.quantidade}</Text>
+      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>{pedido.quantidade}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{pratoNome}</Text>
@@ -73,21 +96,37 @@ export default function ComandaDetailScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const { user } = useAuth();
-  const role = user?.role;
-  const canAdmin = isAdmin(role);
 
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
+  const [pedidos, setPedidos] = useState<PedidoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [closing, setClosing] = useState(false);
 
+  // Cardápio modal state
+  const [showCardapio, setShowCardapio] = useState(false);
+  const [pratos, setPratos] = useState<ApiPrato[]>([]);
+  const [pratosLoading, setPratosLoading] = useState(false);
+  const [selectedPrato, setSelectedPrato] = useState<ApiPrato | null>(null);
+  const [quantidade, setQuantidade] = useState(1);
+  const [observacao, setObservacao] = useState("");
+  const [adicionando, setAdicionando] = useState(false);
+
   const fetchComanda = useCallback(async () => {
     console.log("[Comanda] GET /api/comandas/" + id);
     try {
-      const res = await apiGet<any>(`/api/comandas/${id}`);
-      const c: ComandaDetail = res.comanda || res;
+      const [comandaRes, pedidosRes] = await Promise.all([
+        apiGet<any>(`/api/comandas/${id}`),
+        apiGet<any>(`/api/pedidos?comanda_id=${id}`),
+      ]);
+      const c: ComandaDetail = comandaRes.comanda || comandaRes;
       setComanda(c);
+      const pedidoList: PedidoItem[] = Array.isArray(pedidosRes)
+        ? pedidosRes
+        : (pedidosRes.pedidos || c.pedidos || []);
+      console.log("[Comanda] Carregados", pedidoList.length, "pedidos");
+      setPedidos(pedidoList);
       setError("");
     } catch (e: any) {
       console.error("[Comanda] Erro:", e instanceof Error ? e.message : String(e));
@@ -135,17 +174,74 @@ export default function ComandaDetailScreen() {
     );
   };
 
-  const handleAdicionarItem = () => {
-    console.log("[Comanda] Adicionar item pressionado, comanda:", id);
-    router.push({ pathname: "/pedido/novo", params: { comanda_id: id, mesa_id: comanda?.mesa_id } });
+  const openCardapio = async () => {
+    console.log("[Comanda] Abrir cardápio pressionado");
+    setShowCardapio(true);
+    setSelectedPrato(null);
+    setQuantidade(1);
+    setObservacao("");
+    if (pratos.length === 0) {
+      setPratosLoading(true);
+      try {
+        console.log("[Comanda] GET /api/pratos");
+        const res = await apiGet<any>("/api/pratos");
+        const list: ApiPrato[] = Array.isArray(res) ? res : (res.pratos || []);
+        const disponiveis = list.filter((p) => p.disponivel !== false);
+        console.log("[Comanda] Carregados", disponiveis.length, "pratos disponíveis");
+        setPratos(disponiveis);
+      } catch (e) {
+        console.error("[Comanda] Erro ao carregar pratos:", e);
+      } finally {
+        setPratosLoading(false);
+      }
+    }
+  };
+
+  const handleSelectPrato = (prato: ApiPrato) => {
+    console.log("[Comanda] Prato selecionado:", prato.nome);
+    setSelectedPrato(prato);
+    setQuantidade(1);
+    setObservacao("");
+  };
+
+  const handleAdicionarPedido = async () => {
+    if (!selectedPrato) return;
+    console.log("[Comanda] Adicionar pedido pressionado — prato:", selectedPrato.nome, "qtd:", quantidade);
+    setAdicionando(true);
+    try {
+      const payload = {
+        comanda_id: id,
+        prato_id: selectedPrato.id,
+        quantidade,
+        preco_unitario: Number(selectedPrato.preco),
+        status: "pendente",
+        ...(observacao.trim() ? { observacao: observacao.trim() } : {}),
+      };
+      console.log("[Comanda] POST /api/pedidos", payload);
+      await apiPost("/api/pedidos", payload);
+      console.log("[Comanda] Pedido adicionado com sucesso");
+      setShowCardapio(false);
+      setSelectedPrato(null);
+      setQuantidade(1);
+      setObservacao("");
+      await fetchComanda();
+    } catch (e: any) {
+      console.error("[Comanda] Erro ao adicionar pedido:", e);
+      Alert.alert("Erro", "Não foi possível adicionar o item. Tente novamente.");
+    } finally {
+      setAdicionando(false);
+    }
   };
 
   const isAberta = comanda?.status === "aberta";
-  const total = formatCurrency(comanda?.total ?? 0);
+  const pedidoTotal = pedidos.reduce((sum, p) => {
+    const unit = p.preco_unitario ?? p.prato?.preco ?? 0;
+    return sum + unit * p.quantidade;
+  }, 0);
+  const total = formatCurrency(comanda?.total ?? pedidoTotal);
   const openedAt = formatDate(comanda?.created_at);
   const mesaNum = comanda?.mesa?.numero ?? "?";
   const garcomName = comanda?.garcom?.name || comanda?.garcom?.nome || "—";
-  const pedidos = comanda?.pedidos ?? [];
 
   const statusColorMap: Record<string, string> = {
     aberta: COLORS.success,
@@ -155,6 +251,8 @@ export default function ComandaDetailScreen() {
   const comandaStatus = comanda?.status ?? "aberta";
   const comandaStatusColor = statusColorMap[comandaStatus] ?? COLORS.textSecondary;
   const comandaStatusLabel = comandaStatus === "aberta" ? "Aberta" : comandaStatus === "fechada" ? "Fechada" : "Cancelada";
+
+  const selectedPratoPrice = selectedPrato ? formatCurrency(Number(selectedPrato.preco) * quantidade) : "";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -191,7 +289,7 @@ export default function ComandaDetailScreen() {
         </Text>
         {isAberta ? (
           <TouchableOpacity
-            onPress={handleAdicionarItem}
+            onPress={openCardapio}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{ position: "absolute", right: 16, flexDirection: "row", alignItems: "center", gap: 4 }}
           >
@@ -248,7 +346,7 @@ export default function ComandaDetailScreen() {
                 ) : null}
               </View>
 
-              <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Total</Text>
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.primary }}>{total}</Text>
               </View>
@@ -260,7 +358,7 @@ export default function ComandaDetailScreen() {
                 <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>Itens ({pedidos.length})</Text>
                 {isAberta ? (
                   <AnimatedPressable
-                    onPress={handleAdicionarItem}
+                    onPress={openCardapio}
                     style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.primaryMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
                   >
                     <Plus size={14} color={COLORS.primary} />
@@ -273,6 +371,14 @@ export default function ComandaDetailScreen() {
                 <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
                   <ShoppingBag size={28} color={COLORS.textTertiary} />
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhum item ainda</Text>
+                  {isAberta ? (
+                    <AnimatedPressable
+                      onPress={openCardapio}
+                      style={{ marginTop: 4, backgroundColor: COLORS.primaryMuted, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Ver cardápio</Text>
+                    </AnimatedPressable>
+                  ) : null}
                 </View>
               ) : (
                 pedidos.map((pedido) => <PedidoRow key={pedido.id} pedido={pedido} />)
@@ -284,11 +390,11 @@ export default function ComandaDetailScreen() {
           {isAberta ? (
             <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.background }}>
               <AnimatedPressable
-                onPress={handleAdicionarItem}
+                onPress={openCardapio}
                 style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: COLORS.primary + "30" }}
               >
                 <Plus size={18} color={COLORS.primary} />
-                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.primary }}>Adicionar item</Text>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.primary }}>Adicionar item ao cardápio</Text>
               </AnimatedPressable>
 
               <AnimatedPressable
@@ -309,6 +415,163 @@ export default function ComandaDetailScreen() {
           ) : null}
         </View>
       )}
+
+      {/* Cardápio Modal */}
+      <Modal
+        visible={showCardapio}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { console.log("[Comanda] Cardápio modal fechado"); setShowCardapio(false); setSelectedPrato(null); }}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "90%", minHeight: "60%" }}>
+            {/* Modal header */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>
+                {selectedPrato ? selectedPrato.nome : "Cardápio"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log("[Comanda] Fechar modal cardápio"); if (selectedPrato) { setSelectedPrato(null); } else { setShowCardapio(false); } }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                {selectedPrato ? (
+                  <Ionicons name="chevron-back" size={18} color={COLORS.textSecondary} />
+                ) : (
+                  <X size={16} color={COLORS.textSecondary} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {selectedPrato ? (
+              /* Add item detail view */
+              <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+                {selectedPrato.imagem_url ? (
+                  <View style={{ height: 180, borderRadius: 16, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                    <Image source={resolveImageSource(selectedPrato.imagem_url)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  </View>
+                ) : (
+                  <View style={{ height: 100, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <UtensilsCrossed size={32} color={COLORS.textTertiary} />
+                  </View>
+                )}
+
+                {selectedPrato.descricao ? (
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 }}>{selectedPrato.descricao}</Text>
+                ) : null}
+
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Preço unitário</Text>
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>{formatCurrency(selectedPrato.preco)}</Text>
+                </View>
+
+                {/* Quantity */}
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Quantidade</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 16, alignSelf: "flex-start", backgroundColor: COLORS.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                    <AnimatedPressable
+                      onPress={() => { console.log("[Comanda] Diminuir quantidade"); setQuantidade((q) => Math.max(1, q - 1)); }}
+                      style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Minus size={16} color={COLORS.text} />
+                    </AnimatedPressable>
+                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: COLORS.text, minWidth: 32, textAlign: "center" }}>{quantidade}</Text>
+                    <AnimatedPressable
+                      onPress={() => { console.log("[Comanda] Aumentar quantidade"); setQuantidade((q) => q + 1); }}
+                      style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Plus size={16} color={COLORS.primary} />
+                    </AnimatedPressable>
+                  </View>
+                </View>
+
+                {/* Observation */}
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Observação (opcional)</Text>
+                  <TextInput
+                    value={observacao}
+                    onChangeText={setObservacao}
+                    placeholder="Ex: sem cebola, bem passado..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    numberOfLines={2}
+                    style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 12, fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text, minHeight: 64, textAlignVertical: "top" }}
+                  />
+                </View>
+
+                <AnimatedPressable
+                  onPress={handleAdicionarPedido}
+                  disabled={adicionando}
+                  style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20 }}
+                >
+                  {adicionando ? (
+                    <ActivityIndicator color="#fff" style={{ flex: 1 }} />
+                  ) : (
+                    <>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Adicionar ao pedido</Text>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "rgba(255,255,255,0.85)" }}>{selectedPratoPrice}</Text>
+                    </>
+                  )}
+                </AnimatedPressable>
+              </ScrollView>
+            ) : (
+              /* Pratos list */
+              pratosLoading ? (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>
+                  <ActivityIndicator color={COLORS.primary} size="large" />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, marginTop: 12 }}>Carregando cardápio...</Text>
+                </View>
+              ) : pratos.length === 0 ? (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 12 }}>
+                  <UtensilsCrossed size={36} color={COLORS.textTertiary} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>Nenhum prato disponível</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={pratos}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ padding: 12, paddingBottom: 32, gap: 10 }}
+                  renderItem={({ item }) => {
+                    const pratoPrice = formatCurrency(item.preco);
+                    const imgSource = resolveImageSource(item.imagem_url);
+                    return (
+                      <AnimatedPressable
+                        onPress={() => handleSelectPrato(item)}
+                        style={{ backgroundColor: COLORS.surface, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, flexDirection: "row", overflow: "hidden" }}
+                      >
+                        <View style={{ width: 80, height: 80, backgroundColor: COLORS.surfaceSecondary }}>
+                          {item.imagem_url ? (
+                            <Image source={imgSource} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                          ) : (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                              <UtensilsCrossed size={22} color={COLORS.textTertiary} />
+                            </View>
+                          )}
+                        </View>
+                        <View style={{ flex: 1, padding: 12, justifyContent: "space-between" }}>
+                          <View>
+                            <Text numberOfLines={1} style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{item.nome}</Text>
+                            {item.descricao ? (
+                              <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.descricao}</Text>
+                            ) : null}
+                          </View>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>{pratoPrice}</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.primaryMuted, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                              <Plus size={12} color={COLORS.primary} />
+                              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: COLORS.primary }}>Adicionar</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </AnimatedPressable>
+                    );
+                  }}
+                />
+              )
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

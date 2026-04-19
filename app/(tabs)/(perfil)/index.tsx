@@ -40,7 +40,7 @@ export default function PerfilScreen() {
   }, [fadeAnim, slideAnim]);
 
   const role = ((user as any)?.role as UserRole) || "garcom";
-  const name = (user as any)?.name || user?.email || "Usuário";
+  const name = user?.nome || (user as any)?.name || user?.email || "Usuário";
   const email = user?.email || "";
   const initials = getInitials(name);
   const roleLabel = getRoleLabel(role);

@@ -6,6 +6,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -14,7 +17,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { apiGet, apiPost } from "@/utils/api";
-import { Users, ChevronDown, Lock } from "lucide-react-native";
+import { Users, ChevronDown, Lock, Check } from "lucide-react-native";
 
 interface ApiMesa {
   id: string;
@@ -36,7 +39,7 @@ function isDisponivel(status: string): boolean {
 }
 
 function getGarcomName(g: ApiGarcom): string {
-  return g.name || g.nome || g.email || "";
+  return g.nome || g.name || g.email || "";
 }
 
 export default function NovaComandaScreen() {
@@ -47,7 +50,6 @@ export default function NovaComandaScreen() {
 
   const isGarcom = (user as any)?.role === "garcom";
   const hasMesaParam = !!params.mesa_id;
-  // When garçom opens from a mesa card, lock the form
   const isLockedMode = isGarcom && hasMesaParam;
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
@@ -55,7 +57,7 @@ export default function NovaComandaScreen() {
   const [selectedMesaId, setSelectedMesaId] = useState<string>(params.mesa_id ?? "");
   const [selectedGarcomId, setSelectedGarcomId] = useState<string>((user as any)?.id ?? "");
   const [showMesaPicker, setShowMesaPicker] = useState(false);
-  const [showGarcomPicker, setShowGarcomPicker] = useState(false);
+  const [showGarcomModal, setShowGarcomModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -72,11 +74,17 @@ export default function NovaComandaScreen() {
       console.log("[NovaComanda] Encontradas", livres.length, "mesas disponíveis");
       setMesas(livres);
 
-      const garcomList: ApiGarcom[] = Array.isArray(garConsRes)
+      const rawList = Array.isArray(garConsRes)
         ? garConsRes
         : (garConsRes.garcons || garConsRes.usuarios || garConsRes.users || []);
+      const garcomList: ApiGarcom[] = rawList;
       console.log("[NovaComanda] Encontrados", garcomList.length, "garçons");
       setGarcons(garcomList);
+
+      // If current user not in list, pre-select them anyway by ID
+      if (user && !(garcomList as ApiGarcom[]).find((g) => g.id === (user as any).id)) {
+        console.log("[NovaComanda] Usuário atual não está na lista de garçons, mantendo seleção pelo ID");
+      }
     } catch (e) {
       console.error("[NovaComanda] Erro ao carregar dados:", e);
     } finally {
@@ -87,7 +95,6 @@ export default function NovaComandaScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // In locked mode, ensure garçom is always set to current user
   useEffect(() => {
     if (isLockedMode && user) {
       setSelectedGarcomId((user as any).id ?? "");
@@ -97,8 +104,11 @@ export default function NovaComandaScreen() {
   const selectedMesa = mesas.find((m) => m.id === selectedMesaId);
   const selectedGarcom = garcons.find((g) => g.id === selectedGarcomId);
 
-  // Derive current user display name
-  const currentUserName = (user as any)?.name || (user as any)?.nome || (user as any)?.email || "Você";
+  // Display name for selected garçom — fall back to current user name if not in list
+  const currentUserName = user?.nome || (user as any)?.name || (user as any)?.email || "Você";
+  const selectedGarcomDisplay = selectedGarcom
+    ? getGarcomName(selectedGarcom)
+    : (selectedGarcomId === (user as any)?.id ? currentUserName : "Selecionar garçom");
 
   const handleSubmit = async () => {
     if (!selectedMesaId) { setError("Selecione uma mesa."); return; }
@@ -196,7 +206,7 @@ export default function NovaComandaScreen() {
             keyboardShouldPersistTaps="handled"
           >
 
-            {/* Mesa — read-only in locked mode */}
+            {/* Mesa */}
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>Mesa</Text>
 
@@ -227,7 +237,7 @@ export default function NovaComandaScreen() {
               ) : (
                 <>
                   <AnimatedPressable
-                    onPress={() => { console.log("[NovaComanda] Seletor de mesa alternado"); setShowMesaPicker((v) => !v); setShowGarcomPicker(false); }}
+                    onPress={() => { console.log("[NovaComanda] Seletor de mesa alternado"); setShowMesaPicker((v) => !v); }}
                     style={inputStyle}
                   >
                     <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedMesa ? COLORS.text : COLORS.textTertiary }}>
@@ -251,13 +261,14 @@ export default function NovaComandaScreen() {
                             <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
                               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>{mesa.numero}</Text>
                             </View>
-                            <View>
+                            <View style={{ flex: 1 }}>
                               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Mesa {mesa.numero}</Text>
                               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                                 <Users size={11} color={COLORS.textSecondary} />
                                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{mesa.capacidade} lugares</Text>
                               </View>
                             </View>
+                            {selectedMesaId === mesa.id && <Check size={16} color={COLORS.primary} />}
                           </AnimatedPressable>
                         ))
                       )}
@@ -267,7 +278,7 @@ export default function NovaComandaScreen() {
               )}
             </View>
 
-            {/* Garçom — read-only in locked mode */}
+            {/* Garçom */}
             <View style={{ gap: 8 }}>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>Garçom responsável</Text>
 
@@ -279,37 +290,15 @@ export default function NovaComandaScreen() {
                   <Lock size={14} color={COLORS.textTertiary} />
                 </View>
               ) : (
-                <>
-                  <AnimatedPressable
-                    onPress={() => { console.log("[NovaComanda] Seletor de garçom alternado"); setShowGarcomPicker((v) => !v); setShowMesaPicker(false); }}
-                    style={inputStyle}
-                  >
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedGarcom ? COLORS.text : COLORS.textTertiary }}>
-                      {selectedGarcom ? getGarcomName(selectedGarcom) : "Selecionar garçom"}
-                    </Text>
-                    <ChevronDown size={16} color={COLORS.textSecondary} />
-                  </AnimatedPressable>
-                  {showGarcomPicker && (
-                    <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
-                      {garcons.length === 0 ? (
-                        <View style={{ padding: 16 }}>
-                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhum garçom disponível</Text>
-                        </View>
-                      ) : (
-                        garcons.map((g) => (
-                          <AnimatedPressable
-                            key={g.id}
-                            onPress={() => { console.log("[NovaComanda] Garçom selecionado:", getGarcomName(g)); setSelectedGarcomId(g.id); setShowGarcomPicker(false); }}
-                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: selectedGarcomId === g.id ? COLORS.primaryMuted : "transparent" }}
-                          >
-                            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{getGarcomName(g)}</Text>
-                            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{g.email}</Text>
-                          </AnimatedPressable>
-                        ))
-                      )}
-                    </View>
-                  )}
-                </>
+                <AnimatedPressable
+                  onPress={() => { console.log("[NovaComanda] Abrir modal de garçons"); setShowGarcomModal(true); }}
+                  style={inputStyle}
+                >
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedGarcomId ? COLORS.text : COLORS.textTertiary }}>
+                    {selectedGarcomDisplay}
+                  </Text>
+                  <ChevronDown size={16} color={COLORS.textSecondary} />
+                </AnimatedPressable>
               )}
             </View>
 
@@ -331,6 +320,88 @@ export default function NovaComandaScreen() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+
+      {/* Garçom picker Modal */}
+      <Modal
+        visible={showGarcomModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { console.log("[NovaComanda] Modal garçom fechado"); setShowGarcomModal(false); }}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "70%" }}>
+            {/* Modal header */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text }}>Selecionar Garçom</Text>
+              <TouchableOpacity
+                onPress={() => { console.log("[NovaComanda] Fechar modal garçom"); setShowGarcomModal(false); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {garcons.length === 0 ? (
+              <View style={{ padding: 40, alignItems: "center", gap: 12 }}>
+                <Users size={32} color={COLORS.textTertiary} />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>Nenhum garçom encontrado</Text>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+                  Verifique se há garçons cadastrados no sistema.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={garcons}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 12, paddingBottom: 32, gap: 8 }}
+                renderItem={({ item }) => {
+                  const isSelected = selectedGarcomId === item.id;
+                  const garcomDisplayName = getGarcomName(item);
+                  const isCurrentUser = item.id === (user as any)?.id;
+                  return (
+                    <AnimatedPressable
+                      onPress={() => {
+                        console.log("[NovaComanda] Garçom selecionado:", garcomDisplayName);
+                        setSelectedGarcomId(item.id);
+                        setShowGarcomModal(false);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: 14,
+                        borderRadius: 12,
+                        backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
+                        borderWidth: 1,
+                        borderColor: isSelected ? COLORS.primary + "40" : COLORS.border,
+                      }}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isSelected ? COLORS.primary : COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: isSelected ? "#fff" : COLORS.textSecondary }}>
+                          {garcomDisplayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>{garcomDisplayName}</Text>
+                          {isCurrentUser && (
+                            <View style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: COLORS.primary }}>Você</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>{item.email}</Text>
+                      </View>
+                      {isSelected && <Check size={18} color={COLORS.primary} />}
+                    </AnimatedPressable>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

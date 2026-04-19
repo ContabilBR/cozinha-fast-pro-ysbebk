@@ -306,8 +306,8 @@ export default function EditarPratoScreen() {
           <FormField label="Foto do prato (câmera/galeria)">
             <View style={{ gap: 10 }}>
               {localImageUri ? (
-                <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                  <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                  <Image source={{ uri: localImageUri }} style={{ width: "100%", height: 200 }} contentFit="cover" />
                   <AnimatedPressable
                     onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); }}
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
@@ -319,8 +319,8 @@ export default function EditarPratoScreen() {
                   </View>
                 </View>
               ) : (
-                <View style={{ height: 80, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <UtensilsCrossed size={22} color={COLORS.textTertiary} />
+                <View style={{ width: "100%", height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Nenhuma foto selecionada</Text>
                 </View>
               )}
