@@ -69,41 +69,13 @@ export function registerOrderRoutes(app: App) {
 
       try {
         const userRole = session.profile?.role || session.user?.role;
-        app.logger.info({ status: request.query.status, userRole }, "Listing comandas");
+        const authUserId = session.userId;
+        const authUserEmail = session.user.email;
 
-        // If user is a garcom, filter by their comandas using broad OR strategy
-        let whereClause: any = undefined;
-        if (userRole === "garcom") {
-          const authUserId = session.userId;
-          const authUserEmail = session.user.email;
-
-          // Look up usuarios by email for filtering
-          const usuarioRecords = await app.db
-            .select()
-            .from(schema.usuarios)
-            .where(eq(schema.usuarios.email, authUserEmail))
-            .limit(1);
-
-          const usuarioId = usuarioRecords.length > 0 ? usuarioRecords[0].id : null;
-
-          app.logger.debug(
-            {
-              auth_user_id: authUserId,
-              auth_user_email: authUserEmail,
-              usuarios_id: usuarioId || null,
-            },
-            "Garcom filter for comandas"
-          );
-
-          // Build broad OR filter for garcom_id
-          const whereConditions = [];
-          whereConditions.push(eq(schema.comandas.garcomId, authUserId));
-          if (usuarioId) {
-            whereConditions.push(eq(schema.comandas.garcomId, usuarioId));
-          }
-
-          whereClause = whereConditions.length > 1 ? or(...whereConditions) : whereConditions[0];
-        }
+        app.logger.info(
+          { status: request.query.status, userRole, authUserId, authUserEmail },
+          "Listing comandas"
+        );
 
         // Build and execute query with optional garcom filter
         let baseQuery = app.db
@@ -118,9 +90,43 @@ export function registerOrderRoutes(app: App) {
           .from(schema.comandas)
           .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id));
 
-        const allComandas = whereClause
-          ? await baseQuery.where(whereClause)
-          : await baseQuery;
+        // If user is a garcom, filter by their comandas using broad OR strategy
+        let allComandas: any[];
+        if (userRole === "garcom") {
+          // Build broad OR filter to handle stale garcom_id values across deploys
+          // Check: auth user id, usuarios id (if exists), or better auth user id with same email
+          const whereConditions = [
+            eq(schema.comandas.garcomId, authUserId),
+          ];
+
+          // Also check for any usuarios.id (uuid cast to text) with same email
+          const usuarioRecords = await app.db
+            .select({ id: schema.usuarios.id })
+            .from(schema.usuarios)
+            .where(eq(schema.usuarios.email, authUserEmail));
+
+          for (const usuario of usuarioRecords) {
+            whereConditions.push(eq(schema.comandas.garcomId, usuario.id));
+          }
+
+          app.logger.debug(
+            {
+              authUserId,
+              authUserEmail,
+              usuarioIds: usuarioRecords.map(u => u.id),
+              conditionCount: whereConditions.length,
+            },
+            "Garcom filter - checking multiple id sources"
+          );
+
+          const whereClause = whereConditions.length > 1 ? or(...whereConditions) : whereConditions[0];
+          allComandas = await baseQuery.where(whereClause);
+        } else {
+          // Non-garcom users (admin, cozinheiro, etc.) see all comandas
+          allComandas = await baseQuery;
+        }
+
+        app.logger.debug({ comandasCount: allComandas.length }, "Comandas retrieved");
 
         // Filter by status if provided
         const comandas = request.query.status
@@ -221,19 +227,16 @@ export function registerOrderRoutes(app: App) {
 
         const mesa = mesaRecords[0];
 
-        // Resolve garcom_id: lookup usuarios by email
-        const resolution = await resolveGarcomId(app, session.user.email, session.userId);
-        const { garcomId } = resolution;
+        // Store garcom_id as the authenticated user's Better Auth id (text, stable across deploys)
+        const garcomId = session.userId;
 
         app.logger.info(
           {
             mesaId,
             garcomId,
-            authUserId: session.userId,
             authUserEmail: session.user.email,
-            usuarioId: resolution.usuarioId,
           },
-          "Creating comanda with resolved garcom_id"
+          "Creating comanda with auth user id as garcom_id"
         );
 
         const [comanda] = await app.db
