@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, SafeAreaView } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -83,7 +84,7 @@ export default function PedidoDetailScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
@@ -91,17 +92,16 @@ export default function PedidoDetailScreen() {
         height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
-        <TouchableOpacity
+        <Pressable
           onPress={() => { console.log("[PedidoDetail] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+          style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
         >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
+          <Ionicons name="arrow-back" size={22} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+        </Pressable>
         <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
           {navTitle}
         </Text>

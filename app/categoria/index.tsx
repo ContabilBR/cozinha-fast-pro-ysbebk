@@ -9,8 +9,8 @@ import {
   Modal,
   Alert,
   TouchableOpacity,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -142,7 +142,7 @@ export default function CategoriasScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
       <View style={{
         flexDirection: "row",
@@ -150,8 +150,8 @@ export default function CategoriasScreen() {
         height: 56,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#e0e0e0",
-        backgroundColor: "#fff",
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
       }}>
         <TouchableOpacity
           onPress={() => { console.log("[Categorias] Botão voltar pressionado"); router.back(); }}

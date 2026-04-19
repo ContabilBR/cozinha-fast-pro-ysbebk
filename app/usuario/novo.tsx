@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -98,13 +99,13 @@ export default function NovoUsuarioScreen() {
           borderBottomColor: COLORS.border,
           backgroundColor: COLORS.surface,
         }}>
-          <AnimatedPressable
+          <Pressable
             onPress={() => { console.log("[NovoUsuario] Botão voltar pressionado"); router.back(); }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingRight: 12 }}
           >
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </AnimatedPressable>
+            <Ionicons name="arrow-back" size={22} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          </Pressable>
           <Text style={{
             position: "absolute",
             left: 0,

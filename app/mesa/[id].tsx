@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -96,14 +96,13 @@ export default function MesaDetailScreen() {
         borderBottomColor: COLORS.border,
         backgroundColor: COLORS.surface,
       }}>
-        <TouchableOpacity
+        <Pressable
           onPress={() => { console.log("[Mesa] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+          style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
         >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
+          <Ionicons name="arrow-back" size={22} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+        </Pressable>
         <Text style={{
           position: "absolute",
           left: 0,

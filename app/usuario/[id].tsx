@@ -8,6 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -129,10 +130,10 @@ export default function EditarUsuarioScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
         <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
-          <AnimatedPressable onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingRight: 8 }}>
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </AnimatedPressable>
+          <Pressable onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado (loading)"); router.back(); }} style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}>
+            <Ionicons name="arrow-back" size={22} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          </Pressable>
           <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: COLORS.text, height: 56, lineHeight: 56 }}>Editar Usuário</Text>
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -158,13 +159,13 @@ export default function EditarUsuarioScreen() {
           borderBottomColor: COLORS.border,
           backgroundColor: COLORS.surface,
         }}>
-          <AnimatedPressable
+          <Pressable
             onPress={() => { console.log("[EditarUsuario] Botão voltar pressionado"); router.back(); }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingRight: 12 }}
           >
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </AnimatedPressable>
+            <Ionicons name="arrow-back" size={22} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          </Pressable>
           <Text style={{
             position: "absolute",
             left: 0,

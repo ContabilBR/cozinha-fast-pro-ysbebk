@@ -6,9 +6,9 @@ import {
   TextInput,
   ActivityIndicator,
   FlatList,
-  TouchableOpacity,
-  SafeAreaView,
+  Pressable,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -140,16 +140,15 @@ export default function NovoPedidoScreen() {
 
   if (step === "review") {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
-          <TouchableOpacity
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+        <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
+          <Pressable
             onPress={() => { console.log("[NovoPedido] Voltar para browse"); setStep("browse"); }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+            style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
           >
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </TouchableOpacity>
+            <Ionicons name="arrow-back" size={22} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+          </Pressable>
           <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
             Revisar Pedido
           </Text>
@@ -215,17 +214,16 @@ export default function NovoPedidoScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
-      <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#fff" }}>
-        <TouchableOpacity
+      <View style={{ flexDirection: "row", alignItems: "center", height: 56, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface }}>
+        <Pressable
           onPress={() => { console.log("[NovoPedido] Botão voltar pressionado"); router.back(); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
+          style={{ flexDirection: "row", alignItems: "center", paddingRight: 12 }}
         >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </TouchableOpacity>
+          <Ionicons name="arrow-back" size={22} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 16, marginLeft: 4 }}>Voltar</Text>
+        </Pressable>
         <Text style={{ position: "absolute", left: 0, right: 0, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#111" }}>
           Novo Pedido
         </Text>
