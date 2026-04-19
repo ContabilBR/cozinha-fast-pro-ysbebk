@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -104,7 +105,13 @@ export default function GestaoPratos() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useFocusEffect(
+    useCallback(() => {
+      console.log("[GestaoPratos] Tela focada — recarregando pratos");
+      setLoading(true);
+      fetchData();
+    }, [fetchData])
+  );
 
   const handleRefresh = () => {
     console.log("[GestaoPratos] Refresh manual");

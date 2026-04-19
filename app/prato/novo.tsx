@@ -258,7 +258,7 @@ export default function NovoPratoScreen() {
           <FormField label="URL da imagem">
             <TextInput
               value={imagemUrl}
-              onChangeText={(t) => { console.log("[NovoPrato] imagem_url alterada"); setImagemUrl(t); }}
+              onChangeText={(t) => { console.log("[NovoPrato] imagem_url alterada"); setImagemUrl(t); setLocalImageUri(null); }}
               placeholder="https://exemplo.com/imagem.jpg"
               placeholderTextColor={COLORS.textTertiary}
               autoCapitalize="none"
@@ -266,8 +266,14 @@ export default function NovoPratoScreen() {
               style={inputStyle}
             />
             {imagemUrl.trim() && !localImageUri ? (
-              <View style={{ height: 160, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
+              <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
                 <Image source={resolveImageSource(imagemUrl)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                <AnimatedPressable
+                  onPress={() => { console.log("[NovoPrato] Remover URL pressionado"); setImagemUrl(""); }}
+                  style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Ionicons name="close" size={16} color="#fff" />
+                </AnimatedPressable>
               </View>
             ) : null}
           </FormField>
@@ -276,7 +282,7 @@ export default function NovoPratoScreen() {
             <View style={{ gap: 10 }}>
               {localImageUri ? (
                 <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                  <Image source={{ uri: localImageUri }} style={{ width: "100%", height: 200 }} contentFit="cover" />
+                  <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: 200 }} contentFit="cover" />
                   <AnimatedPressable
                     onPress={() => { console.log("[NovoPrato] Remover foto pressionado"); setLocalImageUri(null); }}
                     style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
@@ -287,10 +293,10 @@ export default function NovoPratoScreen() {
                     <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
                   </View>
                 </View>
-              ) : (
-                <View style={{ width: "100%", height: 120, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
+              ) : imagemUrl.trim() ? null : (
+                <View style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
                   <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Nenhuma foto selecionada</Text>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Sem imagem</Text>
                 </View>
               )}
               <View style={{ flexDirection: "row", gap: 10 }}>
