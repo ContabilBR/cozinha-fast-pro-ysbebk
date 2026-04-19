@@ -380,14 +380,42 @@ export function registerGarconRoutes(app: App) {
       const session = await customRequireAuth(app, request, reply);
       if (!session) return;
 
-      app.logger.info({ userId: session.userId, email: session.user.email }, "Fetching pedidos for garcom");
-
-      let garcomId: string = "";
+      const authUserId = session.userId;
+      const authUserEmail = session.user.email;
 
       try {
-        // Use unified garcom_id resolution
-        const resolution = await resolveGarcomId(app, session.user.email, session.userId);
-        garcomId = resolution.garcomId;
+        // Look up usuarios by email for broad OR filtering
+        const usuarioRecords = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.email, authUserEmail))
+          .limit(1);
+
+        const usuarioId = usuarioRecords.length > 0 ? usuarioRecords[0].id : null;
+
+        app.logger.debug(
+          {
+            auth_user_id: authUserId,
+            auth_user_email: authUserEmail,
+            usuarios_id: usuarioId || null,
+          },
+          "Garcom resolution for pedidos query"
+        );
+
+        // Build broad OR filter for garcom_id
+        const whereConditions = [];
+
+        // Always check against auth user ID
+        whereConditions.push(eq(schema.comandas.garcomId, authUserId));
+
+        // If usuario found, also check against usuarios.id (cast to text)
+        if (usuarioId) {
+          whereConditions.push(eq(schema.comandas.garcomId, usuarioId));
+        }
+
+        const whereClause = whereConditions.length > 1
+          ? or(...whereConditions)
+          : whereConditions[0];
 
         // Query all pedidos for this garcom's comandas
         const pedidosData = await app.db
@@ -406,10 +434,13 @@ export function registerGarconRoutes(app: App) {
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
           .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-          .where(eq(schema.comandas.garcomId, garcomId))
+          .where(whereClause)
           .orderBy(schema.pedidos.createdAt);
 
-        app.logger.debug({ garcomId, pedidosCount: pedidosData.length }, "Pedidos fetched from database");
+        app.logger.info(
+          { authUserId, authUserEmail, usuarioId, comandasCount: new Set(pedidosData.map(p => p.comandaId)).size },
+          "Pedidos fetched for garcom"
+        );
 
         // Group by comanda and compute earliest created_at per comanda
         const comandasMap = new Map<
@@ -468,11 +499,11 @@ export function registerGarconRoutes(app: App) {
               })),
           }));
 
-        app.logger.info({ garcomId, comandasCount: comandas.length }, "Pedidos fetched successfully");
+        app.logger.info({ authUserId, usuarioId, comandasCount: comandas.length }, "Pedidos fetched successfully");
 
         return comandas;
       } catch (error) {
-        app.logger.error({ err: error, garcomId }, "Failed to fetch pedidos for garcom");
+        app.logger.error({ err: error, authUserId }, "Failed to fetch pedidos for garcom");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

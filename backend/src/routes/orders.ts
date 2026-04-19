@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, sql, inArray } from "drizzle-orm";
+import { eq, sql, inArray, or } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -68,19 +68,59 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
-        app.logger.info({ status: request.query.status }, "Listing comandas");
+        const userRole = session.profile?.role || session.user?.role;
+        app.logger.info({ status: request.query.status, userRole }, "Listing comandas");
 
-        // Get all comandas
-        const allComandas = await app.db
+        // If user is a garcom, filter by their comandas using broad OR strategy
+        let whereClause: any = undefined;
+        if (userRole === "garcom") {
+          const authUserId = session.userId;
+          const authUserEmail = session.user.email;
+
+          // Look up usuarios by email for filtering
+          const usuarioRecords = await app.db
+            .select()
+            .from(schema.usuarios)
+            .where(eq(schema.usuarios.email, authUserEmail))
+            .limit(1);
+
+          const usuarioId = usuarioRecords.length > 0 ? usuarioRecords[0].id : null;
+
+          app.logger.debug(
+            {
+              auth_user_id: authUserId,
+              auth_user_email: authUserEmail,
+              usuarios_id: usuarioId || null,
+            },
+            "Garcom filter for comandas"
+          );
+
+          // Build broad OR filter for garcom_id
+          const whereConditions = [];
+          whereConditions.push(eq(schema.comandas.garcomId, authUserId));
+          if (usuarioId) {
+            whereConditions.push(eq(schema.comandas.garcomId, usuarioId));
+          }
+
+          whereClause = whereConditions.length > 1 ? or(...whereConditions) : whereConditions[0];
+        }
+
+        // Build and execute query with optional garcom filter
+        let baseQuery = app.db
           .select({
             id: schema.comandas.id,
             numero: schema.mesas.numero,
             status: schema.comandas.status,
             total: schema.comandas.total,
             createdAt: schema.comandas.createdAt,
+            garcomId: schema.comandas.garcomId,
           })
           .from(schema.comandas)
           .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id));
+
+        const allComandas = whereClause
+          ? await baseQuery.where(whereClause)
+          : await baseQuery;
 
         // Filter by status if provided
         const comandas = request.query.status
@@ -182,9 +222,19 @@ export function registerOrderRoutes(app: App) {
         const mesa = mesaRecords[0];
 
         // Resolve garcom_id: lookup usuarios by email
-        const { garcomId } = await resolveGarcomId(app, session.user.email, session.userId);
+        const resolution = await resolveGarcomId(app, session.user.email, session.userId);
+        const { garcomId } = resolution;
 
-        app.logger.info({ mesaId, garcomId }, "Creating comanda");
+        app.logger.info(
+          {
+            mesaId,
+            garcomId,
+            authUserId: session.userId,
+            authUserEmail: session.user.email,
+            usuarioId: resolution.usuarioId,
+          },
+          "Creating comanda with resolved garcom_id"
+        );
 
         const [comanda] = await app.db
           .insert(schema.comandas)
