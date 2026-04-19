@@ -1432,6 +1432,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
+  // ==================== Usuarios Garcons ====================
+  test("List all usuarios with role='garcom'", async () => {
+    const res = await authenticatedApi("/api/usuarios/garcons", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+    // Verify all returned items have role='garcom'
+    data.forEach((usuario: any) => {
+      expect(usuario.role).toBe("garcom");
+    });
+  });
+
+  test("List garcons without authentication returns 401", async () => {
+    const res = await api("/api/usuarios/garcons");
+    await expectStatus(res, 401);
+  });
+
   // ==================== Garcons CRUD ====================
   const garcomEmail = `garcom-${Date.now()}@example.com`;
 
@@ -1600,6 +1617,27 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 403);
+  });
+
+  // ==================== Garcom Pedidos ====================
+  test("Get authenticated garcom's pedidos", async () => {
+    const res = await authenticatedApi("/api/garcom/pedidos", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+    // Verify response structure
+    data.forEach((item: any) => {
+      expect(item.numero_sequencial).toBeDefined();
+      expect(item.comanda_id).toBeDefined();
+      expect(item.mesa_numero).toBeDefined();
+      expect(item.created_at).toBeDefined();
+      expect(Array.isArray(item.itens)).toBe(true);
+    });
+  });
+
+  test("Get garcom pedidos without authentication returns 401", async () => {
+    const res = await api("/api/garcom/pedidos");
+    await expectStatus(res, 401);
   });
 
   // ==================== Relatorios ====================

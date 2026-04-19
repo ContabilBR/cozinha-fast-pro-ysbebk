@@ -336,4 +336,139 @@ export function registerGarconRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/garcom/pedidos - Get all pedidos for authenticated garcom's comandas
+  app.fastify.get(
+    "/api/garcom/pedidos",
+    {
+      schema: {
+        description: "Get all pedidos (order items) for the authenticated garcom's comandas",
+        tags: ["garcom"],
+        response: {
+          200: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                numero_sequencial: { type: "number" },
+                comanda_id: { type: "string", format: "uuid" },
+                mesa_numero: { type: "number" },
+                created_at: { type: "string", format: "date-time" },
+                itens: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string", format: "uuid" },
+                      prato_nome: { type: "string" },
+                      quantidade: { type: "number" },
+                      observacao: { type: ["string", "null"] },
+                      status: { type: "string" },
+                      created_at: { type: "string", format: "date-time" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      const garcomId = session.userId;
+      app.logger.info({ garcomId }, "Fetching pedidos for garcom");
+
+      try {
+        // Query all pedidos for this garcom's comandas
+        const pedidosData = await app.db
+          .select({
+            pedidoId: schema.pedidos.id,
+            pratoNome: schema.pratos.nome,
+            quantidade: schema.pedidos.quantidade,
+            observacao: schema.pedidos.observacao,
+            pedidoStatus: schema.pedidos.status,
+            pedidoCriadoEm: schema.pedidos.createdAt,
+            comandaId: schema.comandas.id,
+            mesaNumero: schema.mesas.numero,
+            comandaCriadoEm: schema.comandas.createdAt,
+          })
+          .from(schema.pedidos)
+          .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+          .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
+          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+          .where(eq(schema.comandas.garcomId, garcomId))
+          .orderBy(schema.pedidos.createdAt);
+
+        app.logger.debug({ pedidosCount: pedidosData.length }, "Pedidos fetched from database");
+
+        // Group by comanda and compute earliest created_at per comanda
+        const comandasMap = new Map<
+          string,
+          {
+            comanda_id: string;
+            mesa_numero: number;
+            created_at: Date;
+            itens: Array<any>;
+          }
+        >();
+
+        for (const pedido of pedidosData) {
+          if (!comandasMap.has(pedido.comandaId)) {
+            comandasMap.set(pedido.comandaId, {
+              comanda_id: pedido.comandaId,
+              mesa_numero: pedido.mesaNumero,
+              created_at: pedido.comandaCriadoEm,
+              itens: [],
+            });
+          }
+
+          const comanda = comandasMap.get(pedido.comandaId)!;
+          comanda.itens.push({
+            id: pedido.pedidoId,
+            prato_nome: pedido.pratoNome || "Prato não encontrado",
+            quantidade: pedido.quantidade,
+            observacao: pedido.observacao,
+            status: pedido.pedidoStatus,
+            created_at: pedido.pedidoCriadoEm,
+          });
+
+          // Update created_at to be the earliest pedido created_at for this comanda
+          if (pedido.pedidoCriadoEm < comanda.created_at) {
+            comanda.created_at = pedido.pedidoCriadoEm;
+          }
+        }
+
+        // Convert to array, sort by earliest created_at, and assign sequential numbers
+        const comandas = Array.from(comandasMap.values())
+          .sort((a, b) => a.created_at.getTime() - b.created_at.getTime())
+          .map((comanda, index) => ({
+            numero_sequencial: index + 1,
+            comanda_id: comanda.comanda_id,
+            mesa_numero: comanda.mesa_numero,
+            created_at: comanda.created_at.toISOString(),
+            itens: comanda.itens
+              .sort((a, b) => a.created_at.getTime() - b.created_at.getTime())
+              .map((item) => ({
+                id: item.id,
+                prato_nome: item.prato_nome,
+                quantidade: item.quantidade,
+                observacao: item.observacao,
+                status: item.status,
+                created_at: item.created_at.toISOString(),
+              })),
+          }));
+
+        app.logger.info({ garcomId, comandasCount: comandas.length }, "Pedidos fetched successfully");
+
+        return comandas;
+      } catch (error) {
+        app.logger.error({ err: error, garcomId }, "Failed to fetch pedidos for garcom");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }
