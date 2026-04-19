@@ -3,29 +3,18 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as bcryptjs from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-
-// Get JWT secret from env or use fallback
-const JWT_SECRET = process.env.JWT_SECRET || 'cozinhafast_secret_2024';
-const JWT_EXPIRY = '7d'; // 7 days
+import { randomUUID } from 'crypto';
 
 interface LoginBody {
   email: string;
   senha: string;
 }
 
-interface JWTPayload {
-  id: string;
-  email: string;
-  role: string;
-  nome: string;
-}
-
 export function registerCustomAuthRoutes(app: App) {
-  // POST /api/login - Custom JWT login endpoint
+  // POST /api/login - Custom session login endpoint
   app.fastify.post<{ Body: LoginBody }>('/api/login', {
     schema: {
-      description: 'Login with email and senha (password) - returns JWT token',
+      description: 'Login with email and senha (password) - returns session token',
       tags: ['auth'],
       body: {
         type: 'object',
@@ -93,7 +82,7 @@ export function registerCustomAuthRoutes(app: App) {
 
       if (usuarios.length === 0) {
         app.logger.warn({ email: normalizedEmail }, 'User not found in usuarios table');
-        return reply.status(401).send({ error: 'Credenciais inválidas' });
+        return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
       const user = usuarios[0];
@@ -109,7 +98,7 @@ export function registerCustomAuthRoutes(app: App) {
       // Verify password hash exists
       if (!senhaHash) {
         app.logger.warn({ email: normalizedEmail }, 'User has no password hash');
-        return reply.status(401).send({ error: 'Credenciais inválidas' });
+        return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
       // Verify password
@@ -120,19 +109,23 @@ export function registerCustomAuthRoutes(app: App) {
 
       if (!passwordMatch) {
         app.logger.warn({ email: normalizedEmail }, 'Password mismatch');
-        return reply.status(401).send({ error: 'Credenciais inválidas' });
+        return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
-      // Generate JWT token
-      const payload: JWTPayload = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        nome: user.nome,
-      };
+      // Create session token (uuid)
+      const token = randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-      app.logger.info({ userId: user.id, email: user.email }, 'JWT token generated successfully');
+      app.logger.debug({ userId: user.id, expiresAt }, 'Creating session with 30-day expiry');
+
+      // Create session record
+      await app.db.insert(schema.usuariosSession).values({
+        token,
+        userId: user.id.toString(),
+        expiresAt,
+      });
+
+      app.logger.info({ userId: user.id, email: user.email }, 'Session created successfully');
 
       return {
         token,
@@ -149,10 +142,10 @@ export function registerCustomAuthRoutes(app: App) {
     }
   });
 
-  // GET /api/me - Get current user from JWT token
+  // GET /api/me - Get current user from session token
   app.fastify.get<{}>('/api/me', {
     schema: {
-      description: 'Get current user profile from JWT token',
+      description: 'Get current user profile from session token',
       tags: ['auth'],
       response: {
         200: {
@@ -176,7 +169,7 @@ export function registerCustomAuthRoutes(app: App) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     app.logger.info('GET /api/me - Fetching current user profile');
     try {
-      // Verify JWT and attach user context to request
+      // Verify session token and attach user context to request
       const isAuthenticated = await verifyAndAttachUser(app, request, reply);
       if (!isAuthenticated) return;
 
@@ -262,17 +255,19 @@ export function registerCustomAuthRoutes(app: App) {
 }
 
 /**
- * Helper function to protect routes with JWT authentication.
- * Validates the Bearer token in Authorization header and attaches userId and role to request context.
+ * Helper function to protect routes with session token authentication.
+ * Validates the Bearer token in Authorization header against session table.
+ * Attaches userId and role to request context.
  * Should be called at the start of protected route handlers.
  *
+ * @param app - Application instance
  * @param request - Fastify request object
  * @param reply - Fastify reply object
  * @returns true if authentication succeeds, false if it fails (reply with 401 sent)
  *
  * Usage:
  * app.fastify.get('/api/protected', async (request, reply) => {
- *   if (!await verifyAndAttachUser(request, reply)) return;
+ *   if (!await verifyAndAttachUser(app, request, reply)) return;
  *   const userId = (request as any).userId;
  *   const role = (request as any).role;
  *   // ... route logic using userId and role
@@ -286,30 +281,67 @@ export async function verifyAndAttachUser(
   const authHeader = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    app.logger.warn('No Bearer token in Authorization header for protected route');
+    app.logger.warn({ authHeader: authHeader?.substring(0, 20) }, 'No Bearer token in Authorization header for protected route');
     reply.status(401).send({ error: 'Invalid or expired token' });
     return false;
   }
 
   const token = authHeader.substring(7);
+  app.logger.debug({ token: token.substring(0, 20) }, 'Validating bearer token');
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    // Look up session token in usuarios_session table
+    const sessions = await app.db
+      .select()
+      .from(schema.usuariosSession)
+      .where(eq(schema.usuariosSession.token, token))
+      .limit(1);
+
+    if (!sessions || sessions.length === 0) {
+      app.logger.warn({ token: token.substring(0, 20) }, 'Session token not found');
+      reply.status(401).send({ error: 'Invalid or expired token' });
+      return false;
+    }
+
+    const session = sessions[0];
+
+    // Check if session has expired
+    if (new Date(session.expiresAt) < new Date()) {
+      app.logger.warn({ sessionId: session.id, expiresAt: session.expiresAt }, 'Session expired');
+      reply.status(401).send({ error: 'Invalid or expired token' });
+      return false;
+    }
+
+    // Get user from usuarios table
+    const usuarios = await app.db
+      .select()
+      .from(schema.usuarios)
+      .where(eq(schema.usuarios.id, session.userId as any))
+      .limit(1);
+
+    if (!usuarios || usuarios.length === 0) {
+      app.logger.warn({ userId: session.userId }, 'User not found for session');
+      reply.status(401).send({ error: 'Invalid or expired token' });
+      return false;
+    }
+
+    const user = usuarios[0];
+
     // Attach user context to request for downstream handlers
-    (request as any).userId = payload.id;
-    (request as any).role = payload.role;
-    (request as any).userEmail = payload.email;
-    (request as any).userName = payload.nome;
+    (request as any).userId = user.id;
+    (request as any).role = user.role;
+    (request as any).userEmail = user.email;
+    (request as any).userName = user.nome;
 
     app.logger.debug(
-      { userId: payload.id, role: payload.role },
-      'JWT token validated and user context attached'
+      { userId: user.id, role: user.role },
+      'Session token validated and user context attached'
     );
     return true;
   } catch (err) {
-    app.logger.warn(
-      { error: (err as Error).message },
-      'JWT token verification failed for protected route'
+    app.logger.error(
+      { err, token: token.substring(0, 20) },
+      'Session token verification failed for protected route'
     );
     reply.status(401).send({ error: 'Invalid or expired token' });
     return false;
