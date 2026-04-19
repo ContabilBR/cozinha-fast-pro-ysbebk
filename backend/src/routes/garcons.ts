@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
@@ -380,9 +380,28 @@ export function registerGarconRoutes(app: App) {
       if (!session) return;
 
       const garcomId = session.userId;
-      app.logger.info({ garcomId }, "Fetching pedidos for garcom");
+      const garcomEmail = session.user.email;
+      app.logger.info({ garcomId, garcomEmail }, "Fetching pedidos for garcom");
 
       try {
+        // Look up the usuarios table to get the UUID if this user was created via custom auth
+        const usuarioRecords = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.email, garcomEmail))
+          .limit(1);
+
+        const usuarioId = usuarioRecords.length > 0 ? usuarioRecords[0].id : null;
+        app.logger.debug({ garcomId, usuarioId }, "Usuario lookup result");
+
+        // Build where clause with OR condition to match both user table and usuarios table IDs
+        const whereCondition = usuarioId
+          ? or(
+              eq(schema.comandas.garcomId, garcomId),
+              eq(schema.comandas.garcomId, usuarioId)
+            )
+          : eq(schema.comandas.garcomId, garcomId);
+
         // Query all pedidos for this garcom's comandas
         const pedidosData = await app.db
           .select({
@@ -400,7 +419,7 @@ export function registerGarconRoutes(app: App) {
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
           .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-          .where(eq(schema.comandas.garcomId, garcomId))
+          .where(whereCondition)
           .orderBy(schema.pedidos.createdAt);
 
         app.logger.debug({ pedidosCount: pedidosData.length }, "Pedidos fetched from database");
