@@ -181,15 +181,7 @@ export default function ComandasScreen() {
           borderBottomColor: COLORS.border,
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-              Comandas
-            </Text>
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-              {abertas.length} abertas
-            </Text>
-          </View>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Pressable
             onPress={() => {
               console.log("[Comandas] Botão Mesas pressionado — navegando para /(tabs)/(mesas)");
@@ -205,6 +197,7 @@ export default function ComandasScreen() {
               borderRadius: 10,
               paddingHorizontal: 12,
               paddingVertical: 7,
+              marginRight: 14,
             })}
           >
             <Ionicons name="arrow-back" size={16} color={COLORS.primary} />
@@ -212,6 +205,14 @@ export default function ComandasScreen() {
               Mesas
             </Text>
           </Pressable>
+          <View>
+            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+              Comandas
+            </Text>
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+              {abertas.length} abertas
+            </Text>
+          </View>
         </View>
       </View>
 
