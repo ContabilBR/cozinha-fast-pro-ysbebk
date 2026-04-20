@@ -79,47 +79,50 @@ export function registerOrderRoutes(app: App) {
           "Listing comandas for user"
         );
 
-        // Build where conditions
-        const whereConditions = [eq(schema.comandas.garcomId, authUserId)];
+        // Build SQL query with GROUP BY and COUNT
+        let sqlQuery = sql`
+          SELECT
+            c.id,
+            c.mesa_id,
+            c.garcom_id,
+            c.status,
+            c.total,
+            c.created_at,
+            c.closed_at,
+            m.numero AS mesa_numero,
+            m.capacidade AS mesa_capacidade,
+            COUNT(p.id)::integer AS item_count
+          FROM comandas c
+          LEFT JOIN mesas m ON c.mesa_id = m.id
+          LEFT JOIN pedidos p ON p.comanda_id = c.id
+          WHERE c.garcom_id = ${authUserId}
+        `;
+
         if (request.query.status) {
-          whereConditions.push(eq(schema.comandas.status, request.query.status as any));
+          sqlQuery = sql`${sqlQuery} AND c.status = ${request.query.status}`;
         }
 
-        // Combine conditions with AND
-        const whereClause = whereConditions.length > 1
-          ? and(...whereConditions)
-          : whereConditions[0];
+        sqlQuery = sql`${sqlQuery}
+          GROUP BY c.id, m.numero, m.capacidade
+          ORDER BY c.created_at DESC
+        `;
 
-        const comandas = await app.db
-          .select({
-            id: schema.comandas.id,
-            mesaId: schema.comandas.mesaId,
-            mesaNumero: schema.mesas.numero,
-            mesaStatus: schema.mesas.status,
-            garcomId: schema.comandas.garcomId,
-            status: schema.comandas.status,
-            total: schema.comandas.total,
-            createdAt: schema.comandas.createdAt,
-            closedAt: schema.comandas.closedAt,
-          })
-          .from(schema.comandas)
-          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
-          .where(whereClause)
-          .orderBy(schema.comandas.createdAt);
+        const comandas = await (app.db as any).execute(sqlQuery) as any[];
 
         app.logger.info({ count: comandas.length }, "Comandas retrieved");
 
         return reply.code(200).send({
-          comandas: comandas.map((c) => ({
+          comandas: comandas.map((c: any) => ({
             id: c.id,
-            mesa_id: c.mesaId,
-            mesa_numero: c.mesaNumero,
-            mesa_status: c.mesaStatus,
-            garcom_id: c.garcomId,
+            mesa_id: c.mesa_id,
+            mesa_numero: c.mesa_numero,
+            mesa_capacidade: c.mesa_capacidade,
+            garcom_id: c.garcom_id,
             status: c.status,
             total: c.total,
-            created_at: c.createdAt.toISOString(),
-            closed_at: c.closedAt ? c.closedAt.toISOString() : null,
+            created_at: c.created_at.toISOString(),
+            closed_at: c.closed_at ? c.closed_at.toISOString() : null,
+            item_count: c.item_count,
           })),
         });
       } catch (error) {

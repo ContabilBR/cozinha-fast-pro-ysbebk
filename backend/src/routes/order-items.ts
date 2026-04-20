@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth } from "../utils/auth.js";
@@ -74,20 +74,24 @@ export function registerOrderItemRoutes(app: App) {
             id: schema.pedidos.id,
             comandaId: schema.pedidos.comandaId,
             pratoId: schema.pedidos.pratoId,
-            pratoNome: schema.pratos.nome,
             quantidade: schema.pedidos.quantidade,
             precoUnitario: schema.pedidos.precoUnitario,
             observacao: schema.pedidos.observacao,
             status: schema.pedidos.status,
             createdAt: schema.pedidos.createdAt,
+            pratoNome: schema.pratos.nome,
+            pratoDescricao: schema.pratos.descricao,
+            pratoImagem: schema.pratos.imagemUrl,
             mesaNumero: schema.mesas.numero,
             comandaStatus: schema.comandas.status,
+            garcomId: schema.comandas.garcomId,
           })
           .from(schema.pedidos)
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
-          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
+          .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-          .where(eq(schema.comandas.garcomId, authUserId));
+          .where(eq(schema.comandas.garcomId, authUserId))
+          .orderBy(desc(schema.pedidos.createdAt));
 
         app.logger.info({ count: pedidos.length }, "Pedidos retrieved");
 
@@ -96,14 +100,17 @@ export function registerOrderItemRoutes(app: App) {
             id: p.id,
             comanda_id: p.comandaId,
             prato_id: p.pratoId,
-            prato_nome: p.pratoNome,
             quantidade: p.quantidade,
             preco_unitario: p.precoUnitario,
             observacao: p.observacao,
             status: p.status,
             created_at: p.createdAt.toISOString(),
+            prato_nome: p.pratoNome,
+            prato_descricao: p.pratoDescricao,
+            prato_imagem: p.pratoImagem,
             mesa_numero: p.mesaNumero,
             comanda_status: p.comandaStatus,
+            garcom_id: p.garcomId,
           })),
         });
       } catch (error) {
