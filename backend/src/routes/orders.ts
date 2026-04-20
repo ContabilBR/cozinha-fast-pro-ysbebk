@@ -733,4 +733,159 @@ export function registerOrderRoutes(app: App) {
       }
     }
   );
+
+  // DELETE /api/comandas/:id - Delete a comanda and all its pedidos
+  app.fastify.delete<{ Params: { id: string } }>(
+    "/api/comandas/:id",
+    {
+      schema: {
+        description: "Delete a comanda and all its pedidos",
+        tags: ["comandas"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          204: { description: "Comanda deleted successfully" },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      try {
+        app.logger.info({ comandaId: request.params.id }, "Deleting comanda");
+
+        const existing = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, request.params.id));
+
+        if (!existing.length) {
+          app.logger.warn({ comandaId: request.params.id }, "Comanda not found");
+          return reply.code(404).send({ error: "Comanda not found" });
+        }
+
+        const comanda = existing[0];
+
+        // Delete all pedidos for this comanda
+        app.logger.debug({ comandaId: request.params.id }, "Deleting pedidos for comanda");
+        await app.db
+          .delete(schema.pedidos)
+          .where(eq(schema.pedidos.comandaId, request.params.id));
+
+        // Delete the comanda
+        await app.db
+          .delete(schema.comandas)
+          .where(eq(schema.comandas.id, request.params.id));
+
+        // Update mesa status back to livre
+        await app.db
+          .update(schema.mesas)
+          .set({ status: "livre" })
+          .where(eq(schema.mesas.id, comanda.mesaId));
+
+        app.logger.info({ comandaId: request.params.id }, "Comanda deleted successfully");
+
+        return reply.code(204).send();
+      } catch (error) {
+        app.logger.error({ err: error, comandaId: request.params.id }, "Failed to delete comanda");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // PATCH /api/pedidos/:id/observacao - Update pedido observacao
+  interface UpdateObservacaoBody {
+    observacao: string;
+  }
+
+  app.fastify.patch<{ Params: { id: string }; Body: UpdateObservacaoBody }>(
+    "/api/pedidos/:id/observacao",
+    {
+      schema: {
+        description: "Update observacao for a pedido",
+        tags: ["pedidos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          required: ["observacao"],
+          properties: {
+            observacao: { type: "string" },
+          },
+        },
+        response: {
+          200: {
+            description: "Pedido updated successfully",
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              comanda_id: { type: "string", format: "uuid" },
+              prato_id: { type: ["string", "null"], format: "uuid" },
+              quantidade: { type: "number" },
+              preco_unitario: { type: "string" },
+              observacao: { type: ["string", "null"] },
+              status: { type: "string" },
+              created_at: { type: "string", format: "date-time" },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: UpdateObservacaoBody }>,
+      reply: FastifyReply
+    ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      try {
+        app.logger.info({ pedidoId: request.params.id }, "Updating pedido observacao");
+
+        const existing = await app.db
+          .select()
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.id, request.params.id));
+
+        if (!existing.length) {
+          app.logger.warn({ pedidoId: request.params.id }, "Pedido not found");
+          return reply.code(404).send({ error: "Pedido not found" });
+        }
+
+        const [updated] = await app.db
+          .update(schema.pedidos)
+          .set({
+            observacao: request.body.observacao,
+          })
+          .where(eq(schema.pedidos.id, request.params.id))
+          .returning();
+
+        app.logger.info({ pedidoId: updated.id }, "Pedido observacao updated successfully");
+
+        return reply.code(200).send({
+          id: updated.id,
+          comanda_id: updated.comandaId,
+          prato_id: updated.pratoId,
+          quantidade: updated.quantidade,
+          preco_unitario: updated.precoUnitario,
+          observacao: updated.observacao,
+          status: updated.status,
+          created_at: updated.createdAt.toISOString(),
+        });
+      } catch (error) {
+        app.logger.error({ err: error, pedidoId: request.params.id }, "Failed to update pedido observacao");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }
