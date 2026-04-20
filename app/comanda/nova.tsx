@@ -11,11 +11,13 @@ import {
   Platform,
   UIManager,
   ImageSourcePropType,
+  Modal,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Minus, Plus, Trash2, ShoppingCart, UtensilsCrossed } from "lucide-react-native";
+import { Minus, Plus, Trash2, ShoppingCart, UtensilsCrossed, ChevronDown } from "lucide-react-native";
 import { useColors } from "@/hooks/useColors";
 import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet, apiPost } from "@/utils/api";
@@ -32,8 +34,6 @@ interface ApiMesa {
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,12 +107,16 @@ function PratoSkeleton() {
 function PratoCard({
   prato,
   cartQuantidade,
+  observacao,
   onAdd,
+  onObservacaoChange,
   index,
 }: {
   prato: ApiPrato;
   cartQuantidade: number;
+  observacao: string;
   onAdd: () => void;
+  onObservacaoChange: (text: string) => void;
   index: number;
 }) {
   const COLORS = useColors();
@@ -130,9 +134,6 @@ function PratoCard({
         marginHorizontal: 16,
         marginBottom: 8,
         padding: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.06,
@@ -140,89 +141,116 @@ function PratoCard({
         elevation: 1,
       }}
     >
-      {/* Thumbnail */}
-      {hasImage ? (
-        <Image
-          source={resolveImageSource(prato.imagem_url)}
-          style={{ width: 60, height: 60, borderRadius: 8 }}
-          resizeMode="cover"
-        />
-      ) : (
-        <View
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 8,
-            backgroundColor: "#f0f0f0",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <UtensilsCrossed size={22} color="#bbb" />
-        </View>
-      )}
-
-      {/* Info */}
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text
-          style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "#111" }}
-          numberOfLines={1}
-        >
-          {prato.nome}
-        </Text>
-        {!!descricaoDisplay && (
-          <Text
-            style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#888", lineHeight: 16 }}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {descricaoDisplay}
-          </Text>
-        )}
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: "#22c55e" }}>
-          {precoDisplay}
-        </Text>
-      </View>
-
-      {/* Add button */}
-      <Pressable
-        onPress={() => {
-          console.log("[Cardápio] Botão adicionar pressionado:", prato.nome, "id:", prato.id, "qty atual:", cartQuantidade);
-          onAdd();
-        }}
-        style={({ pressed }) => ({
-          backgroundColor: inCart ? "#22c55e" : "transparent",
-          borderWidth: inCart ? 0 : 1.5,
-          borderColor: "#22c55e",
-          borderRadius: 20,
-          paddingHorizontal: 14,
-          paddingVertical: 8,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 5,
-          opacity: pressed ? 0.75 : 1,
-        })}
-      >
-        {inCart && (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {/* Thumbnail */}
+        {hasImage ? (
+          <Image
+            source={resolveImageSource(prato.imagem_url)}
+            style={{ width: 60, height: 60, borderRadius: 8 }}
+            resizeMode="cover"
+          />
+        ) : (
           <View
             style={{
-              backgroundColor: "#fff",
-              borderRadius: 10,
-              width: 18,
-              height: 18,
+              width: 60,
+              height: 60,
+              borderRadius: 8,
+              backgroundColor: "#f0f0f0",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: "#22c55e" }}>
-              {cartQuantidade}
-            </Text>
+            <UtensilsCrossed size={22} color="#bbb" />
           </View>
         )}
-        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: inCart ? "#fff" : "#22c55e" }}>
-          {buttonLabel}
-        </Text>
-      </Pressable>
+
+        {/* Info */}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text
+            style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "#111" }}
+            numberOfLines={1}
+          >
+            {prato.nome}
+          </Text>
+          {!!descricaoDisplay && (
+            <Text
+              style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#888", lineHeight: 16 }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {descricaoDisplay}
+            </Text>
+          )}
+          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: "#22c55e" }}>
+            {precoDisplay}
+          </Text>
+        </View>
+
+        {/* Add button */}
+        <Pressable
+          onPress={() => {
+            console.log("[Cardápio] Botão adicionar pressionado:", prato.nome, "id:", prato.id, "qty atual:", cartQuantidade);
+            onAdd();
+          }}
+          style={({ pressed }) => ({
+            backgroundColor: inCart ? "#22c55e" : "transparent",
+            borderWidth: inCart ? 0 : 1.5,
+            borderColor: "#22c55e",
+            borderRadius: 20,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          {inCart && (
+            <View
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 10,
+                width: 18,
+                height: 18,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: "#22c55e" }}>
+                {cartQuantidade}
+              </Text>
+            </View>
+          )}
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: inCart ? "#fff" : "#22c55e" }}>
+            {buttonLabel}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Observation field — only shown when item is in cart */}
+      {inCart && (
+        <TextInput
+          value={observacao}
+          onChangeText={(text) => {
+            console.log("[Cardápio] Observação alterada para:", prato.nome, "—", text);
+            onObservacaoChange(text);
+          }}
+          placeholder="Observação (ex: sem cebola)"
+          placeholderTextColor="#bbb"
+          style={{
+            marginTop: 10,
+            backgroundColor: "#f9f9f9",
+            borderWidth: 1,
+            borderColor: "#e5e5e5",
+            borderRadius: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 7,
+            fontFamily: "Outfit_400Regular",
+            fontSize: 12,
+            color: "#444",
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -332,9 +360,9 @@ function CartItemRow({
   );
 }
 
-// ─── Mesa Selector ────────────────────────────────────────────────────────────
+// ─── Mesa Dropdown ────────────────────────────────────────────────────────────
 
-function MesaSelector({
+function MesaDropdown({
   mesas,
   loadingMesas,
   selectedMesaId,
@@ -347,6 +375,9 @@ function MesaSelector({
   onSelect: (id: string) => void;
   error: string;
 }) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const selectedMesa = mesas.find((m) => m.id === selectedMesaId);
+  const selectedLabel = selectedMesa ? `Mesa ${selectedMesa.numero}` : "Selecionar mesa...";
 
   return (
     <View
@@ -355,6 +386,7 @@ function MesaSelector({
         borderBottomWidth: 1,
         borderBottomColor: "#e5e5e5",
         paddingVertical: 12,
+        paddingHorizontal: 16,
       }}
     >
       <Text
@@ -362,7 +394,6 @@ function MesaSelector({
           fontFamily: "Outfit_600SemiBold",
           fontSize: 13,
           color: "#555",
-          paddingHorizontal: 16,
           marginBottom: 8,
           textTransform: "uppercase",
           letterSpacing: 0.5,
@@ -372,67 +403,37 @@ function MesaSelector({
       </Text>
 
       {loadingMesas ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-        >
-          {[0, 1, 2, 3, 4].map((i) => (
-            <SkeletonLine key={i} width={52} height={36} borderRadius={20} />
-          ))}
-        </ScrollView>
-      ) : mesas.length === 0 ? (
-        <Text
-          style={{
-            fontFamily: "Outfit_400Regular",
-            fontSize: 13,
-            color: "#888",
-            paddingHorizontal: 16,
-          }}
-        >
-          Nenhuma mesa disponível
-        </Text>
+        <SkeletonLine width="100%" height={44} borderRadius={10} />
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
-        >
-          {mesas.map((mesa) => {
-            const isSelected = mesa.id === selectedMesaId;
-            const mesaLabel = `Mesa ${mesa.numero}`;
-            return (
-              <Pressable
-                key={mesa.id}
-                onPress={() => {
-                  console.log("[Comanda] Mesa selecionada:", mesa.numero, "id:", mesa.id);
-                  onSelect(mesa.id);
-                }}
-                style={({ pressed }) => ({
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? "#22c55e" : "#d1d5db",
-                  backgroundColor: isSelected ? "#22c55e" : "#fff",
-                  opacity: pressed ? 0.75 : 1,
-                  minWidth: 52,
-                  alignItems: "center",
-                })}
-              >
-                <Text
-                  style={{
-                    fontFamily: "Outfit_600SemiBold",
-                    fontSize: 13,
-                    color: isSelected ? "#fff" : "#555",
-                  }}
-                >
-                  {mesaLabel}
-                </Text>
-              </Pressable>
-            );
+        <Pressable
+          onPress={() => {
+            console.log("[Comanda] Dropdown de mesa aberto");
+            setModalVisible(true);
+          }}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderWidth: 1.5,
+            borderColor: selectedMesaId ? "#22c55e" : "#d1d5db",
+            borderRadius: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 11,
+            backgroundColor: selectedMesaId ? "#f0fdf4" : "#fafafa",
+            opacity: pressed ? 0.8 : 1,
           })}
-        </ScrollView>
+        >
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 14,
+              color: selectedMesaId ? "#22c55e" : "#aaa",
+            }}
+          >
+            {selectedLabel}
+          </Text>
+          <ChevronDown size={18} color={selectedMesaId ? "#22c55e" : "#aaa"} />
+        </Pressable>
       )}
 
       {!!error && (
@@ -441,13 +442,120 @@ function MesaSelector({
             fontFamily: "Outfit_400Regular",
             fontSize: 12,
             color: "#ef4444",
-            paddingHorizontal: 16,
             marginTop: 6,
           }}
         >
           {error}
         </Text>
       )}
+
+      {/* Dropdown Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" }}
+          onPress={() => {
+            console.log("[Comanda] Dropdown de mesa fechado (backdrop)");
+            setModalVisible(false);
+          }}
+        >
+          <Pressable
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 16,
+              width: "85%",
+              maxHeight: "60%",
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+            onPress={() => {}}
+          >
+            {/* Modal header */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 18,
+                paddingVertical: 14,
+                borderBottomWidth: 1,
+                borderBottomColor: "#f0f0f0",
+              }}
+            >
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#111" }}>
+                Selecionar Mesa
+              </Text>
+              <Pressable
+                onPress={() => {
+                  console.log("[Comanda] Dropdown de mesa fechado (botão X)");
+                  setModalVisible(false);
+                }}
+                style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.6 : 1 })}
+              >
+                <Ionicons name="close" size={20} color="#888" />
+              </Pressable>
+            </View>
+
+            {/* Mesa list */}
+            <ScrollView bounces={false}>
+              {mesas.length === 0 ? (
+                <View style={{ padding: 24, alignItems: "center" }}>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: "#888" }}>
+                    Nenhuma mesa disponível
+                  </Text>
+                </View>
+              ) : (
+                mesas.map((mesa, idx) => {
+                  const isSelected = mesa.id === selectedMesaId;
+                  const mesaLabel = `Mesa ${mesa.numero}`;
+                  const isLast = idx === mesas.length - 1;
+                  return (
+                    <Pressable
+                      key={mesa.id}
+                      onPress={() => {
+                        console.log("[Comanda] Mesa selecionada no dropdown:", mesa.numero, "id:", mesa.id);
+                        onSelect(mesa.id);
+                        setModalVisible(false);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        paddingHorizontal: 18,
+                        paddingVertical: 14,
+                        backgroundColor: isSelected ? "#f0fdf4" : pressed ? "#f9f9f9" : "#fff",
+                        borderBottomWidth: isLast ? 0 : 1,
+                        borderBottomColor: "#f5f5f5",
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: isSelected ? "Outfit_700Bold" : "Outfit_400Regular",
+                          fontSize: 15,
+                          color: isSelected ? "#22c55e" : "#222",
+                        }}
+                      >
+                        {mesaLabel}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color="#22c55e" />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -463,6 +571,9 @@ export default function CardapioNovaComandaScreen() {
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [loadingMesas, setLoadingMesas] = useState(true);
   const [mesaError, setMesaError] = useState("");
+
+  // Observations keyed by prato id
+  const [observacoes, setObservacoes] = useState<Record<string, string>>({});
 
   const selectedMesa = mesas.find((m) => m.id === selectedMesaId);
   const mesaNumeroDisplay = selectedMesa
@@ -544,13 +655,30 @@ export default function CardapioNovaComandaScreen() {
     setCart((prev) => {
       const item = prev.find((c) => c.id === id);
       if (!item) return prev;
-      if (item.quantidade <= 1) return prev.filter((c) => c.id !== id);
+      if (item.quantidade <= 1) {
+        // Clear observation when item removed
+        setObservacoes((obs) => {
+          const next = { ...obs };
+          delete next[id];
+          return next;
+        });
+        return prev.filter((c) => c.id !== id);
+      }
       return prev.map((c) => c.id === id ? { ...c, quantidade: c.quantidade - 1 } : c);
     });
   }, []);
 
   const removeItem = useCallback((id: string) => {
     setCart((prev) => prev.filter((c) => c.id !== id));
+    setObservacoes((obs) => {
+      const next = { ...obs };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const setObservacao = useCallback((pratoId: string, text: string) => {
+    setObservacoes((prev) => ({ ...prev, [pratoId]: text }));
   }, []);
 
   // ── Derived values ───────────────────────────────────────────────────────────
@@ -574,7 +702,7 @@ export default function CardapioNovaComandaScreen() {
     setSubmitting(true);
 
     try {
-      // Step 1: Create comanda (apiPost handles Bearer token automatically)
+      // Step 1: Create comanda
       console.log("[Cardápio] POST /api/comandas — mesa_id:", selectedMesaId);
       const comandaData = await apiPost<any>("/api/comandas", { mesa_id: selectedMesaId });
       const comandaId = comandaData?.comanda?.id || comandaData?.id;
@@ -584,11 +712,12 @@ export default function CardapioNovaComandaScreen() {
         throw new Error("Comanda criada mas sem ID na resposta.");
       }
 
-      // Step 2: Send pedidos (apiPost handles Bearer token automatically)
+      // Step 2: Send pedidos with observacao
       const items = cart.map((c) => ({
         prato_id: c.id,
         quantidade: c.quantidade,
         preco_unitario: c.preco,
+        observacao: observacoes[c.id] || null,
       }));
       console.log("[Cardápio] POST /api/comandas/" + comandaId + "/pedidos — items:", items.length, JSON.stringify(items));
 
@@ -596,6 +725,7 @@ export default function CardapioNovaComandaScreen() {
 
       console.log("[Cardápio] Pedido enviado com sucesso para comanda:", comandaId);
       setCart([]);
+      setObservacoes({});
       Alert.alert(
         "✅ Pedido enviado!",
         "Pedido enviado para a cozinha com sucesso.",
@@ -685,8 +815,8 @@ export default function CardapioNovaComandaScreen() {
         </View>
       </View>
 
-      {/* ── Mesa Selector ── */}
-      <MesaSelector
+      {/* ── Mesa Dropdown ── */}
+      <MesaDropdown
         mesas={mesas}
         loadingMesas={loadingMesas}
         selectedMesaId={selectedMesaId}
@@ -846,7 +976,9 @@ export default function CardapioNovaComandaScreen() {
                   <PratoCard
                     prato={item}
                     cartQuantidade={qty}
+                    observacao={observacoes[item.id] ?? ""}
                     onAdd={() => addToCart(item)}
+                    onObservacaoChange={(text) => setObservacao(item.id, text)}
                     index={index}
                   />
                 );
