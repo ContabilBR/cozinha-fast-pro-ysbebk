@@ -7,6 +7,7 @@ import {
   Animated,
   Pressable,
   TextInput,
+  Alert,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet, apiPatch, apiDelete } from "@/utils/api";
 
 // ─── API response types ───────────────────────────────────────────────────────
 
@@ -60,7 +61,6 @@ interface GarcomPedido {
 // ─── Normalise raw API response into display shape ────────────────────────────
 
 function normaliseComandas(raw: any): GarcomPedido[] {
-  // Handle both { comandas: [...] } and direct array
   const list: ApiComanda[] = Array.isArray(raw) ? raw : (raw?.comandas ?? []);
 
   return list.map((comanda, idx) => {
@@ -107,7 +107,13 @@ function formatDateTime(iso: string): string {
   }
 }
 
-function ItemRow({ item }: { item: GarcomPedidoItem }) {
+function ItemRow({
+  item,
+  onDelete,
+}: {
+  item: GarcomPedidoItem;
+  onDelete: (id: string) => void;
+}) {
   const COLORS = useColors();
   const cfg = getStatusConfig(item.status);
   const quantLabel = `${item.quantidade}x`;
@@ -123,11 +129,11 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
     const original = (item.observacao ?? "").trim();
     if (trimmed === original) return;
 
-    console.log("[Pedidos] PATCH /api/pedidos/" + item.id + " — observacao:", trimmed);
+    console.log("[Pedidos] PATCH /api/pedidos/" + item.id + "/observacao — observacao:", trimmed);
     setSaving(true);
     setSaveError("");
     try {
-      await apiPost<any>(`/api/pedidos/${item.id}`, { observacao: trimmed, _method: "PATCH" });
+      await apiPatch<any>(`/api/pedidos/${item.id}/observacao`, { observacao: trimmed });
       console.log("[Pedidos] Observação atualizada para pedido:", item.id);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -138,9 +144,32 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
     }
   }, [item.id, item.observacao, obsValue]);
 
+  const handleDeletePress = () => {
+    console.log("[Pedidos] Trash icon pressed — pedido item:", item.id, "prato:", item.prato_nome);
+    Alert.alert(
+      "Excluir prato?",
+      "Tem certeza que deseja remover este prato do pedido?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => console.log("[Pedidos] Exclusão de item cancelada:", item.id),
+        },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            console.log("[Pedidos] Confirmado — DELETE /api/pedidos/" + item.id);
+            onDelete(item.id);
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={{ paddingVertical: 10 }}>
-      {/* Top row: qty + name + status badge */}
+      {/* Top row: qty + name + status badge + delete */}
       <View
         style={{
           flexDirection: "row",
@@ -148,7 +177,7 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
           justifyContent: "space-between",
         }}
       >
-        <View style={{ flex: 1, marginRight: 12 }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text
               style={{
@@ -172,24 +201,39 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
             </Text>
           </View>
         </View>
-        <View
-          style={{
-            backgroundColor: cfg.bg,
-            borderRadius: 20,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            alignSelf: "flex-start",
-          }}
-        >
-          <Text
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View
             style={{
-              fontFamily: "Outfit_600SemiBold",
-              fontSize: 11,
-              color: cfg.text,
+              backgroundColor: cfg.bg,
+              borderRadius: 20,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              alignSelf: "flex-start",
             }}
           >
-            {cfg.label}
-          </Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 11,
+                color: cfg.text,
+              }}
+            >
+              {cfg.label}
+            </Text>
+          </View>
+
+          {/* Delete item button */}
+          <Pressable
+            onPress={handleDeletePress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.5 : 1,
+              padding: 2,
+            })}
+          >
+            <Ionicons name="trash-outline" size={17} color="#EF4444" />
+          </Pressable>
         </View>
       </View>
 
@@ -264,7 +308,17 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
   );
 }
 
-function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) {
+function PedidoCard({
+  pedido,
+  index,
+  onDeleteItem,
+  onDeleteComanda,
+}: {
+  pedido: GarcomPedido;
+  index: number;
+  onDeleteItem: (comandaId: string, itemId: string) => void;
+  onDeleteComanda: (comandaId: string) => void;
+}) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
@@ -291,6 +345,29 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
   const itemCountLabel = `${itemCount} ${itemCount === 1 ? "item" : "itens"}`;
   const pedidoLabel = `Pedido #${pedido.numero_sequencial}`;
   const mesaLabel = `Mesa ${pedido.mesa_numero}`;
+
+  const handleDeleteComandaPress = () => {
+    console.log("[Pedidos] Trash icon pressed — comanda:", pedido.comanda_id, "mesa:", pedido.mesa_numero);
+    Alert.alert(
+      "Excluir pedido?",
+      "Isso irá remover todos os pratos desta comanda. Deseja continuar?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => console.log("[Pedidos] Exclusão de comanda cancelada:", pedido.comanda_id),
+        },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            console.log("[Pedidos] Confirmado — DELETE /api/comandas/" + pedido.comanda_id);
+            onDeleteComanda(pedido.comanda_id);
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <Animated.View
@@ -329,7 +406,7 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
           }}
         >
           {/* Left: order number + date */}
-          <View>
+          <View style={{ flex: 1 }}>
             <Text
               style={{
                 fontFamily: "Outfit_700Bold",
@@ -352,24 +429,38 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
             </Text>
           </View>
 
-          {/* Right: Mesa pill */}
-          <View
-            style={{
-              backgroundColor: COLORS.primary,
-              borderRadius: 20,
-              paddingHorizontal: 14,
-              paddingVertical: 6,
-            }}
-          >
-            <Text
+          {/* Right: Mesa pill + delete comanda */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
               style={{
-                fontFamily: "Outfit_700Bold",
-                fontSize: 13,
-                color: "#fff",
+                backgroundColor: COLORS.primary,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
               }}
             >
-              {mesaLabel}
-            </Text>
+              <Text
+                style={{
+                  fontFamily: "Outfit_700Bold",
+                  fontSize: 13,
+                  color: "#fff",
+                }}
+              >
+                {mesaLabel}
+              </Text>
+            </View>
+
+            {/* Delete comanda button */}
+            <Pressable
+              onPress={handleDeleteComandaPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.5 : 1,
+                padding: 4,
+              })}
+            >
+              <Ionicons name="trash-outline" size={19} color="#EF4444" />
+            </Pressable>
           </View>
         </View>
 
@@ -377,7 +468,10 @@ function PedidoCard({ pedido, index }: { pedido: GarcomPedido; index: number }) 
         <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
           {pedido.itens.map((item, i) => (
             <View key={item.id}>
-              <ItemRow item={item} />
+              <ItemRow
+                item={item}
+                onDelete={(itemId) => onDeleteItem(pedido.comanda_id, itemId)}
+              />
               {i < pedido.itens.length - 1 && (
                 <View
                   style={{
@@ -520,6 +614,43 @@ export default function PedidosGarcomScreen() {
     console.log("[Pedidos Garçom] Back button pressed");
     router.back();
   };
+
+  const handleDeleteItem = useCallback(async (comandaId: string, itemId: string) => {
+    console.log("[Pedidos] DELETE /api/pedidos/" + itemId + " (comanda:", comandaId + ")");
+    try {
+      await apiDelete(`/api/pedidos/${itemId}`);
+      console.log("[Pedidos] Item deletado com sucesso:", itemId);
+      // Remove item from local state
+      setPedidos((prev) =>
+        prev
+          .map((p) =>
+            p.comanda_id === comandaId
+              ? { ...p, itens: p.itens.filter((it) => it.id !== itemId) }
+              : p
+          )
+          // Remove comanda if it has no more items
+          .filter((p) => p.itens.length > 0)
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Pedidos] Erro ao deletar item:", msg);
+      Alert.alert("Erro", "Não foi possível remover o prato. Tente novamente.");
+    }
+  }, []);
+
+  const handleDeleteComanda = useCallback(async (comandaId: string) => {
+    console.log("[Pedidos] DELETE /api/comandas/" + comandaId);
+    try {
+      await apiDelete(`/api/comandas/${comandaId}`);
+      console.log("[Pedidos] Comanda deletada com sucesso:", comandaId);
+      // Remove entire comanda from local state
+      setPedidos((prev) => prev.filter((p) => p.comanda_id !== comandaId));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Pedidos] Erro ao deletar comanda:", msg);
+      Alert.alert("Erro", "Não foi possível remover o pedido. Tente novamente.");
+    }
+  }, []);
 
   const pedidoCount = pedidos.length;
   const pedidoCountLabel = `${pedidoCount} ${pedidoCount === 1 ? "pedido" : "pedidos"}`;
@@ -735,6 +866,8 @@ export default function PedidosGarcomScreen() {
                 key={`${pedido.comanda_id}-${pedido.numero_sequencial}`}
                 pedido={pedido}
                 index={index}
+                onDeleteItem={handleDeleteItem}
+                onDeleteComanda={handleDeleteComanda}
               />
             ))
           )}

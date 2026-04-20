@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { Users } from "lucide-react-native";
+import { Users, ChevronRight } from "lucide-react-native";
 
 interface ApiMesa {
   id: string;
@@ -26,9 +26,9 @@ interface ApiMesa {
 
 function getMesaStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    disponivel: "Disponível",
-    livre: "Disponível",
-    free: "Disponível",
+    disponivel: "Livre",
+    livre: "Livre",
+    free: "Livre",
     ocupada: "Ocupada",
     occupied: "Ocupada",
     reservada: "Reservada",
@@ -54,145 +54,140 @@ function isDisponivel(status: string): boolean {
   return status === "disponivel" || status === "livre" || status === "free";
 }
 
-function TableCard({
+function MesaListItem({
   mesa,
   onPress,
   index,
-  role,
-  onAbrirChamado,
-  onVerComanda,
 }: {
   mesa: ApiMesa;
   onPress: () => void;
   index: number;
-  role?: string;
-  onAbrirChamado?: () => void;
-  onVerComanda?: () => void;
 }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(16)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 350, delay: index * 50, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 50, useNativeDriver: true }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 300,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [index, opacity, translateY]);
 
   const statusColor = getMesaStatusColor(mesa.status);
   const statusLabel = getMesaStatusLabel(mesa.status);
   const livre = isDisponivel(mesa.status);
-  const isGarcom = role === "garcom";
-
-  const showAbrirChamado = isGarcom && livre;
-  const showVerComanda = isGarcom && !livre && !!mesa.comanda_id;
+  const mesaLabel = `Mesa ${mesa.numero}`;
+  const capacidadeLabel = `Capacidade: ${mesa.capacidade} pessoas`;
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }], flex: 1, margin: 6 }}>
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <AnimatedPressable
-        onPress={onPress}
+        onPress={() => {
+          console.log("[Mesas] Mesa row pressed:", mesa.numero, "status:", mesa.status);
+          onPress();
+        }}
         style={{
           backgroundColor: COLORS.surface,
+          marginHorizontal: 16,
+          marginBottom: 10,
           borderRadius: 16,
-          padding: 16,
-          borderWidth: 2,
-          borderColor: livre ? COLORS.border : statusColor + "50",
-          minHeight: 140,
-          justifyContent: "space-between",
+          borderWidth: 1,
+          borderColor: livre ? COLORS.border : statusColor + "40",
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+          elevation: 1,
         }}
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              backgroundColor: statusColor + "18",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: statusColor }}>
-              {mesa.numero}
-            </Text>
-          </View>
-          <View
-            style={{
-              backgroundColor: statusColor + "20",
-              borderRadius: 20,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: statusColor }}>
-              {statusLabel}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ gap: 4, marginTop: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Users size={13} color={COLORS.textSecondary} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {mesa.capacidade} lugares
-            </Text>
-          </View>
-        </View>
-
-        {showAbrirChamado && (
-          <AnimatedPressable
-            onPress={(e) => {
-              console.log("[Mesas] Abrir Chamado pressionado para mesa:", mesa.numero);
-              if (onAbrirChamado) onAbrirChamado();
-            }}
-            style={{
-              marginTop: 10,
-              backgroundColor: COLORS.primary,
-              borderRadius: 10,
-              paddingVertical: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: "#fff" }}>
-              Abrir Chamado
-            </Text>
-          </AnimatedPressable>
-        )}
-
-        {showVerComanda && (
-          <AnimatedPressable
-            onPress={(e) => {
-              console.log("[Mesas] Ver Comanda pressionado para mesa:", mesa.numero, "comanda_id:", mesa.comanda_id);
-              if (onVerComanda) onVerComanda();
-            }}
-            style={{
-              marginTop: 10,
-              backgroundColor: statusColor + "18",
-              borderRadius: 10,
-              paddingVertical: 8,
-              alignItems: "center",
-              borderWidth: 1,
-              borderColor: statusColor + "40",
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: statusColor }}>
-              Ver Comanda
-            </Text>
-          </AnimatedPressable>
-        )}
-
+        {/* Status dot + Mesa number */}
         <View
           style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: statusColor,
+            width: 52,
+            height: 52,
+            borderRadius: 14,
+            backgroundColor: statusColor + "18",
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 14,
           }}
-        />
+        >
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 22,
+              color: statusColor,
+            }}
+          >
+            {mesa.numero}
+          </Text>
+        </View>
+
+        {/* Center info */}
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 17,
+              color: COLORS.text,
+              letterSpacing: -0.2,
+            }}
+          >
+            {mesaLabel}
+          </Text>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Users size={12} color={COLORS.textSecondary} />
+            <Text
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 13,
+                color: COLORS.textSecondary,
+              }}
+            >
+              {capacidadeLabel}
+            </Text>
+          </View>
+        </View>
+
+        {/* Status badge */}
+        <View
+          style={{
+            backgroundColor: statusColor + "20",
+            borderRadius: 20,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            marginRight: 10,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 12,
+              color: statusColor,
+            }}
+          >
+            {statusLabel}
+          </Text>
+        </View>
+
+        {/* Chevron */}
+        <ChevronRight size={18} color={COLORS.textSecondary} />
       </AnimatedPressable>
     </Animated.View>
   );
@@ -254,21 +249,12 @@ export default function MesasScreen() {
     }
   };
 
-  const handleAbrirChamado = (mesa: ApiMesa) => {
-    console.log("[Mesas] Abrir Chamado para mesa:", mesa.numero, "id:", mesa.id);
-    router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
-  };
-
-  const handleVerComanda = (mesa: ApiMesa) => {
-    console.log("[Mesas] Ver Comanda para mesa:", mesa.numero, "comanda_id:", mesa.comanda_id);
-    router.push(`/comanda/${mesa.comanda_id}`);
-  };
-
   const livreCount = mesas.filter((m) => isDisponivel(m.status)).length;
   const ocupadaCount = mesas.filter((m) => !isDisponivel(m.status)).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 12,
@@ -283,21 +269,55 @@ export default function MesasScreen() {
         }}
       >
         <View>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 26,
+              color: COLORS.text,
+              letterSpacing: -0.3,
+            }}
+          >
             Mesas
           </Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 13,
+              color: COLORS.textSecondary,
+            }}
+          >
             {ocupadaCount} ocupadas · {livreCount} disponíveis
           </Text>
         </View>
       </View>
 
-      {/* Legenda */}
-      <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingVertical: 10, gap: 12, flexWrap: "wrap" }}>
+      {/* Legend */}
+      <View
+        style={{
+          flexDirection: "row",
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+          gap: 14,
+          flexWrap: "wrap",
+        }}
+      >
         {(["disponivel", "ocupada", "reservada"] as string[]).map((s) => (
           <View key={s} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: getMesaStatusColor(s) }} />
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: getMesaStatusColor(s),
+              }}
+            />
+            <Text
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 11,
+                color: COLORS.textSecondary,
+              }}
+            >
               {getMesaStatusLabel(s)}
             </Text>
           </View>
@@ -305,22 +325,56 @@ export default function MesasScreen() {
       </View>
 
       {loading ? (
-        <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
-          {[0, 1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 10 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </View>
       ) : error ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 32,
+            gap: 12,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 17,
+              color: COLORS.text,
+            }}
+          >
             Erro ao carregar mesas
           </Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              textAlign: "center",
+            }}
+          >
             {error}
           </Text>
           <AnimatedPressable
             onPress={fetchMesas}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+            }}
           >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 15,
+                color: "#fff",
+              }}
+            >
               Tentar novamente
             </Text>
           </AnimatedPressable>
@@ -329,24 +383,31 @@ export default function MesasScreen() {
         <FlatList
           data={mesas}
           renderItem={({ item, index }) => (
-            <TableCard
+            <MesaListItem
               mesa={item}
               onPress={() => handleMesaPress(item)}
               index={index}
-              role={role}
-              onAbrirChamado={() => handleAbrirChamado(item)}
-              onVerComanda={() => handleVerComanda(item)}
             />
           )}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={{ padding: 6, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
           }
           ListEmptyComponent={
-            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 48,
+                gap: 12,
+              }}
+            >
               <View
                 style={{
                   width: 72,
@@ -359,10 +420,23 @@ export default function MesasScreen() {
               >
                 <Users size={32} color={COLORS.primary} />
               </View>
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 17,
+                  color: COLORS.text,
+                }}
+              >
                 Nenhuma mesa cadastrada
               </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                }}
+              >
                 As mesas do restaurante aparecerão aqui
               </Text>
             </View>
