@@ -46,13 +46,14 @@ type Pedido = {
 type Comanda = {
   id: string;
   mesa_id: string;
+  mesa_numero: number;
+  mesa_capacidade?: number;
   status: string;
   total: number | string;
-  mesa?: { id: string; numero: number };
 };
 
 export default function ComandaDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mesa_numero: mesaNumeroParam } = useLocalSearchParams<{ id: string; mesa_numero?: string }>();
   const router = useRouter();
 
   const [comanda, setComanda] = useState<Comanda | null>(null);
@@ -69,16 +70,19 @@ export default function ComandaDetailScreen() {
     setLoading(true);
     setError('');
     try {
-      const [comandasRes, pratosRes, pedidosRes] = await Promise.all([
-        apiGet<any>('/api/comandas'),
+      console.log('[ComandaDetail] GET /api/comandas/' + id);
+      const [comandaRes, pratosRes, pedidosRes] = await Promise.all([
+        apiGet<any>(`/api/comandas/${id}`),
         apiGet<any>('/api/pratos'),
         apiGet<any>('/api/pedidos'),
       ]);
 
-      const allComandas: Comanda[] = Array.isArray(comandasRes)
-        ? comandasRes
-        : comandasRes?.comandas ?? [];
-      const found = allComandas.find((c) => c.id === id) ?? null;
+      // Support both direct object and wrapped { comanda: ... }
+      const found: Comanda | null = comandaRes?.id
+        ? comandaRes
+        : comandaRes?.comanda ?? null;
+      console.log('[ComandaDetail] comanda raw response:', JSON.stringify(comandaRes));
+      console.log('[ComandaDetail] comanda loaded:', found?.id, 'mesa_numero:', found?.mesa_numero);
       setComanda(found);
 
       const allPratos: Prato[] = Array.isArray(pratosRes)
@@ -197,8 +201,10 @@ export default function ComandaDetailScreen() {
     (sum, p) => sum + p.quantidade * Number(p.preco_unitario),
     0
   );
+  const totalDisplay = `R$ ${total.toFixed(2).replace(".", ",")}`;
+  console.log("[ComandaDetail] total calculado:", totalDisplay, "— pedidos:", pedidosEnviados.length);
 
-  const mesaNum = comanda?.mesa?.numero ?? '?';
+  const mesaNum = comanda?.mesa_numero ?? '?';
   const headerTitle = comanda ? `Comanda — Mesa ${mesaNum}` : 'Comanda';
 
   const NavBar = ({ title }: { title: string }) => (
@@ -372,12 +378,10 @@ export default function ComandaDetailScreen() {
               })
             )}
 
-            {pedidosEnviados.length > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>{formatPrice(total)}</Text>
-              </View>
-            )}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total:</Text>
+              <Text style={styles.totalValue}>{totalDisplay}</Text>
+            </View>
           </ScrollView>
         )}
       </View>

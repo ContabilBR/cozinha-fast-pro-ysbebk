@@ -411,7 +411,7 @@ export default function MesasScreen() {
   const handleMesaPress = (mesa: ApiMesa) => {
     console.log("[Mesas] Mesa pressionada:", mesa.numero, "comanda_id:", mesa.comanda_id);
     if (isOcupada(mesa.status) && mesa.comanda_id) {
-      router.push(`/comanda/${mesa.comanda_id}`);
+      router.push({ pathname: `/comanda/${mesa.comanda_id}`, params: { mesa_numero: String(mesa.numero) } });
     } else if (canOpenComanda(mesa.status)) {
       router.push({ pathname: "/comanda/nova", params: { mesa_id: mesa.id, mesa_numero: String(mesa.numero) } });
     } else {

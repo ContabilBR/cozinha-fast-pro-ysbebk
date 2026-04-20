@@ -20,12 +20,12 @@ import { Plus, Clock, ShoppingBag } from "lucide-react-native";
 
 interface ApiComanda {
   id: string;
-  mesa?: number | string;
-  mesa_numero?: number | string;
+  mesa_id?: string;
+  mesa_numero: number;
+  mesa_capacidade?: number;
   status: string;
   total: number;
-  item_count?: number;
-  items_count?: number;
+  item_count: number;
   opened_at?: string;
   created_at?: string;
 }
@@ -42,10 +42,12 @@ function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress
     ]).start();
   }, [index, opacity, translateY]);
 
-  const mesaNum = comanda.mesa_numero ?? comanda.mesa ?? "?";
+  const mesaNum = comanda.mesa_numero;
   const timeOpen = formatRelativeTime(comanda.opened_at ?? comanda.created_at ?? "");
-  const total = formatCurrency(comanda.total);
-  const itemCount = comanda.item_count ?? comanda.items_count ?? 0;
+  const rawTotal = Number(comanda.total);
+  const total = `R$ ${(isNaN(rawTotal) ? 0 : rawTotal).toFixed(2).replace(".", ",")}`;
+  const itemCount = comanda.item_count;
+  const itemCountDisplay = `${itemCount} ${itemCount === 1 ? "item" : "itens"}`;
 
   const statusColors: Record<string, string> = {
     aberta: "#22C55E",
@@ -96,7 +98,7 @@ function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress
                 Mesa {mesaNum}
               </Text>
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-                {itemCount} {itemCount === 1 ? "item" : "itens"}
+                {itemCountDisplay}
               </Text>
             </View>
           </View>
@@ -117,7 +119,7 @@ function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <ShoppingBag size={13} color={COLORS.textSecondary} />
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-              {itemCount} itens
+              {itemCountDisplay}
             </Text>
           </View>
         </View>
@@ -148,6 +150,7 @@ export default function ComandasScreen() {
       const res = await apiGet<any>("/api/comandas");
       const list: ApiComanda[] = Array.isArray(res) ? res : (res.comandas || []);
       console.log("[Comandas] Loaded", list.length, "comandas");
+      list.forEach((comanda) => console.log('comanda data:', JSON.stringify(comanda)));
       setComandas(list);
       setError("");
     } catch (e: any) {
@@ -284,8 +287,8 @@ export default function ComandasScreen() {
       {/* FAB */}
       <AnimatedPressable
         onPress={() => {
-          console.log("[Comandas] FAB - nova comanda");
-          router.push("/comanda/nova");
+          console.log("[Comandas] FAB - nova comanda: redirecionando para Mesas para selecionar mesa");
+          router.replace("/(tabs)/(mesas)");
         }}
         style={{
           position: "absolute",
