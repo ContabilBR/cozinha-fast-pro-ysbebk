@@ -1,18 +1,30 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
-  Pressable,
+  TextInput,
+  Animated,
+  SectionList,
+  ImageSourcePropType,
 } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { AnimatedPressable } from "@/components/AnimatedPressable";
+import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { UtensilsCrossed } from "lucide-react-native";
+import { Search, UtensilsCrossed, X } from "lucide-react-native";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Categoria {
+  id: string;
+  nome: string;
+  descricao?: string;
+}
 
 interface Prato {
   id: string;
@@ -21,39 +33,270 @@ interface Prato {
   preco: number;
   imagem_url?: string;
   disponivel?: boolean;
-  categoria?: { nome: string };
+  categoria_id?: string;
+  categoria?: { id?: string; nome: string };
 }
 
-interface PratoGroup {
-  categoria: string;
-  pratos: Prato[];
+interface SectionData {
+  title: string;
+  icon: string;
+  data: Prato[];
 }
 
-function formatPreco(preco: number): string {
-  return `R$ ${Number(preco).toFixed(2).replace(".", ",")}`;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveImageSource(
+  source: string | number | ImageSourcePropType | undefined
+): ImageSourcePropType {
+  if (!source) return { uri: "" };
+  if (typeof source === "string") return { uri: source };
+  return source as ImageSourcePropType;
 }
+
+function formatPreco(preco: number | string | undefined): string {
+  const n = Number(preco);
+  if (isNaN(n)) return "R$ --";
+  return `R$ ${n.toFixed(2).replace(".", ",")}`;
+}
+
+const CATEGORY_ICONS: Record<string, string> = {
+  "Entradas": "🥗",
+  "Pratos Principais": "🍽",
+  "Carnes": "🥩",
+  "Peixes": "🐟",
+  "Massas": "🍝",
+  "Pizzas": "🍕",
+  "Saladas": "🥗",
+  "Sobremesas": "🍮",
+  "Bebidas": "🥤",
+  "Sucos": "🧃",
+  "Cervejas": "🍺",
+  "Vinhos": "🍷",
+  "Outros": "🍴",
+};
+
+function getCategoryIcon(nome: string): string {
+  return CATEGORY_ICONS[nome] || "🍴";
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function PratoCardSkeleton() {
+  const COLORS = useColors();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginHorizontal: 16,
+        marginBottom: 10,
+        backgroundColor: COLORS.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        padding: 12,
+        gap: 12,
+      }}
+    >
+      <SkeletonLine width={72} height={72} borderRadius={10} />
+      <View style={{ flex: 1, gap: 8 }}>
+        <SkeletonLine width="65%" height={15} />
+        <SkeletonLine width="85%" height={11} />
+        <SkeletonLine width="35%" height={14} />
+      </View>
+    </View>
+  );
+}
+
+function SectionSkeleton() {
+  return (
+    <View style={{ marginBottom: 8 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
+        <SkeletonLine width={140} height={18} />
+      </View>
+      {[0, 1, 2].map((i) => (
+        <PratoCardSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
+
+// ─── Prato Card ───────────────────────────────────────────────────────────────
+
+function PratoCard({ prato, index }: { prato: Prato; index: number }) {
+  const COLORS = useColors();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 280,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 280,
+        delay: index * 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [index, opacity, translateY]);
+
+  const precoDisplay = formatPreco(prato.preco);
+  const cardOpacity = prato.disponivel === false ? 0.5 : 1;
+  const hasImage = !!prato.imagem_url;
+
+  return (
+    <Animated.View
+      style={{
+        opacity: Animated.multiply(opacity, new Animated.Value(cardOpacity)),
+        transform: [{ translateY }],
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginHorizontal: 16,
+          marginBottom: 10,
+          backgroundColor: COLORS.surface,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          padding: 12,
+          gap: 12,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 4,
+          elevation: 1,
+          opacity: cardOpacity,
+        }}
+      >
+        {/* Image */}
+        {hasImage ? (
+          <Image
+            source={resolveImageSource(prato.imagem_url)}
+            style={{ width: 72, height: 72, borderRadius: 10 }}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 10,
+              backgroundColor: COLORS.surfaceSecondary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <UtensilsCrossed size={24} color={COLORS.textTertiary} />
+          </View>
+        )}
+
+        {/* Info */}
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 15,
+              color: COLORS.text,
+              letterSpacing: -0.1,
+            }}
+          >
+            {prato.nome}
+          </Text>
+          {!!prato.descricao && (
+            <Text
+              numberOfLines={2}
+              ellipsizeMode="tail"
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 12,
+                color: COLORS.textSecondary,
+                lineHeight: 17,
+              }}
+            >
+              {prato.descricao}
+            </Text>
+          )}
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 15,
+              color: "#22C55E",
+              marginTop: 2,
+            }}
+          >
+            {precoDisplay}
+          </Text>
+        </View>
+
+        {/* Indisponível badge */}
+        {prato.disponivel === false && (
+          <View
+            style={{
+              backgroundColor: COLORS.surfaceSecondary,
+              borderRadius: 8,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 10,
+                color: COLORS.textTertiary,
+                letterSpacing: 0.3,
+              }}
+            >
+              Indisponível
+            </Text>
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CardapioScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
-  const [groups, setGroups] = useState<PratoGroup[]>([]);
+  const [pratos, setPratos] = useState<Prato[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
-  const fetchPratos = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    console.log("[Cardápio] GET /api/pratos e /api/categorias");
     try {
-      const res = await apiGet<any>("/api/pratos");
-      const list: Prato[] = Array.isArray(res) ? res : (res.pratos ?? []);
-      const map = new Map<string, Prato[]>();
-      for (const p of list) {
-        const key = p.categoria?.nome ?? "Sem categoria";
-        if (!map.has(key)) map.set(key, []);
-        map.get(key)!.push(p);
-      }
-      setGroups(Array.from(map.entries()).map(([categoria, pratos]) => ({ categoria, pratos })));
+      const [pratosRes, categoriasRes] = await Promise.all([
+        apiGet<any>("/api/pratos"),
+        apiGet<any>("/api/categorias"),
+      ]);
+      const pratosList: Prato[] = Array.isArray(pratosRes)
+        ? pratosRes
+        : (pratosRes.pratos ?? []);
+      const categoriasList: Categoria[] = Array.isArray(categoriasRes)
+        ? categoriasRes
+        : (categoriasRes.categorias ?? []);
+      console.log("[Cardápio] Pratos:", pratosList.length, "Categorias:", categoriasList.length);
+      setPratos(pratosList);
+      setCategorias(categoriasList);
       setError("");
     } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Cardápio] Erro ao carregar dados:", msg);
       setError("Não foi possível carregar o cardápio.");
     } finally {
       setLoading(false);
@@ -61,112 +304,392 @@ export default function CardapioScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    setLoading(true);
-    fetchPratos();
-  }, [fetchPratos]));
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchData();
+    }, [fetchData])
+  );
 
-  const totalPratos = groups.reduce((s, g) => s + g.pratos.length, 0);
+  // Build sections from categories + pratos
+  const sections: SectionData[] = React.useMemo(() => {
+    const result: SectionData[] = [];
+    const usedPratoIds = new Set<string>();
+
+    for (const cat of categorias) {
+      const catPratos = pratos.filter((p) => {
+        const catId = p.categoria_id || p.categoria?.id;
+        return catId === cat.id;
+      });
+      if (catPratos.length > 0) {
+        catPratos.forEach((p) => usedPratoIds.add(p.id));
+        result.push({
+          title: cat.nome,
+          icon: getCategoryIcon(cat.nome),
+          data: catPratos,
+        });
+      }
+    }
+
+    // Pratos without a matched category
+    const outros = pratos.filter((p) => !usedPratoIds.has(p.id));
+    if (outros.length > 0) {
+      result.push({ title: "Outros", icon: "🍴", data: outros });
+    }
+
+    return result;
+  }, [pratos, categorias]);
+
+  // Search filter
+  const searchLower = searchQuery.toLowerCase().trim();
+  const isSearching = searchLower.length > 0;
+  const searchResults = isSearching
+    ? pratos.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(searchLower) ||
+          (p.descricao || "").toLowerCase().includes(searchLower)
+      )
+    : [];
+
+  const totalPratos = pratos.length;
   const subtitleText = loading ? "Carregando..." : `${totalPratos} pratos`;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       {/* Header */}
-      <View style={{
-        paddingTop: insets.top + 12,
-        paddingHorizontal: 20,
-        paddingBottom: 14,
-        backgroundColor: COLORS.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-      }}>
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+      <View
+        style={{
+          paddingTop: insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 14,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: "Outfit_700Bold",
+            fontSize: 26,
+            color: COLORS.text,
+            letterSpacing: -0.3,
+          }}
+        >
           Cardápio
         </Text>
-        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
+        <Text
+          style={{
+            fontFamily: "Outfit_400Regular",
+            fontSize: 13,
+            color: COLORS.textSecondary,
+            marginTop: 2,
+          }}
+        >
           {subtitleText}
         </Text>
+
+        {/* Search bar */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surfaceSecondary,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            marginTop: 12,
+            borderWidth: 1.5,
+            borderColor: searchFocused ? COLORS.primary : "transparent",
+            gap: 8,
+          }}
+        >
+          <Search size={16} color={searchFocused ? COLORS.primary : COLORS.textTertiary} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={(text) => {
+              console.log("[Cardápio] Busca alterada:", text);
+              setSearchQuery(text);
+            }}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder="Buscar prato ou descrição..."
+            placeholderTextColor={COLORS.textTertiary}
+            style={{
+              flex: 1,
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.text,
+              padding: 0,
+            }}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <AnimatedPressable
+              onPress={() => {
+                console.log("[Cardápio] Limpar busca pressionado");
+                setSearchQuery("");
+              }}
+            >
+              <X size={16} color={COLORS.textSecondary} />
+            </AnimatedPressable>
+          )}
+        </View>
       </View>
 
+      {/* Content */}
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={COLORS.primary} />
+        <ScrollView contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}>
+          <SectionSkeleton />
+          <SectionSkeleton />
+        </ScrollView>
       ) : error ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text, textAlign: "center" }}>{error}</Text>
-          <Pressable
-            onPress={() => { setLoading(true); fetchPratos(); }}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
-          >
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPratos(); }} tintColor={COLORS.primary} />}
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 32,
+            gap: 12,
+          }}
         >
-          {groups.length === 0 ? (
-            <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12, marginTop: 40 }}>
-              <UtensilsCrossed size={40} color={COLORS.textTertiary} />
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Nenhum prato disponível</Text>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 20,
+              backgroundColor: "rgba(239,68,68,0.10)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <UtensilsCrossed size={32} color={COLORS.danger} />
+          </View>
+          <Text
+            style={{
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 17,
+              color: COLORS.text,
+              textAlign: "center",
+            }}
+          >
+            Erro ao carregar cardápio
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              textAlign: "center",
+              lineHeight: 20,
+            }}
+          >
+            {error}
+          </Text>
+          <AnimatedPressable
+            onPress={() => {
+              console.log("[Cardápio] Tentar novamente pressionado");
+              setLoading(true);
+              fetchData();
+            }}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 15,
+                color: "#fff",
+              }}
+            >
+              Tentar novamente
+            </Text>
+          </AnimatedPressable>
+        </View>
+      ) : isSearching ? (
+        // ── Search results (flat list) ──
+        <ScrollView
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {searchResults.length === 0 ? (
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 48,
+                gap: 12,
+                marginTop: 32,
+              }}
+            >
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Search size={32} color={COLORS.primary} />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 17,
+                  color: COLORS.text,
+                }}
+              >
+                Nenhum resultado
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                  maxWidth: 260,
+                }}
+              >
+                Nenhum prato encontrado para "{searchQuery}"
+              </Text>
             </View>
           ) : (
-            groups.map((group) => (
-              <View key={group.categoria}>
-                <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 }}>
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text, letterSpacing: -0.2 }}>
-                    {group.categoria}
-                  </Text>
-                  <View style={{ height: 2, width: 28, backgroundColor: COLORS.primary, borderRadius: 2, marginTop: 4 }} />
-                </View>
-                {group.pratos.map((prato) => {
-                  const precoDisplay = formatPreco(prato.preco);
-                  const cardOpacity = prato.disponivel === false ? 0.5 : 1;
-                  return (
-                    <View key={prato.id} style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginHorizontal: 16,
-                      marginBottom: 8,
-                      backgroundColor: COLORS.surface,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: COLORS.border,
-                      padding: 12,
-                      gap: 12,
-                      opacity: cardOpacity,
-                    }}>
-                      {prato.imagem_url ? (
-                        <Image
-                          source={{ uri: prato.imagem_url }}
-                          style={{ width: 68, height: 68, borderRadius: 10 }}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View style={{ width: 68, height: 68, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
-                          <UtensilsCrossed size={24} color={COLORS.textTertiary} />
-                        </View>
-                      )}
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <Text numberOfLines={1} style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                          {prato.nome}
-                        </Text>
-                        {!!prato.descricao && (
-                          <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                            {prato.descricao}
-                          </Text>
-                        )}
-                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: "#22C55E" }}>
-                          {precoDisplay}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            ))
+            <>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 13,
+                  color: COLORS.textSecondary,
+                  paddingHorizontal: 20,
+                  paddingBottom: 10,
+                }}
+              >
+                {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""}
+              </Text>
+              {searchResults.map((prato, idx) => (
+                <PratoCard key={prato.id} prato={prato} index={idx} />
+              ))}
+            </>
           )}
         </ScrollView>
+      ) : (
+        // ── Category sections ──
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+          contentInsetAdjustmentBehavior="automatic"
+          stickySectionHeadersEnabled={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                console.log("[Cardápio] Pull-to-refresh acionado");
+                setRefreshing(true);
+                fetchData();
+              }}
+              tintColor={COLORS.primary}
+            />
+          }
+          renderSectionHeader={({ section }) => (
+            <View
+              style={{
+                paddingHorizontal: 20,
+                paddingTop: 20,
+                paddingBottom: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Text style={{ fontSize: 18 }}>{section.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "Outfit_700Bold",
+                    fontSize: 16,
+                    color: COLORS.text,
+                    letterSpacing: -0.2,
+                  }}
+                >
+                  {section.title}
+                </Text>
+                <View
+                  style={{
+                    height: 2,
+                    width: 24,
+                    backgroundColor: COLORS.primary,
+                    borderRadius: 2,
+                    marginTop: 3,
+                  }}
+                />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 12,
+                  color: COLORS.textTertiary,
+                }}
+              >
+                {section.data.length}
+              </Text>
+            </View>
+          )}
+          renderItem={({ item, index }) => (
+            <PratoCard prato={item} index={index} />
+          )}
+          ListEmptyComponent={
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 48,
+                gap: 12,
+                marginTop: 32,
+              }}
+            >
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <UtensilsCrossed size={32} color={COLORS.primary} />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 17,
+                  color: COLORS.text,
+                }}
+              >
+                Nenhum prato disponível
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                  maxWidth: 260,
+                }}
+              >
+                O cardápio está vazio no momento
+              </Text>
+            </View>
+          }
+        />
       )}
     </View>
   );

@@ -2,9 +2,11 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   RefreshControl,
   Animated,
+  FlatList,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -12,9 +14,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { CardSkeleton } from "@/components/SkeletonLoader";
+import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { Users, ChevronRight } from "lucide-react-native";
+import { Users, UtensilsCrossed, LayoutGrid } from "lucide-react-native";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ApiMesa {
   id: string;
@@ -23,6 +27,10 @@ interface ApiMesa {
   status: string;
   comanda_id?: string;
 }
+
+type FilterKey = "todas" | "livres" | "ocupadas" | "reservadas";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getMesaStatusLabel(status: string): string {
   const labels: Record<string, string> = {
@@ -50,35 +58,77 @@ function getMesaStatusColor(status: string): string {
   return map[status] || "#94A3B8";
 }
 
-function isDisponivel(status: string): boolean {
+function isLivre(status: string): boolean {
   return status === "disponivel" || status === "livre" || status === "free";
 }
 
-function MesaListItem({
+function isOcupada(status: string): boolean {
+  return status === "ocupada" || status === "occupied";
+}
+
+function isReservada(status: string): boolean {
+  return status === "reservada" || status === "reserved";
+}
+
+function canOpenComanda(status: string): boolean {
+  return isLivre(status) || isReservada(status);
+}
+
+// ─── Skeleton Grid ────────────────────────────────────────────────────────────
+
+function MesaCardSkeleton() {
+  const COLORS = useColors();
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        padding: 16,
+        margin: 6,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        gap: 10,
+        minHeight: 160,
+      }}
+    >
+      <SkeletonLine width={48} height={48} borderRadius={12} />
+      <SkeletonLine width="70%" height={16} />
+      <SkeletonLine width="50%" height={12} />
+      <SkeletonLine width="60%" height={28} borderRadius={8} />
+    </View>
+  );
+}
+
+// ─── Mesa Card ────────────────────────────────────────────────────────────────
+
+function MesaCard({
   mesa,
+  onOpenComanda,
   onPress,
   index,
 }: {
   mesa: ApiMesa;
+  onOpenComanda: () => void;
   onPress: () => void;
   index: number;
 }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(12)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 300,
-        delay: index * 40,
+        duration: 320,
+        delay: index * 50,
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 300,
-        delay: index * 40,
+        duration: 320,
+        delay: index * 50,
         useNativeDriver: true,
       }),
     ]).start();
@@ -86,77 +136,106 @@ function MesaListItem({
 
   const statusColor = getMesaStatusColor(mesa.status);
   const statusLabel = getMesaStatusLabel(mesa.status);
-  const livre = isDisponivel(mesa.status);
+  const canOpen = canOpenComanda(mesa.status);
   const mesaLabel = `Mesa ${mesa.numero}`;
-  const capacidadeLabel = `Capacidade: ${mesa.capacidade} pessoas`;
+  const capacidadeLabel = `${mesa.capacidade} pessoas`;
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+    <Animated.View
+      style={{
+        flex: 1,
+        opacity,
+        transform: [{ translateY }],
+        margin: 6,
+      }}
+    >
       <AnimatedPressable
         onPress={() => {
-          console.log("[Mesas] Mesa row pressed:", mesa.numero, "status:", mesa.status);
+          console.log("[Mesas] Card da mesa pressionado:", mesa.numero, "status:", mesa.status);
           onPress();
         }}
         style={{
           backgroundColor: COLORS.surface,
-          marginHorizontal: 16,
-          marginBottom: 10,
           borderRadius: 16,
-          borderWidth: 1,
-          borderColor: livre ? COLORS.border : statusColor + "40",
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 16,
-          paddingVertical: 14,
+          borderWidth: 1.5,
+          borderColor: isOcupada(mesa.status)
+            ? statusColor + "30"
+            : isReservada(mesa.status)
+            ? statusColor + "40"
+            : COLORS.border,
+          padding: 14,
           shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 4,
-          elevation: 1,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 2,
+          minHeight: 168,
+          justifyContent: "space-between",
         }}
       >
-        {/* Status dot + Mesa number */}
-        <View
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
-            backgroundColor: statusColor + "18",
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 14,
-          }}
-        >
-          <Text
+        {/* Top: number circle + status badge */}
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <View
             style={{
-              fontFamily: "Outfit_700Bold",
-              fontSize: 22,
-              color: statusColor,
+              width: 52,
+              height: 52,
+              borderRadius: 14,
+              backgroundColor: statusColor + "18",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {mesa.numero}
-          </Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 22,
+                color: statusColor,
+                letterSpacing: -0.5,
+              }}
+            >
+              {mesa.numero}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              backgroundColor: statusColor + "20",
+              borderRadius: 20,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "Outfit_600SemiBold",
+                fontSize: 11,
+                color: statusColor,
+                letterSpacing: 0.2,
+              }}
+            >
+              {statusLabel}
+            </Text>
+          </View>
         </View>
 
-        {/* Center info */}
-        <View style={{ flex: 1, gap: 4 }}>
+        {/* Middle: name + capacity */}
+        <View style={{ marginTop: 10, gap: 4 }}>
           <Text
             style={{
               fontFamily: "Outfit_700Bold",
-              fontSize: 17,
+              fontSize: 16,
               color: COLORS.text,
               letterSpacing: -0.2,
             }}
           >
             {mesaLabel}
           </Text>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Users size={12} color={COLORS.textSecondary} />
             <Text
               style={{
                 fontFamily: "Outfit_400Regular",
-                fontSize: 13,
+                fontSize: 12,
                 color: COLORS.textSecondary,
               }}
             >
@@ -165,57 +244,137 @@ function MesaListItem({
           </View>
         </View>
 
-        {/* Status badge */}
-        <View
+        {/* Bottom: action button */}
+        <AnimatedPressable
+          onPress={() => {
+            console.log("[Mesas] Botão Abrir Comanda pressionado — mesa:", mesa.numero, "id:", mesa.id);
+            onOpenComanda();
+          }}
+          disabled={!canOpen}
           style={{
-            backgroundColor: statusColor + "20",
-            borderRadius: 20,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            marginRight: 10,
+            marginTop: 12,
+            backgroundColor: canOpen ? COLORS.primary : COLORS.surfaceSecondary,
+            borderRadius: 10,
+            paddingVertical: 9,
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "row",
+            gap: 5,
+            opacity: canOpen ? 1 : 0.5,
           }}
         >
+          <UtensilsCrossed size={13} color={canOpen ? "#fff" : COLORS.textTertiary} />
           <Text
             style={{
               fontFamily: "Outfit_600SemiBold",
               fontSize: 12,
-              color: statusColor,
+              color: canOpen ? "#fff" : COLORS.textTertiary,
             }}
           >
-            {statusLabel}
+            {isOcupada(mesa.status) ? "Ocupada" : "Abrir Comanda"}
           </Text>
-        </View>
-
-        {/* Chevron */}
-        <ChevronRight size={18} color={COLORS.textSecondary} />
+        </AnimatedPressable>
       </AnimatedPressable>
     </Animated.View>
   );
 }
+
+// ─── Filter Chip ──────────────────────────────────────────────────────────────
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const COLORS = useColors();
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: active ? COLORS.primary : COLORS.surface,
+        borderWidth: 1.5,
+        borderColor: active ? COLORS.primary : COLORS.border,
+        marginRight: 8,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: active ? "Outfit_700Bold" : "Outfit_500Medium",
+          fontSize: 13,
+          color: active ? "#fff" : COLORS.textSecondary,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          backgroundColor: active ? "rgba(255,255,255,0.25)" : COLORS.surfaceSecondary,
+          borderRadius: 10,
+          minWidth: 20,
+          height: 20,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 5,
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: "Outfit_700Bold",
+            fontSize: 11,
+            color: active ? "#fff" : COLORS.textSecondary,
+          }}
+        >
+          {count}
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "todas", label: "Todas" },
+  { key: "livres", label: "Livres" },
+  { key: "ocupadas", label: "Ocupadas" },
+  { key: "reservadas", label: "Reservadas" },
+];
 
 export default function MesasScreen() {
   const COLORS = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const role = user?.role as string | undefined;
-  const canAdmin = role === "admin" || role === "administrador" || role === "gerente";
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("todas");
 
   const fetchMesas = useCallback(async () => {
-    console.log("[Mesas] Fetching mesas from /api/mesas");
+    console.log("[Mesas] GET /api/mesas");
     try {
       const res = await apiGet<any>("/api/mesas");
       const list: ApiMesa[] = Array.isArray(res) ? res : (res.mesas || []);
-      console.log("[Mesas] Loaded", list.length, "mesas");
+      console.log("[Mesas] Carregadas", list.length, "mesas");
       setMesas(list);
       setError("");
     } catch (e: any) {
-      console.error("[Mesas] Error fetching mesas:", e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Mesas] Erro ao carregar mesas:", msg);
       setError("Não foi possível carregar as mesas.");
     } finally {
       setLoading(false);
@@ -223,34 +382,68 @@ export default function MesasScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    fetchMesas();
-    const interval = setInterval(() => {
-      console.log("[Mesas] Auto-refresh (30s)");
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
       fetchMesas();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [fetchMesas]));
+      const interval = setInterval(() => {
+        console.log("[Mesas] Auto-refresh (30s)");
+        fetchMesas();
+      }, 30000);
+      return () => clearInterval(interval);
+    }, [fetchMesas])
+  );
 
   const handleRefresh = () => {
-    console.log("[Mesas] Manual refresh");
+    console.log("[Mesas] Pull-to-refresh acionado");
     setRefreshing(true);
     fetchMesas();
   };
 
+  const handleOpenComanda = (mesa: ApiMesa) => {
+    console.log("[Mesas] Abrir comanda — mesa:", mesa.numero, "id:", mesa.id, "status:", mesa.status);
+    router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
+  };
+
   const handleMesaPress = (mesa: ApiMesa) => {
-    console.log("[Mesas] Mesa pressed:", mesa.numero, "status:", mesa.status, "comanda_id:", mesa.comanda_id);
-    if (!isDisponivel(mesa.status) && mesa.comanda_id) {
+    console.log("[Mesas] Mesa pressionada:", mesa.numero, "comanda_id:", mesa.comanda_id);
+    if (isOcupada(mesa.status) && mesa.comanda_id) {
       router.push(`/comanda/${mesa.comanda_id}`);
-    } else if (isDisponivel(mesa.status) && (role === "garcom" || canAdmin)) {
+    } else if (canOpenComanda(mesa.status)) {
       router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
     } else {
       router.push(`/mesa/${mesa.id}`);
     }
   };
 
-  const livreCount = mesas.filter((m) => isDisponivel(m.status)).length;
-  const ocupadaCount = mesas.filter((m) => !isDisponivel(m.status)).length;
+  // Counts
+  const livreCount = mesas.filter((m) => isLivre(m.status)).length;
+  const ocupadaCount = mesas.filter((m) => isOcupada(m.status)).length;
+  const reservadaCount = mesas.filter((m) => isReservada(m.status)).length;
+
+  const filterCounts: Record<FilterKey, number> = {
+    todas: mesas.length,
+    livres: livreCount,
+    ocupadas: ocupadaCount,
+    reservadas: reservadaCount,
+  };
+
+  // Filtered list
+  const filteredMesas = mesas.filter((m) => {
+    if (activeFilter === "todas") return true;
+    if (activeFilter === "livres") return isLivre(m.status);
+    if (activeFilter === "ocupadas") return isOcupada(m.status);
+    if (activeFilter === "reservadas") return isReservada(m.status);
+    return true;
+  });
+
+  // Pair up for 2-column grid
+  const rows: ApiMesa[][] = [];
+  for (let i = 0; i < filteredMesas.length; i += 2) {
+    rows.push(filteredMesas.slice(i, i + 2));
+  }
+
+  const subtitleText = `${ocupadaCount} ocupadas · ${livreCount} disponíveis`;
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -259,7 +452,7 @@ export default function MesasScreen() {
         style={{
           paddingTop: insets.top + 12,
           paddingHorizontal: 20,
-          paddingBottom: 16,
+          paddingBottom: 14,
           backgroundColor: COLORS.surface,
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
@@ -284,52 +477,65 @@ export default function MesasScreen() {
               fontFamily: "Outfit_400Regular",
               fontSize: 13,
               color: COLORS.textSecondary,
+              marginTop: 2,
             }}
           >
-            {ocupadaCount} ocupadas · {livreCount} disponíveis
+            {loading ? "Carregando..." : subtitleText}
           </Text>
         </View>
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            backgroundColor: COLORS.primaryMuted,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <LayoutGrid size={20} color={COLORS.primary} />
+        </View>
       </View>
 
-      {/* Legend */}
+      {/* Filter chips */}
       <View
         style={{
-          flexDirection: "row",
-          paddingHorizontal: 20,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
           paddingVertical: 10,
-          gap: 14,
-          flexWrap: "wrap",
         }}
       >
-        {(["disponivel", "ocupada", "reservada"] as string[]).map((s) => (
-          <View key={s} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: getMesaStatusColor(s),
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+        >
+          {FILTERS.map((f) => (
+            <FilterChip
+              key={f.key}
+              label={f.label}
+              count={filterCounts[f.key]}
+              active={activeFilter === f.key}
+              onPress={() => {
+                console.log("[Mesas] Filtro selecionado:", f.key);
+                setActiveFilter(f.key);
               }}
             />
-            <Text
-              style={{
-                fontFamily: "Outfit_400Regular",
-                fontSize: 11,
-                color: COLORS.textSecondary,
-              }}
-            >
-              {getMesaStatusLabel(s)}
-            </Text>
-          </View>
-        ))}
+          ))}
+        </ScrollView>
       </View>
 
+      {/* Content */}
       {loading ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 10 }}>
-          {[0, 1, 2, 3].map((i) => (
-            <CardSkeleton key={i} />
+        <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 120 }}>
+          {[0, 1, 2].map((row) => (
+            <View key={row} style={{ flexDirection: "row" }}>
+              <MesaCardSkeleton />
+              <MesaCardSkeleton />
+            </View>
           ))}
-        </View>
+        </ScrollView>
       ) : error ? (
         <View
           style={{
@@ -340,11 +546,24 @@ export default function MesasScreen() {
             gap: 12,
           }}
         >
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 20,
+              backgroundColor: "rgba(239,68,68,0.10)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <LayoutGrid size={32} color={COLORS.danger} />
+          </View>
           <Text
             style={{
               fontFamily: "Outfit_600SemiBold",
               fontSize: 17,
               color: COLORS.text,
+              textAlign: "center",
             }}
           >
             Erro ao carregar mesas
@@ -355,17 +574,22 @@ export default function MesasScreen() {
               fontSize: 14,
               color: COLORS.textSecondary,
               textAlign: "center",
+              lineHeight: 20,
             }}
           >
             {error}
           </Text>
           <AnimatedPressable
-            onPress={fetchMesas}
+            onPress={() => {
+              console.log("[Mesas] Tentar novamente pressionado");
+              setLoading(true);
+              fetchMesas();
+            }}
             style={{
               backgroundColor: COLORS.primary,
               borderRadius: 12,
-              paddingHorizontal: 24,
-              paddingVertical: 12,
+              paddingHorizontal: 28,
+              paddingVertical: 13,
             }}
           >
             <Text
@@ -380,17 +604,8 @@ export default function MesasScreen() {
           </AnimatedPressable>
         </View>
       ) : (
-        <FlatList
-          data={mesas}
-          renderItem={({ item, index }) => (
-            <MesaListItem
-              mesa={item}
-              onPress={() => handleMesaPress(item)}
-              index={index}
-            />
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: 120 }}
+        <ScrollView
+          contentContainerStyle={{ padding: 6, paddingBottom: 120 }}
           contentInsetAdjustmentBehavior="automatic"
           refreshControl={
             <RefreshControl
@@ -399,13 +614,15 @@ export default function MesasScreen() {
               tintColor={COLORS.primary}
             />
           }
-          ListEmptyComponent={
+        >
+          {filteredMesas.length === 0 ? (
             <View
               style={{
                 alignItems: "center",
                 justifyContent: "center",
                 padding: 48,
                 gap: 12,
+                marginTop: 32,
               }}
             >
               <View
@@ -418,7 +635,7 @@ export default function MesasScreen() {
                   justifyContent: "center",
                 }}
               >
-                <Users size={32} color={COLORS.primary} />
+                <LayoutGrid size={32} color={COLORS.primary} />
               </View>
               <Text
                 style={{
@@ -427,7 +644,7 @@ export default function MesasScreen() {
                   color: COLORS.text,
                 }}
               >
-                Nenhuma mesa cadastrada
+                Nenhuma mesa encontrada
               </Text>
               <Text
                 style={{
@@ -435,13 +652,30 @@ export default function MesasScreen() {
                   fontSize: 14,
                   color: COLORS.textSecondary,
                   textAlign: "center",
+                  maxWidth: 260,
                 }}
               >
-                As mesas do restaurante aparecerão aqui
+                Não há mesas com o filtro selecionado
               </Text>
             </View>
-          }
-        />
+          ) : (
+            rows.map((row, rowIdx) => (
+              <View key={rowIdx} style={{ flexDirection: "row" }}>
+                {row.map((mesa, colIdx) => (
+                  <MesaCard
+                    key={mesa.id}
+                    mesa={mesa}
+                    index={rowIdx * 2 + colIdx}
+                    onOpenComanda={() => handleOpenComanda(mesa)}
+                    onPress={() => handleMesaPress(mesa)}
+                  />
+                ))}
+                {/* Fill empty slot if odd number */}
+                {row.length === 1 && <View style={{ flex: 1, margin: 6 }} />}
+              </View>
+            ))
+          )}
+        </ScrollView>
       )}
     </View>
   );
