@@ -100,10 +100,10 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateCategoriaBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.nome) {
@@ -242,10 +242,10 @@ export function registerCategoriasRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ categoriaId: request.params.id }, "Deleting categoria");

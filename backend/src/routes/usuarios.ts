@@ -118,10 +118,10 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateUsuarioBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.email || !request.body.senha) {
@@ -198,10 +198,10 @@ export function registerUsuariosRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateUsuarioBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Updating usuario");
@@ -266,10 +266,10 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");

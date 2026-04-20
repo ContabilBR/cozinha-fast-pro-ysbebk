@@ -113,10 +113,10 @@ export function registerGarconRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateGarconBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.name || !request.body.email || !request.body.password) {
@@ -233,10 +233,10 @@ export function registerGarconRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateGarconBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Updating garcon");
@@ -309,10 +309,10 @@ export function registerGarconRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Deleting garcon");
@@ -377,11 +377,11 @@ export function registerGarconRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      const authUserId = session.userId;
-      const authUserEmail = session.user.email;
+      const authUserId = authUser.id;
+      const authUserEmail = authUser.email;
 
       try {
         // Look up usuarios by email for broad OR filtering

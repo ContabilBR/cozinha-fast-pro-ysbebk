@@ -4,11 +4,18 @@ import { session as sessionTable, user as userTable } from "../db/schema/auth-sc
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 
+export interface AuthContext {
+  id: string;
+  email: string;
+  role: string;
+  name: string;
+}
+
 export async function requireAuth(
   app: App,
   request: FastifyRequest,
   reply: FastifyReply
-): Promise<{ userId: string; user: any; profile: any } | null> {
+): Promise<AuthContext | null> {
   try {
     const authHeader = request.headers.authorization;
 
@@ -21,7 +28,7 @@ export async function requireAuth(
     const token = authHeader.slice(7).trim();
     app.logger.debug({ token: token.substring(0, 20) }, "Validating bearer token");
 
-    // Try custom usuarios_session table first (new custom auth)
+    // Try custom usuarios_session table first
     const usuariosSessions = await app.db
       .select()
       .from(schema.usuariosSession)
@@ -38,27 +45,47 @@ export async function requireAuth(
         return null;
       }
 
-      // Get user from usuarios table
+      // Try to find user in usuarios table (session.userId is text, usuarios.id is UUID)
       const usuarios = await app.db
         .select()
         .from(schema.usuarios)
         .where(eq(schema.usuarios.id, session.userId as any))
         .limit(1);
 
-      if (!usuarios || usuarios.length === 0) {
-        app.logger.warn({ userId: session.userId }, "Usuario not found for session");
-        reply.status(401).send({ error: "Unauthorized" });
-        return null;
+      if (usuarios && usuarios.length > 0) {
+        const usuario = usuarios[0];
+        app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session auth validation successful");
+
+        return {
+          id: usuario.id.toString(),
+          email: usuario.email,
+          role: usuario.role,
+          name: usuario.nome,
+        };
       }
 
-      const usuario = usuarios[0];
-      app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session auth validation successful");
+      // Fall back to user table (Better Auth) if not found in usuarios
+      const users = await app.db
+        .select()
+        .from(userTable)
+        .where(eq(userTable.id, session.userId))
+        .limit(1);
 
-      return {
-        userId: usuario.id,
-        user: usuario,
-        profile: { role: usuario.role, name: usuario.nome },
-      };
+      if (users && users.length > 0) {
+        const user = users[0];
+        app.logger.info({ userId: user.id }, "Usuarios session auth validation successful (Better Auth user)");
+
+        return {
+          id: user.id,
+          email: user.email,
+          role: user.role ?? "garcom",
+          name: user.name || "",
+        };
+      }
+
+      app.logger.warn({ userId: session.userId }, "User not found in either usuarios or user table");
+      reply.status(401).send({ error: "User not found" });
+      return null;
     }
 
     // Fall back to Better Auth session table
@@ -94,29 +121,18 @@ export async function requireAuth(
 
     if (!users || users.length === 0) {
       app.logger.warn({ userId: session.userId }, "User not found for Better Auth session");
-      reply.status(401).send({ error: "Unauthorized" });
+      reply.status(401).send({ error: "User not found" });
       return null;
     }
 
     const user = users[0];
-
-    // Get profile for role information
-    const profiles = await app.db
-      .select()
-      .from(schema.profiles)
-      .where(eq(schema.profiles.userId, user.id))
-      .limit(1);
-
-    const profile = profiles && profiles.length > 0
-      ? { role: profiles[0].role, name: profiles[0].name }
-      : { role: user.role || "usuario", name: user.name };
-
     app.logger.info({ userId: user.id }, "Better Auth session validation successful");
 
     return {
-      userId: user.id,
-      user: user,
-      profile: profile,
+      id: user.id,
+      email: user.email,
+      role: user.role ?? "garcom",
+      name: user.name || "",
     };
   } catch (error) {
     app.logger.error({ err: error }, "Auth validation failed");
@@ -126,16 +142,33 @@ export async function requireAuth(
 }
 
 export function requireRole(
-  user: any,
-  profile: any,
-  allowedRoles: string[],
-  reply: FastifyReply
+  authUserOrUser: AuthContext | any,
+  allowedRolesOrProfile?: string[] | any,
+  allowedRolesOrReply?: string[] | FastifyReply,
+  reply?: FastifyReply
 ): boolean {
-  // Check both user role and profile role
-  const userRole = profile?.role || user?.role;
-  if (!allowedRoles.includes(userRole)) {
-    reply.status(403).send({ error: "Forbidden" });
-    return false;
+  // Handle both old (3 args) and new (2 args) signatures for backward compatibility
+  let userRole: string;
+  let actualReply: FastifyReply;
+
+  if (Array.isArray(allowedRolesOrProfile)) {
+    // New signature: (authContext, allowedRoles, reply)
+    userRole = authUserOrUser.role;
+    actualReply = allowedRolesOrReply as FastifyReply;
+    const allowedRoles = allowedRolesOrProfile as string[];
+    if (!allowedRoles.includes(userRole)) {
+      actualReply.status(403).send({ error: "Forbidden" });
+      return false;
+    }
+  } else {
+    // Old signature: (user, profile, allowedRoles, reply)
+    userRole = allowedRolesOrProfile?.role || authUserOrUser?.role;
+    actualReply = reply!;
+    const allowedRoles = allowedRolesOrReply as string[];
+    if (!allowedRoles.includes(userRole)) {
+      actualReply.status(403).send({ error: "Forbidden" });
+      return false;
+    }
   }
   return true;
 }

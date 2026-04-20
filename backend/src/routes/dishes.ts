@@ -154,10 +154,10 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreatePratoBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.preco) {
@@ -348,10 +348,10 @@ export function registerDishRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdatePratoBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Updating prato");
@@ -422,10 +422,10 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
@@ -480,10 +480,10 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente", "cozinheiro"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "cozinheiro"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Uploading prato photo");

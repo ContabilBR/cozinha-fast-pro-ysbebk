@@ -768,6 +768,17 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.mesas)).toBe(true);
   });
 
+  test("List mesas filtered by status", async () => {
+    const res = await authenticatedApi(
+      "/api/mesas?status=livre",
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.mesas).toBeDefined();
+    expect(Array.isArray(data.mesas)).toBe(true);
+  });
+
   test("Create mesa", async () => {
     const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",

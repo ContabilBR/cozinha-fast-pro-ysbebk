@@ -68,11 +68,11 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Querystring: { status?: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        const authUserId = session.userId;
+        const authUserId = authUser.id;
 
         app.logger.info(
           { authUserId, status: request.query.status },
@@ -169,8 +169,8 @@ export function registerOrderRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateComandaBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
         const mesaId = request.body.mesa_id || request.body.mesaId;
@@ -192,14 +192,14 @@ export function registerOrderRoutes(app: App) {
 
         const mesa = mesaRecords[0];
 
-        // Store garcom_id as the authenticated user's Better Auth id (text, stable across deploys)
-        const garcomId = session.userId;
+        // Store garcom_id as the authenticated user's id (text, stable across deploys)
+        const garcomId = authUser.id;
 
         app.logger.info(
           {
             mesaId,
             garcomId,
-            authUserEmail: session.user.email,
+            authUserEmail: authUser.email,
           },
           "Creating comanda with auth user id as garcom_id"
         );
@@ -441,8 +441,8 @@ export function registerOrderRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: CreatePedidosBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
         const comandaId = request.params.id;
@@ -465,7 +465,7 @@ export function registerOrderRoutes(app: App) {
         const comanda = comandas[0];
 
         // Resolve garcom_id and verify ownership
-        const { garcomId: resolvedGarcomId } = await resolveGarcomId(app, session.user.email, session.userId);
+        const { garcomId: resolvedGarcomId } = await resolveGarcomId(app, authUser.email, authUser.id);
 
         if (comanda.garcomId !== resolvedGarcomId) {
           app.logger.warn(

@@ -140,10 +140,10 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Body: CreateMesaBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.numero) {
@@ -296,10 +296,10 @@ export function registerTableRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateMesaBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id, body: request.body }, "Updating mesa");
@@ -377,10 +377,10 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id }, "Deleting mesa with cascade");
@@ -453,10 +453,10 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-      if (!requireRole(session.user, session.profile, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ mesaId: request.params.id }, "Force deleting mesa");

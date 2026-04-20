@@ -62,11 +62,11 @@ export function registerOrderItemRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        const authUserId = session.userId;
+        const authUserId = authUser.id;
         app.logger.info({ authUserId }, "Listing pedidos for user");
 
         const pedidos = await app.db
