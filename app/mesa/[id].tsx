@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
+import { View, Text, ScrollView, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,54 @@ import { Mesa } from "@/types";
 import { apiGet } from "@/utils/api";
 import { getMesaStatusLabel, getMesaStatusColor, isAdmin } from "@/utils/helpers";
 import { Users } from "lucide-react-native";
+
+const BASE_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
+
+interface Pedido {
+  id: string | number;
+  prato_nome: string;
+  quantidade: number;
+  preco_unitario: number;
+  observacao?: string | null;
+  status: string;
+}
+
+interface ComandaInfo {
+  id: string | number;
+  aberta_em: string;
+  garcom_nome: string;
+  total: number;
+  status: string;
+  pedidos: Pedido[];
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
+function formatPrice(value: number | string): string {
+  return Number(value).toFixed(2).replace(".", ",");
+}
+
+function getPedidoStatusConfig(status: string): { label: string; color: string; bg: string } {
+  switch (status) {
+    case "em_preparo":
+      return { label: "Em Preparo", color: "#F59E0B", bg: "rgba(245,158,11,0.12)" };
+    case "pronto":
+      return { label: "Pronto", color: "#22C55E", bg: "rgba(34,197,94,0.12)" };
+    case "entregue":
+      return { label: "Entregue", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" };
+    default:
+      return { label: "Pendente", color: "#94A3B8", bg: "rgba(148,163,184,0.12)" };
+  }
+}
 
 export default function MesaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,6 +73,32 @@ export default function MesaDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  const [comanda, setComanda] = useState<ComandaInfo | null>(null);
+  const [comandaLoading, setComandaLoading] = useState(false);
+
+  const fetchComanda = useCallback(async (mesaId: string) => {
+    console.log("[Mesa] GET /api/mesas/" + mesaId + "/comanda");
+    setComandaLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/mesas/${mesaId}/comanda`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn("[Mesa] Comanda fetch error:", res.status, text.slice(0, 200));
+        setComanda(null);
+        return;
+      }
+      const data = await res.json();
+      const c: ComandaInfo | null = data.comanda ?? data ?? null;
+      console.log("[Mesa] Comanda carregada:", c?.id ?? "nenhuma");
+      setComanda(c);
+    } catch (e: any) {
+      console.error("[Mesa] Erro ao buscar comanda:", e);
+      setComanda(null);
+    } finally {
+      setComandaLoading(false);
+    }
+  }, []);
+
   const fetchMesa = useCallback(async () => {
     console.log("[Mesa] GET /api/mesas/" + id);
     try {
@@ -32,6 +106,11 @@ export default function MesaDetailScreen() {
       const m: Mesa = res.mesa || res;
       setMesa(m);
       setError("");
+      if ((m.status as string) === "ocupada") {
+        fetchComanda(String(id));
+      } else {
+        setComanda(null);
+      }
     } catch (e: any) {
       console.error("[Mesa] Erro:", e);
       setError("Não foi possível carregar a mesa.");
@@ -39,7 +118,7 @@ export default function MesaDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, fetchComanda]);
 
   useEffect(() => { fetchMesa(); }, [fetchMesa]);
 
@@ -66,6 +145,11 @@ export default function MesaDetailScreen() {
   const mesaStatus = mesa?.status ?? "livre";
   const comandaId = (mesa as any)?.comanda_id;
   const garcomName = (mesa as any)?.garcom?.name;
+
+  const isOcupada = (mesaStatus as string) === "ocupada";
+  const pedidosCount = comanda?.pedidos?.length ?? 0;
+  const abertoEm = comanda ? formatDateTime(comanda.aberta_em) : "";
+  const totalFormatted = comanda ? formatPrice(comanda.total) : "0,00";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -122,6 +206,7 @@ export default function MesaDetailScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 80, gap: 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
         >
+          {/* Mesa info card */}
           <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: COLORS.border, gap: 16 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <View style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: statusColor + "18", alignItems: "center", justifyContent: "center" }}>
@@ -147,6 +232,143 @@ export default function MesaDetailScreen() {
             </View>
           </View>
 
+          {/* Comanda section — only when ocupada */}
+          {isOcupada ? (
+            comandaLoading ? (
+              <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, marginTop: 8 }}>
+                  Carregando comanda...
+                </Text>
+              </View>
+            ) : comanda ? (
+              <>
+                {/* Comanda header card */}
+                <View>
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, marginBottom: 10 }}>
+                    Comanda Ativa
+                  </Text>
+                  <View style={{
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    gap: 10,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.06,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <View style={{ gap: 8, flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontSize: 15 }}>🧾</Text>
+                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+                            Aberta em:
+                          </Text>
+                          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
+                            {abertoEm}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontSize: 15 }}>👤</Text>
+                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+                            Garçom:
+                          </Text>
+                          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
+                            {comanda.garcom_nome}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontSize: 15 }}>💰</Text>
+                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+                            Total:
+                          </Text>
+                          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
+                            R$ {totalFormatted}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ backgroundColor: "rgba(34,197,94,0.12)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginLeft: 12 }}>
+                        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: "#22C55E" }}>Aberta</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Pedidos list */}
+                <View>
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text, marginBottom: 10 }}>
+                    Pedidos ({pedidosCount})
+                  </Text>
+                  {pedidosCount === 0 ? (
+                    <View style={{
+                      backgroundColor: COLORS.surface,
+                      borderRadius: 16,
+                      padding: 20,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      alignItems: "center",
+                    }}>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
+                        Nenhum pedido ainda
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 10 }}>
+                      {comanda.pedidos.map((pedido) => {
+                        const statusCfg = getPedidoStatusConfig(pedido.status);
+                        const precoFormatted = formatPrice(pedido.preco_unitario);
+                        const qtdPreco = `${pedido.quantidade}x R$ ${precoFormatted}`;
+                        const hasObs = pedido.observacao && pedido.observacao.trim().length > 0;
+                        return (
+                          <View
+                            key={pedido.id}
+                            style={{
+                              backgroundColor: COLORS.surface,
+                              borderRadius: 14,
+                              padding: 14,
+                              borderWidth: 1,
+                              borderColor: COLORS.border,
+                              gap: 6,
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.05,
+                              shadowRadius: 3,
+                              elevation: 1,
+                            }}
+                          >
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.text, flex: 1, marginRight: 8 }}>
+                                {pedido.prato_nome}
+                              </Text>
+                              <View style={{ backgroundColor: statusCfg.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusCfg.color }}>
+                                  {statusCfg.label}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+                              {qtdPreco}
+                            </Text>
+                            {hasObs ? (
+                              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary, fontStyle: "italic" }}>
+                                {pedido.observacao}
+                              </Text>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              </>
+            ) : null
+          ) : null}
+
+          {/* Action buttons */}
           {comandaId ? (
             <AnimatedPressable
               onPress={() => { console.log("[Mesa] Ver comanda pressionado:", comandaId); router.push(`/comanda/${comandaId}`); }}
