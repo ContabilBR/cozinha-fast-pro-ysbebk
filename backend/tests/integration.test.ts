@@ -1288,6 +1288,42 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Delete comanda", async () => {
+    // Create a new comanda to delete
+    const createRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const createData = await createRes.json();
+
+    const res = await authenticatedApi(`/api/comandas/${createData.comanda.id}`, authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 204);
+  });
+
+  test("Delete non-existent comanda returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete comanda with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/comandas/invalid-uuid", authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 400);
+  });
+
   // ==================== Pedidos CRUD (depends on comanda and prato) ====================
   let pedidoCommandaId: string;
   let pedidoPratoId: string;
@@ -1428,6 +1464,48 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+  });
+
+  test("Update pedido observacao", async () => {
+    const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/observacao`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        observacao: "Updated observation - no croutons",
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update non-existent pedido observacao returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/pedidos/00000000-0000-0000-0000-000000000000/observacao",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ observacao: "Test" }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Update pedido observacao with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/pedidos/bad-uuid/observacao", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ observacao: "Test" }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Update pedido observacao without authentication returns 401", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}/observacao`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ observacao: "Test" }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Delete pedido", async () => {

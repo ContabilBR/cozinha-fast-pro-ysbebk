@@ -40,53 +40,82 @@ const seedAuthUsers = [
 ];
 
 const seedCategorias = [
-  { nome: "Entradas", descricao: "Aperitivos e entradas" },
+  { nome: "Entradas", descricao: "Aperitivos e entradas leves" },
   { nome: "Pratos Principais", descricao: "Pratos quentes e frios" },
+  { nome: "Sobremesas", descricao: "Doces e sobremesas" },
   { nome: "Bebidas", descricao: "Bebidas quentes e frias" },
 ];
 
 const seedPratos = [
   {
-    nome: "Bruschetta Italiana",
-    descricao: "Pão crocante com tomate fresco e manjericão",
-    preco: "18.90",
+    nome: "Coxinha de Frango",
+    descricao: "Coxinha crocante recheada com frango desfiado",
+    preco: "12.90",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato1/400/300",
   },
   {
-    nome: "Carpaccio de Carne",
-    descricao: "Carne bovina cortada finíssima com limão e azeite",
-    preco: "32.00",
+    nome: "Bolinho de Bacalhau",
+    descricao: "Bolinho de bacalhau à Brás, crocante por fora macio por dentro",
+    preco: "15.90",
     categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato2/400/300",
   },
   {
-    nome: "Filé ao Molho Madeira",
-    descricao: "Filé mignon grelhado com molho madeira",
-    preco: "58.00",
-    categoria: "Pratos Principais",
+    nome: "Pão de Alho",
+    descricao: "Pão crocante com azeite e alho",
+    preco: "8.90",
+    categoria: "Entradas",
     imagemUrl: "https://picsum.photos/seed/prato3/400/300",
   },
   {
-    nome: "Risoto de Camarão",
-    descricao: "Risoto cremoso com camarões frescos",
-    preco: "65.00",
+    nome: "Frango Grelhado",
+    descricao: "Peito de frango grelhado com acompanhamentos",
+    preco: "38.90",
     categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato4/400/300",
   },
   {
-    nome: "Suco de Laranja Natural",
-    descricao: "Suco natural de laranja fresca",
-    preco: "12.00",
-    categoria: "Bebidas",
+    nome: "Picanha na Brasa",
+    descricao: "Picanha suculenta grelhada no fogo de chão",
+    preco: "65.90",
+    categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato5/400/300",
   },
   {
-    nome: "Água com Gás",
-    descricao: "Água mineral com gás gelada",
-    preco: "8.00",
-    categoria: "Bebidas",
+    nome: "Salmão ao Molho",
+    descricao: "Salmão fresco ao molho de limão e manteiga",
+    preco: "55.90",
+    categoria: "Pratos Principais",
     imagemUrl: "https://picsum.photos/seed/prato6/400/300",
+  },
+  {
+    nome: "Feijoada Completa",
+    descricao: "Feijoada tradicional com acompanhamentos",
+    preco: "42.90",
+    categoria: "Pratos Principais",
+    imagemUrl: "https://picsum.photos/seed/prato7/400/300",
+  },
+  {
+    nome: "Pudim de Leite",
+    descricao: "Pudim doce de leite condensado",
+    preco: "14.90",
+    categoria: "Sobremesas",
+    imagemUrl: "https://picsum.photos/seed/prato8/400/300",
+  },
+  {
+    nome: "Mousse de Chocolate",
+    descricao: "Mousse aerado de chocolate belga",
+    preco: "12.90",
+    categoria: "Sobremesas",
+    imagemUrl: "https://picsum.photos/seed/prato9/400/300",
+  },
+  {
+    nome: "Suco de Laranja Natural",
+    descricao: "Suco natural de laranja fresca",
+    preco: "9.90",
+    categoria: "Bebidas",
+    imagemUrl: "https://picsum.photos/seed/prato10/400/300",
   },
 ];
 
@@ -288,19 +317,17 @@ export async function seedDatabase(app: App) {
       return;
     }
 
-    // Seed mesas (10 tables with capacidade 4)
+    // Seed mesas (8 tables with varied statuses and capacidades)
     app.logger.info("Seeding mesas");
     const mesasToSeed = [
-      { numero: 1, capacidade: 4 },
-      { numero: 2, capacidade: 4 },
-      { numero: 3, capacidade: 4 },
-      { numero: 4, capacidade: 4 },
-      { numero: 5, capacidade: 4 },
-      { numero: 6, capacidade: 4 },
-      { numero: 7, capacidade: 4 },
-      { numero: 8, capacidade: 4 },
-      { numero: 9, capacidade: 4 },
-      { numero: 10, capacidade: 4 },
+      { numero: 1, capacidade: 2, status: "livre" },
+      { numero: 2, capacidade: 4, status: "livre" },
+      { numero: 3, capacidade: 4, status: "ocupada" },
+      { numero: 4, capacidade: 6, status: "ocupada" },
+      { numero: 5, capacidade: 2, status: "reservada" },
+      { numero: 6, capacidade: 8, status: "livre" },
+      { numero: 7, capacidade: 4, status: "livre" },
+      { numero: 8, capacidade: 6, status: "ocupada" },
     ];
     for (const mesa of mesasToSeed) {
       try {
@@ -314,7 +341,7 @@ export async function seedDatabase(app: App) {
           await app.db.insert(schema.mesas).values({
             numero: mesa.numero,
             capacidade: mesa.capacidade,
-            status: "livre",
+            status: mesa.status as any,
           });
         }
       } catch (err) {

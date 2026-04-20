@@ -20,7 +20,7 @@ export function registerCategoriasRoutes(app: App) {
     "/api/categorias",
     {
       schema: {
-        description: "List all categorias (requires authentication)",
+        description: "List all categorias",
         tags: ["categorias"],
         response: {
           200: {
@@ -34,20 +34,15 @@ export function registerCategoriasRoutes(app: App) {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
                     descricao: { type: ["string", "null"] },
-                    createdAt: { type: "string", format: "date-time" },
                   },
                 },
               },
             },
           },
-          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
-
       try {
         app.logger.info({}, "Listing categorias");
 
@@ -61,7 +56,6 @@ export function registerCategoriasRoutes(app: App) {
             id: c.id,
             nome: c.nome,
             descricao: c.descricao,
-            createdAt: c.createdAt.toISOString(),
           })),
         });
       } catch (error) {

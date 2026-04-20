@@ -17,13 +17,19 @@ interface UpdateMesaBody {
 }
 
 export function registerTableRoutes(app: App) {
-  // GET /api/mesas - List all mesas ordered by numero
-  app.fastify.get(
+  // GET /api/mesas - List all mesas ordered by numero, optional status filter
+  app.fastify.get<{ Querystring: { status?: string } }>(
     "/api/mesas",
     {
       schema: {
-        description: "List all mesas ordered by numero",
+        description: "List all mesas ordered by numero with optional status filter",
         tags: ["mesas"],
+        querystring: {
+          type: "object",
+          properties: {
+            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+          },
+        },
         response: {
           200: {
             type: "object",
@@ -37,6 +43,7 @@ export function registerTableRoutes(app: App) {
                     numero: { type: "number" },
                     status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
                     capacidade: { type: "number" },
+                    created_at: { type: "string", format: "date-time" },
                   },
                 },
               },
@@ -45,22 +52,38 @@ export function registerTableRoutes(app: App) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Querystring: { status?: string } }>, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Listing all mesas");
+        app.logger.info({ status: request.query.status }, "Listing mesas");
 
-        // Get all mesas ordered by numero
-        const mesas = await app.db
-          .select({
-            id: schema.mesas.id,
-            numero: schema.mesas.numero,
-            status: schema.mesas.status,
-            capacidade: schema.mesas.capacidade,
-          })
-          .from(schema.mesas)
-          .orderBy(schema.mesas.numero);
+        // Get all mesas ordered by numero, with optional status filter
+        let mesas: any[];
+        if (request.query.status) {
+          mesas = await app.db
+            .select({
+              id: schema.mesas.id,
+              numero: schema.mesas.numero,
+              status: schema.mesas.status,
+              capacidade: schema.mesas.capacidade,
+              createdAt: schema.mesas.createdAt,
+            })
+            .from(schema.mesas)
+            .where(eq(schema.mesas.status, request.query.status as any))
+            .orderBy(schema.mesas.numero);
+        } else {
+          mesas = await app.db
+            .select({
+              id: schema.mesas.id,
+              numero: schema.mesas.numero,
+              status: schema.mesas.status,
+              capacidade: schema.mesas.capacidade,
+              createdAt: schema.mesas.createdAt,
+            })
+            .from(schema.mesas)
+            .orderBy(schema.mesas.numero);
+        }
 
-        app.logger.info({ count: mesas.length }, "Listed all mesas");
+        app.logger.info({ count: mesas.length }, "Listed mesas");
 
         return reply.code(200).send({
           mesas: mesas.map((m) => ({
@@ -68,6 +91,7 @@ export function registerTableRoutes(app: App) {
             numero: m.numero,
             status: m.status,
             capacidade: m.capacidade,
+            created_at: m.createdAt.toISOString(),
           })),
         });
       } catch (error) {
