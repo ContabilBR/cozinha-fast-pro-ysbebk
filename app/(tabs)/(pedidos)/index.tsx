@@ -6,6 +6,7 @@ import {
   RefreshControl,
   Animated,
   Pressable,
+  TextInput,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 
 // ─── API response types ───────────────────────────────────────────────────────
 
@@ -110,73 +111,154 @@ function ItemRow({ item }: { item: GarcomPedidoItem }) {
   const COLORS = useColors();
   const cfg = getStatusConfig(item.status);
   const quantLabel = `${item.quantidade}x`;
-  const hasObs = !!item.observacao;
+
+  const [obsValue, setObsValue] = useState(item.observacao ?? "");
+  const [obsFocused, setObsFocused] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const handleObsBlur = useCallback(async () => {
+    setObsFocused(false);
+    const trimmed = obsValue.trim();
+    const original = (item.observacao ?? "").trim();
+    if (trimmed === original) return;
+
+    console.log("[Pedidos] PATCH /api/pedidos/" + item.id + " — observacao:", trimmed);
+    setSaving(true);
+    setSaveError("");
+    try {
+      await apiPost<any>(`/api/pedidos/${item.id}`, { observacao: trimmed, _method: "PATCH" });
+      console.log("[Pedidos] Observação atualizada para pedido:", item.id);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Pedidos] Erro ao salvar observação:", msg);
+      setSaveError("Não foi possível salvar");
+    } finally {
+      setSaving(false);
+    }
+  }, [item.id, item.observacao, obsValue]);
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        paddingVertical: 10,
-      }}
-    >
-      <View style={{ flex: 1, marginRight: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+    <View style={{ paddingVertical: 10 }}>
+      {/* Top row: qty + name + status badge */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 14,
+                color: COLORS.primary,
+                minWidth: 24,
+              }}
+            >
+              {quantLabel}
+            </Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_500Medium",
+                fontSize: 14,
+                color: COLORS.text,
+                flex: 1,
+              }}
+            >
+              {item.prato_nome}
+            </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            backgroundColor: cfg.bg,
+            borderRadius: 20,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            alignSelf: "flex-start",
+          }}
+        >
           <Text
             style={{
-              fontFamily: "Outfit_700Bold",
-              fontSize: 14,
-              color: COLORS.primary,
-              minWidth: 24,
+              fontFamily: "Outfit_600SemiBold",
+              fontSize: 11,
+              color: cfg.text,
             }}
           >
-            {quantLabel}
-          </Text>
-          <Text
-            style={{
-              fontFamily: "Outfit_500Medium",
-              fontSize: 14,
-              color: COLORS.text,
-              flex: 1,
-            }}
-          >
-            {item.prato_nome}
+            {cfg.label}
           </Text>
         </View>
-        {hasObs && (
+      </View>
+
+      {/* Observações field */}
+      <View style={{ marginTop: 8, marginLeft: 30 }}>
+        <Text
+          style={{
+            fontFamily: "Outfit_500Medium",
+            fontSize: 11,
+            color: COLORS.textSecondary,
+            marginBottom: 4,
+            textTransform: "uppercase",
+            letterSpacing: 0.4,
+          }}
+        >
+          Observações
+        </Text>
+        <TextInput
+          value={obsValue}
+          onChangeText={(t) => {
+            setObsValue(t);
+            setSaveError("");
+          }}
+          onFocus={() => {
+            console.log("[Pedidos] Campo observação focado — pedido:", item.id);
+            setObsFocused(true);
+          }}
+          onBlur={handleObsBlur}
+          placeholder="Ex: sem cebola, bem passado..."
+          placeholderTextColor={COLORS.textTertiary ?? "#bbb"}
+          multiline
+          style={{
+            fontFamily: "Outfit_400Regular",
+            fontSize: 13,
+            color: COLORS.text,
+            backgroundColor: COLORS.surfaceSecondary ?? "#f5f5f5",
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: obsFocused ? COLORS.primary : (COLORS.border ?? "#e5e5e5"),
+            paddingHorizontal: 10,
+            paddingVertical: 7,
+            minHeight: 36,
+            lineHeight: 18,
+          }}
+        />
+        {saving && (
           <Text
             style={{
               fontFamily: "Outfit_400Regular",
-              fontSize: 12,
+              fontSize: 11,
               color: COLORS.textSecondary,
-              fontStyle: "italic",
               marginTop: 3,
-              marginLeft: 30,
             }}
           >
-            {item.observacao}
+            Salvando...
           </Text>
         )}
-      </View>
-      <View
-        style={{
-          backgroundColor: cfg.bg,
-          borderRadius: 20,
-          paddingHorizontal: 10,
-          paddingVertical: 4,
-          alignSelf: "flex-start",
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Outfit_600SemiBold",
-            fontSize: 11,
-            color: cfg.text,
-          }}
-        >
-          {cfg.label}
-        </Text>
+        {!!saveError && (
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 11,
+              color: "#ef4444",
+              marginTop: 3,
+            }}
+          >
+            {saveError}
+          </Text>
+        )}
       </View>
     </View>
   );

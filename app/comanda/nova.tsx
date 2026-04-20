@@ -20,6 +20,15 @@ import { useColors } from "@/hooks/useColors";
 import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet, apiPost } from "@/utils/api";
 
+// ─── Mesa type ────────────────────────────────────────────────────────────────
+
+interface ApiMesa {
+  id: string;
+  numero: number;
+  status?: string;
+  capacidade?: number;
+}
+
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -323,15 +332,145 @@ function CartItemRow({
   );
 }
 
+// ─── Mesa Selector ────────────────────────────────────────────────────────────
+
+function MesaSelector({
+  mesas,
+  loadingMesas,
+  selectedMesaId,
+  onSelect,
+  error,
+}: {
+  mesas: ApiMesa[];
+  loadingMesas: boolean;
+  selectedMesaId: string;
+  onSelect: (id: string) => void;
+  error: string;
+}) {
+
+  return (
+    <View
+      style={{
+        backgroundColor: "#fff",
+        borderBottomWidth: 1,
+        borderBottomColor: "#e5e5e5",
+        paddingVertical: 12,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: "Outfit_600SemiBold",
+          fontSize: 13,
+          color: "#555",
+          paddingHorizontal: 16,
+          marginBottom: 8,
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        Selecionar Mesa
+      </Text>
+
+      {loadingMesas ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {[0, 1, 2, 3, 4].map((i) => (
+            <SkeletonLine key={i} width={52} height={36} borderRadius={20} />
+          ))}
+        </ScrollView>
+      ) : mesas.length === 0 ? (
+        <Text
+          style={{
+            fontFamily: "Outfit_400Regular",
+            fontSize: 13,
+            color: "#888",
+            paddingHorizontal: 16,
+          }}
+        >
+          Nenhuma mesa disponível
+        </Text>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        >
+          {mesas.map((mesa) => {
+            const isSelected = mesa.id === selectedMesaId;
+            const mesaLabel = `Mesa ${mesa.numero}`;
+            return (
+              <Pressable
+                key={mesa.id}
+                onPress={() => {
+                  console.log("[Comanda] Mesa selecionada:", mesa.numero, "id:", mesa.id);
+                  onSelect(mesa.id);
+                }}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? "#22c55e" : "#d1d5db",
+                  backgroundColor: isSelected ? "#22c55e" : "#fff",
+                  opacity: pressed ? 0.75 : 1,
+                  minWidth: 52,
+                  alignItems: "center",
+                })}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Outfit_600SemiBold",
+                    fontSize: 13,
+                    color: isSelected ? "#fff" : "#555",
+                  }}
+                >
+                  {mesaLabel}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {!!error && (
+        <Text
+          style={{
+            fontFamily: "Outfit_400Regular",
+            fontSize: 12,
+            color: "#ef4444",
+            paddingHorizontal: 16,
+            marginTop: 6,
+          }}
+        >
+          {error}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function CardapioNovaComandaScreen() {
   const router = useRouter();
   const { mesa_id, mesa_numero } = useLocalSearchParams<{ mesa_id: string; mesa_numero: string }>();
 
-  const mesaId = mesa_id ?? "";
-  const mesaNumero = mesa_numero ?? mesaId;
-  const titleText = `Comanda — Mesa ${mesaNumero}`;
+  // If mesa_id was passed via params, pre-select it; otherwise let the garçom pick
+  const [selectedMesaId, setSelectedMesaId] = useState<string>(mesa_id ?? "");
+  const [mesas, setMesas] = useState<ApiMesa[]>([]);
+  const [loadingMesas, setLoadingMesas] = useState(true);
+  const [mesaError, setMesaError] = useState("");
+
+  const selectedMesa = mesas.find((m) => m.id === selectedMesaId);
+  const mesaNumeroDisplay = selectedMesa
+    ? String(selectedMesa.numero)
+    : mesa_numero ?? (selectedMesaId || "—");
+  const titleText = selectedMesaId
+    ? `Comanda — Mesa ${mesaNumeroDisplay}`
+    : "Nova Comanda";
 
   const [activeTab, setActiveTab] = useState<"cardapio" | "pedido">("cardapio");
   const [pratos, setPratos] = useState<ApiPrato[]>([]);
@@ -339,6 +478,30 @@ export default function CardapioNovaComandaScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Fetch mesas ─────────────────────────────────────────────────────────────
+  const fetchMesas = useCallback(async () => {
+    console.log("[Comanda] GET /api/mesas");
+    setLoadingMesas(true);
+    try {
+      const res = await apiGet<any>("/api/mesas");
+      const list: ApiMesa[] = Array.isArray(res) ? res : (res.mesas ?? []);
+      // Only show available mesas (status !== "ocupada" unless it's the pre-selected one)
+      const available = list.filter(
+        (m) => m.status !== "ocupada" || m.id === (mesa_id ?? "")
+      );
+      console.log("[Comanda] Mesas disponíveis:", available.length);
+      setMesas(available);
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Comanda] Erro ao carregar mesas:", msg);
+      setMesas([]);
+    } finally {
+      setLoadingMesas(false);
+    }
+  }, [mesa_id]);
+
+  useEffect(() => { fetchMesas(); }, [fetchMesas]);
 
   // ── Fetch pratos ────────────────────────────────────────────────────────────
   const fetchPratos = useCallback(async () => {
@@ -400,18 +563,20 @@ export default function CardapioNovaComandaScreen() {
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (cart.length === 0) return;
-    if (!mesaId) {
-      Alert.alert("Erro", "Mesa não identificada. Volte e tente novamente.");
+    if (!selectedMesaId) {
+      setMesaError("Selecione uma mesa antes de enviar o pedido.");
+      console.warn("[Comanda] Tentativa de envio sem mesa selecionada");
       return;
     }
+    setMesaError("");
 
-    console.log("[Cardápio] Salvar e Enviar Pedido pressionado — mesa:", mesaId, "itens:", cart.length, "total:", subtotalDisplay);
+    console.log("[Cardápio] Salvar e Enviar Pedido pressionado — mesa:", selectedMesaId, "itens:", cart.length, "total:", subtotalDisplay);
     setSubmitting(true);
 
     try {
       // Step 1: Create comanda (apiPost handles Bearer token automatically)
-      console.log("[Cardápio] POST /api/comandas — mesa_id:", mesaId);
-      const comandaData = await apiPost<any>("/api/comandas", { mesa_id: mesaId });
+      console.log("[Cardápio] POST /api/comandas — mesa_id:", selectedMesaId);
+      const comandaData = await apiPost<any>("/api/comandas", { mesa_id: selectedMesaId });
       const comandaId = comandaData?.comanda?.id || comandaData?.id;
       console.log("[Cardápio] Comanda criada, id:", comandaId);
 
@@ -519,6 +684,18 @@ export default function CardapioNovaComandaScreen() {
           )}
         </View>
       </View>
+
+      {/* ── Mesa Selector ── */}
+      <MesaSelector
+        mesas={mesas}
+        loadingMesas={loadingMesas}
+        selectedMesaId={selectedMesaId}
+        onSelect={(id) => {
+          setSelectedMesaId(id);
+          setMesaError("");
+        }}
+        error={mesaError}
+      />
 
       {/* ── Tabs ── */}
       <View
