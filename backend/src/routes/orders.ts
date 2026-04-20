@@ -121,14 +121,14 @@ export function registerOrderRoutes(app: App) {
           comandas: comandas.map((c: any) => ({
             id: c.id,
             mesa_id: c.mesa_id,
-            mesa_numero: c.mesa_numero,
-            mesa_capacidade: c.mesa_capacidade,
+            mesa_numero: Number(c.mesa_numero),
+            mesa_capacidade: Number(c.mesa_capacidade),
             garcom_id: c.garcom_id,
             status: c.status,
-            total: c.total,
+            total: Number(c.total),
             created_at: c.created_at ? new Date(c.created_at).toISOString() : null,
             closed_at: c.closed_at ? new Date(c.closed_at).toISOString() : null,
-            item_count: c.item_count,
+            item_count: Number(c.item_count),
           })),
         });
       } catch (error) {
@@ -676,7 +676,7 @@ export function registerOrderRoutes(app: App) {
         // Update mesa status back to livre
         await app.db
           .update(schema.mesas)
-          .set({ status: "livre" })
+          .set({ status: "disponivel" })
           .where(eq(schema.mesas.id, updated.mesaId));
 
         app.logger.info({ comandaId: updated.id }, "Comanda closed successfully");
@@ -741,7 +741,7 @@ export function registerOrderRoutes(app: App) {
         // Update mesa status back to livre
         await app.db
           .update(schema.mesas)
-          .set({ status: "livre" })
+          .set({ status: "disponivel" })
           .where(eq(schema.mesas.id, updated.mesaId));
 
         app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
@@ -814,7 +814,7 @@ export function registerOrderRoutes(app: App) {
         // Update mesa status back to livre
         await app.db
           .update(schema.mesas)
-          .set({ status: "livre" })
+          .set({ status: "disponivel" })
           .where(eq(schema.mesas.id, comanda.mesaId));
 
         app.logger.info({ comandaId: request.params.id }, "Comanda deleted successfully");

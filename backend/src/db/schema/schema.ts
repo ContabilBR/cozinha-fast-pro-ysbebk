@@ -11,7 +11,7 @@ import {
 import { user } from "./auth-schema.js";
 
 // Enums
-export const mesaStatusEnum = pgEnum("mesa_status", ["livre", "ocupada"]);
+export const mesaStatusEnum = pgEnum("mesa_status", ["disponivel", "ocupada", "reservada"]);
 export const comandaStatusEnum = pgEnum("comanda_status", ["aberta", "fechada", "cancelada"]);
 export const pedidoStatusEnum = pgEnum("pedido_status", [
   "pendente",
@@ -25,7 +25,7 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
 export const mesas = pgTable("mesas", {
   id: uuid("id").primaryKey().defaultRandom(),
   numero: integer("numero").notNull().unique(),
-  status: mesaStatusEnum("status").default("livre").notNull(),
+  status: mesaStatusEnum("status").default("disponivel").notNull(),
   capacidade: integer("capacidade").default(4).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

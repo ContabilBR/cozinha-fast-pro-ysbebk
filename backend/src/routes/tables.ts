@@ -27,7 +27,7 @@ export function registerTableRoutes(app: App) {
         querystring: {
           type: "object",
           properties: {
-            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+            status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
           },
         },
         response: {
@@ -41,7 +41,7 @@ export function registerTableRoutes(app: App) {
                   properties: {
                     id: { type: "string", format: "uuid" },
                     numero: { type: "number" },
-                    status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+                    status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
                     capacidade: { type: "number" },
                     created_at: { type: "string", format: "date-time" },
                   },
@@ -114,7 +114,7 @@ export function registerTableRoutes(app: App) {
           properties: {
             numero: { type: "number" },
             capacidade: { type: "number" },
-            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+            status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
           },
         },
         response: {
@@ -126,7 +126,7 @@ export function registerTableRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   numero: { type: "number" },
-                  status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+                  status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
                   capacidade: { type: "number" },
                   createdAt: { type: "string", format: "date-time" },
                 },
@@ -163,7 +163,7 @@ export function registerTableRoutes(app: App) {
           return reply.code(409).send({ error: "Número de mesa já existe" });
         }
 
-        const statusValue = request.body.status || "livre";
+        const statusValue = request.body.status || "disponivel";
         const [mesa] = await app.db
           .insert(schema.mesas)
           .values({
@@ -209,7 +209,7 @@ export function registerTableRoutes(app: App) {
             properties: {
               id: { type: "string", format: "uuid" },
               numero: { type: "number" },
-              status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+              status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
               capacidade: { type: "number" },
               createdAt: { type: "string", format: "date-time" },
             },
@@ -266,7 +266,7 @@ export function registerTableRoutes(app: App) {
           type: "object",
           properties: {
             numero: { type: "number" },
-            status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+            status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
             capacidade: { type: "number" },
           },
         },
@@ -279,7 +279,7 @@ export function registerTableRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   numero: { type: "number" },
-                  status: { type: "string", enum: ["livre", "ocupada", "reservada"] },
+                  status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
                   capacidade: { type: "number" },
                   createdAt: { type: "string", format: "date-time" },
                 },
@@ -328,7 +328,7 @@ export function registerTableRoutes(app: App) {
 
         const updates: any = {};
         if (request.body.numero !== undefined) updates.numero = request.body.numero as number;
-        if (request.body.status !== undefined) updates.status = request.body.status as "livre" | "ocupada";
+        if (request.body.status !== undefined) updates.status = request.body.status as "disponivel" | "ocupada" | "reservada";
         if (request.body.capacidade !== undefined) updates.capacidade = request.body.capacidade as number;
 
         const [updated] = await app.db

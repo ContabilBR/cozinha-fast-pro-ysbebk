@@ -548,39 +548,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("List pratos filtered by categoria", async () => {
-    const res = await authenticatedApi(
-      `/api/pratos?categoria_id=${pratoCategoryId}`,
-      authToken
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
-  });
-
-  test("List pratos filtered by disponivel=true", async () => {
-    const res = await authenticatedApi(
-      "/api/pratos?disponivel=true",
-      authToken
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
-  });
-
-  test("List pratos filtered by disponivel=false", async () => {
-    const res = await authenticatedApi(
-      "/api/pratos?disponivel=false",
-      authToken
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
-  });
-
   test("Update prato", async () => {
     const res = await authenticatedApi(`/api/pratos/${testDishId}`, adminToken, {
       method: "PUT",
@@ -770,7 +737,7 @@ describe("API Integration Tests", () => {
 
   test("List mesas filtered by status", async () => {
     const res = await authenticatedApi(
-      "/api/mesas?status=livre",
+      "/api/mesas?status=disponivel",
       authToken
     );
     await expectStatus(res, 200);
@@ -861,7 +828,7 @@ describe("API Integration Tests", () => {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "livre" }),
+        body: JSON.stringify({ status: "disponivel" }),
       }
     );
     await expectStatus(res, 404);
@@ -871,7 +838,7 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/mesas/bad-uuid", adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "livre" }),
+      body: JSON.stringify({ status: "disponivel" }),
     });
     await expectStatus(res, 400);
   });

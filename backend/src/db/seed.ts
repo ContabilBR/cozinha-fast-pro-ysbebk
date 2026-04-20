@@ -310,42 +310,50 @@ export async function seedDatabase(app: App) {
       app.logger.error({ err }, 'Failed to seed usuarios');
     }
 
-    // Check if already seeded (by checking mesas)
-    const existingMesas = await app.db.select().from(schema.mesas).limit(1);
-    if (existingMesas.length > 0) {
+    // Check if mesas table has too many rows (over 30 indicates bad seed data)
+    const existingMesas = await app.db.select().from(schema.mesas);
+    if (existingMesas.length > 30) {
+      app.logger.info("Truncating mesas table due to over-seeding");
+      await app.db.delete(schema.mesas);
+    } else if (existingMesas.length > 0) {
       app.logger.info("Database already seeded with mesas and other data");
       return;
     }
 
-    // Seed mesas (8 tables with varied statuses and capacidades)
+    // Seed mesas (20 tables with varied statuses and capacidades)
     app.logger.info("Seeding mesas");
     const mesasToSeed = [
-      { numero: 1, capacidade: 2, status: "livre" },
-      { numero: 2, capacidade: 4, status: "livre" },
-      { numero: 3, capacidade: 4, status: "ocupada" },
-      { numero: 4, capacidade: 6, status: "ocupada" },
-      { numero: 5, capacidade: 2, status: "reservada" },
-      { numero: 6, capacidade: 8, status: "livre" },
-      { numero: 7, capacidade: 4, status: "livre" },
-      { numero: 8, capacidade: 6, status: "ocupada" },
+      { numero: 1, capacidade: 2, status: "disponivel" as const },
+      { numero: 2, capacidade: 4, status: "ocupada" as const },
+      { numero: 3, capacidade: 4, status: "disponivel" as const },
+      { numero: 4, capacidade: 6, status: "ocupada" as const },
+      { numero: 5, capacidade: 2, status: "disponivel" as const },
+      { numero: 6, capacidade: 4, status: "reservada" as const },
+      { numero: 7, capacidade: 8, status: "disponivel" as const },
+      { numero: 8, capacidade: 4, status: "ocupada" as const },
+      { numero: 9, capacidade: 2, status: "disponivel" as const },
+      { numero: 10, capacidade: 6, status: "ocupada" as const },
+      { numero: 11, capacidade: 4, status: "disponivel" as const },
+      { numero: 12, capacidade: 2, status: "reservada" as const },
+      { numero: 13, capacidade: 4, status: "disponivel" as const },
+      { numero: 14, capacidade: 8, status: "ocupada" as const },
+      { numero: 15, capacidade: 4, status: "disponivel" as const },
+      { numero: 16, capacidade: 2, status: "disponivel" as const },
+      { numero: 17, capacidade: 6, status: "ocupada" as const },
+      { numero: 18, capacidade: 4, status: "disponivel" as const },
+      { numero: 19, capacidade: 4, status: "reservada" as const },
+      { numero: 20, capacidade: 2, status: "disponivel" as const },
     ];
+
     for (const mesa of mesasToSeed) {
       try {
-        const existing = await app.db
-          .select()
-          .from(schema.mesas)
-          .where(eq(schema.mesas.numero, mesa.numero))
-          .limit(1);
-
-        if (existing.length === 0) {
-          await app.db.insert(schema.mesas).values({
-            numero: mesa.numero,
-            capacidade: mesa.capacidade,
-            status: mesa.status as any,
-          });
-        }
+        await app.db.insert(schema.mesas).values({
+          numero: mesa.numero,
+          capacidade: mesa.capacidade,
+          status: mesa.status,
+        });
       } catch (err) {
-        app.logger.debug({ numero: mesa.numero, err }, "Mesa already exists or error on insert");
+        app.logger.debug({ numero: mesa.numero, err }, "Mesa insert error");
       }
     }
     app.logger.info("Mesas seeded successfully");
