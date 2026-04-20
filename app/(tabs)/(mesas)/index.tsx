@@ -7,7 +7,9 @@ import {
   Animated,
   FlatList,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -363,6 +365,7 @@ export default function MesasScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("todas");
+  const [searchText, setSearchText] = useState("");
 
   const fetchMesas = useCallback(async () => {
     console.log("[Mesas] GET /api/mesas");
@@ -429,13 +432,16 @@ export default function MesasScreen() {
   };
 
   // Filtered list
-  const filteredMesas = mesas.filter((m) => {
-    if (activeFilter === "todas") return true;
-    if (activeFilter === "livres") return isLivre(m.status);
-    if (activeFilter === "ocupadas") return isOcupada(m.status);
-    if (activeFilter === "reservadas") return isReservada(m.status);
-    return true;
-  });
+  const trimmedSearch = searchText.trim();
+  const filteredMesas = mesas
+    .filter((m) => {
+      if (activeFilter === "todas") return true;
+      if (activeFilter === "livres") return isLivre(m.status);
+      if (activeFilter === "ocupadas") return isOcupada(m.status);
+      if (activeFilter === "reservadas") return isReservada(m.status);
+      return true;
+    })
+    .filter((m) => trimmedSearch === "" || String(m.numero).includes(trimmedSearch));
 
   // Pair up for 2-column grid
   const rows: ApiMesa[][] = [];
@@ -524,6 +530,61 @@ export default function MesasScreen() {
             />
           ))}
         </ScrollView>
+      </View>
+
+      {/* Search bar */}
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surfaceSecondary,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            height: 42,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+          }}
+        >
+          <Ionicons name="search" size={16} color={COLORS.textSecondary} />
+          <TextInput
+            value={searchText}
+            onChangeText={(text) => {
+              console.log("[Mesas] Busca alterada:", text);
+              setSearchText(text);
+            }}
+            placeholder="Buscar mesa por número..."
+            placeholderTextColor={COLORS.textTertiary}
+            keyboardType="numeric"
+            style={{
+              flex: 1,
+              marginLeft: 8,
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.text,
+              paddingVertical: 0,
+            }}
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                console.log("[Mesas] Busca limpa");
+                setSearchText("");
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Content */}
