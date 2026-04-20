@@ -19,10 +19,13 @@ import { apiGet, apiPatch, apiDelete } from "@/utils/api";
 
 // ─── API response types ───────────────────────────────────────────────────────
 
-interface ApiPedidoItem {
+// Flat pedido item returned by GET /api/pedidos
+interface ApiPedidoFlat {
   id: string;
-  prato?: { nome: string; imagem_url?: string };
+  comanda_id: string;
+  mesa_numero?: number;
   prato_nome?: string;
+  prato?: { nome: string; imagem_url?: string };
   quantidade: number;
   preco_unitario?: number;
   observacao?: string;
@@ -30,13 +33,14 @@ interface ApiPedidoItem {
   created_at?: string;
 }
 
+// Comanda-grouped shape (legacy, kept for fallback)
 interface ApiComanda {
   id: string;
   mesa?: { numero: number };
   mesa_numero?: number;
   created_at: string;
-  pedidos?: ApiPedidoItem[];
-  itens?: ApiPedidoItem[];
+  pedidos?: ApiPedidoFlat[];
+  itens?: ApiPedidoFlat[];
 }
 
 // ─── Internal display types ───────────────────────────────────────────────────
@@ -45,6 +49,7 @@ interface GarcomPedidoItem {
   id: string;
   prato_nome: string;
   quantidade: number;
+  preco_unitario?: number;
   observacao?: string;
   status: "aguardando" | "preparando" | "pronto" | string;
   created_at: string;
@@ -60,17 +65,58 @@ interface GarcomPedido {
 
 // ─── Normalise raw API response into display shape ────────────────────────────
 
-function normaliseComandas(raw: any): GarcomPedido[] {
-  const list: ApiComanda[] = Array.isArray(raw) ? raw : (raw?.comandas ?? []);
+function normalisePedidos(raw: any): GarcomPedido[] {
+  // Handle flat array of pedido items (GET /api/pedidos returns flat list)
+  const flatList: ApiPedidoFlat[] = Array.isArray(raw)
+    ? raw
+    : (raw?.pedidos ?? raw?.comandas ?? []);
 
-  return list.map((comanda, idx) => {
+  // If the array items have comanda_id, it's a flat pedidos list — group by comanda_id
+  if (flatList.length > 0 && "comanda_id" in flatList[0]) {
+    const grouped = new Map<string, GarcomPedido>();
+    let seq = 1;
+
+    for (const item of flatList) {
+      const cid = item.comanda_id;
+      if (!grouped.has(cid)) {
+        grouped.set(cid, {
+          numero_sequencial: seq++,
+          comanda_id: cid,
+          mesa_numero: item.mesa_numero ?? 0,
+          created_at: item.created_at ?? "",
+          itens: [],
+        });
+      }
+      const group = grouped.get(cid)!;
+      // Update mesa_numero if we get a better value
+      if (item.mesa_numero && !group.mesa_numero) {
+        group.mesa_numero = item.mesa_numero;
+      }
+      group.itens.push({
+        id: item.id,
+        prato_nome: item.prato?.nome ?? item.prato_nome ?? "Prato",
+        quantidade: item.quantidade,
+        preco_unitario: item.preco_unitario,
+        observacao: item.observacao,
+        status: item.status ?? "aguardando",
+        created_at: item.created_at ?? "",
+      });
+    }
+
+    return Array.from(grouped.values());
+  }
+
+  // Fallback: treat as comanda-grouped shape
+  const comandas: ApiComanda[] = flatList as unknown as ApiComanda[];
+  return comandas.map((comanda, idx) => {
     const mesaNumero = comanda.mesa?.numero ?? comanda.mesa_numero ?? 0;
-    const rawItems: ApiPedidoItem[] = comanda.pedidos ?? comanda.itens ?? [];
+    const rawItems: ApiPedidoFlat[] = comanda.pedidos ?? comanda.itens ?? [];
 
     const itens: GarcomPedidoItem[] = rawItems.map((item) => ({
       id: item.id,
       prato_nome: item.prato?.nome ?? item.prato_nome ?? "Prato",
       quantidade: item.quantidade,
+      preco_unitario: item.preco_unitario,
       observacao: item.observacao,
       status: item.status ?? "aguardando",
       created_at: item.created_at ?? comanda.created_at,
@@ -576,7 +622,7 @@ export default function PedidosGarcomScreen() {
       const data = await apiGet<any>("/api/pedidos");
       console.log("[Pedidos] raw:", JSON.stringify(data).slice(0, 500));
 
-      const list = normaliseComandas(data);
+      const list = normalisePedidos(data);
       console.log("[Pedidos Garçom] Loaded", list.length, "comandas");
       setPedidos(list);
       setError("");

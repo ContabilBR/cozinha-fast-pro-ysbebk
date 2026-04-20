@@ -20,11 +20,14 @@ import { Plus, Clock, ShoppingBag } from "lucide-react-native";
 
 interface ApiComanda {
   id: string;
-  mesa: number | string;
+  mesa?: number | string;
+  mesa_numero?: number | string;
   status: string;
   total: number;
-  items_count: number;
-  opened_at: string;
+  item_count?: number;
+  items_count?: number;
+  opened_at?: string;
+  created_at?: string;
 }
 
 function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress: () => void; index: number }) {
@@ -39,10 +42,10 @@ function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress
     ]).start();
   }, [index, opacity, translateY]);
 
-  const mesaNum = comanda.mesa ?? "?";
-  const timeOpen = formatRelativeTime(comanda.opened_at);
+  const mesaNum = comanda.mesa_numero ?? comanda.mesa ?? "?";
+  const timeOpen = formatRelativeTime(comanda.opened_at ?? comanda.created_at ?? "");
   const total = formatCurrency(comanda.total);
-  const itemCount = comanda.items_count ?? 0;
+  const itemCount = comanda.item_count ?? comanda.items_count ?? 0;
 
   const statusColors: Record<string, string> = {
     aberta: "#22C55E",

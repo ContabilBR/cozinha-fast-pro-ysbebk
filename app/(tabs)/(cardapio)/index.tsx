@@ -318,9 +318,17 @@ export default function CardapioScreen() {
     const result: SectionData[] = [];
     const usedPratoIds = new Set<string>();
 
+    // Deduplicate categories by ID to prevent duplicate section headers
+    const seenCatIds = new Set<string>();
+    const uniqueCategorias = categorias.filter((c) => {
+      if (seenCatIds.has(c.id)) return false;
+      seenCatIds.add(c.id);
+      return true;
+    });
+
     const filteredCats = selectedCategoryId
-      ? categorias.filter((c) => c.id === selectedCategoryId)
-      : categorias;
+      ? uniqueCategorias.filter((c) => c.id === selectedCategoryId)
+      : uniqueCategorias;
 
     for (const cat of filteredCats) {
       const catPratos = pratos.filter((p) => {

@@ -5,6 +5,7 @@ import {
   ScrollView,
   FlatList,
   Alert,
+  Modal,
   TextInput,
   Animated,
   ActivityIndicator,
@@ -473,6 +474,8 @@ export default function NovaComandaScreen() {
   const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"cardapio" | "pedido">("cardapio");
+  const [showSuccess, setShowSuccess] = useState(false);
+  const successOpacity = useRef(new Animated.Value(0)).current;
 
   const mesaNumeroDisplay = mesa_numero ?? "—";
   const titleText = mesa_id ? `Nova Comanda — Mesa ${mesaNumeroDisplay}` : "Nova Comanda";
@@ -590,20 +593,16 @@ export default function NovaComandaScreen() {
 
       console.log("[Comanda] Comanda criada com sucesso para mesa:", mesaNumeroDisplay);
       setCart([]);
-
-      Alert.alert(
-        "✅ Pedido enviado para a cozinha!",
-        "Sua comanda foi registrada com sucesso. A cozinha já recebeu o pedido.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              console.log("[Comanda] Navegar de volta para Mesas após sucesso");
-              router.replace("/(tabs)/(mesas)");
-            },
-          },
-        ]
-      );
+      setShowSuccess(true);
+      Animated.timing(successOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+      setTimeout(() => {
+        console.log("[Comanda] Navegar de volta para Mesas após sucesso");
+        router.replace("/(tabs)/(mesas)");
+      }, 2500);
     } catch (e: any) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Comanda] Erro ao criar comanda:", msg);
@@ -619,6 +618,60 @@ export default function NovaComandaScreen() {
       style={{ flex: 1, backgroundColor: COLORS.background }}
       edges={["top", "left", "right"]}
     >
+      {/* ── Success Modal ── */}
+      <Modal visible={showSuccess} transparent animationType="none" statusBarTranslucent>
+        <Animated.View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: successOpacity,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 24,
+              padding: 36,
+              alignItems: "center",
+              marginHorizontal: 40,
+              gap: 12,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              elevation: 12,
+            }}
+          >
+            <Text style={{ fontSize: 56, lineHeight: 68 }}>✅</Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_700Bold",
+                fontSize: 22,
+                color: "#111827",
+                textAlign: "center",
+                letterSpacing: -0.3,
+                marginTop: 4,
+              }}
+            >
+              Pedido enviado!
+            </Text>
+            <Text
+              style={{
+                fontFamily: "Outfit_400Regular",
+                fontSize: 14,
+                color: "#6B7280",
+                textAlign: "center",
+                lineHeight: 21,
+                maxWidth: 240,
+              }}
+            >
+              Seu pedido foi registrado e enviado para a cozinha com sucesso.
+            </Text>
+          </View>
+        </Animated.View>
+      </Modal>
       {/* ── Header ── */}
       <View
         style={{
