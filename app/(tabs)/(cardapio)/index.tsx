@@ -8,6 +8,7 @@ import {
   Animated,
   SectionList,
   ImageSourcePropType,
+  Pressable,
 } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect } from "@react-navigation/native";
@@ -276,6 +277,7 @@ export default function CardapioScreen() {
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     console.log("[Cardápio] GET /api/pratos e /api/categorias");
@@ -311,12 +313,16 @@ export default function CardapioScreen() {
     }, [fetchData])
   );
 
-  // Build sections from categories + pratos
+  // Build sections from categories + pratos (respects selectedCategoryId)
   const sections: SectionData[] = React.useMemo(() => {
     const result: SectionData[] = [];
     const usedPratoIds = new Set<string>();
 
-    for (const cat of categorias) {
+    const filteredCats = selectedCategoryId
+      ? categorias.filter((c) => c.id === selectedCategoryId)
+      : categorias;
+
+    for (const cat of filteredCats) {
       const catPratos = pratos.filter((p) => {
         const catId = p.categoria_id || p.categoria?.id;
         return catId === cat.id;
@@ -331,20 +337,30 @@ export default function CardapioScreen() {
       }
     }
 
-    // Pratos without a matched category
-    const outros = pratos.filter((p) => !usedPratoIds.has(p.id));
-    if (outros.length > 0) {
-      result.push({ title: "Outros", icon: "🍴", data: outros });
+    // Pratos without a matched category — only show when no category filter active
+    if (!selectedCategoryId) {
+      const outros = pratos.filter((p) => !usedPratoIds.has(p.id));
+      if (outros.length > 0) {
+        result.push({ title: "Outros", icon: "🍴", data: outros });
+      }
     }
 
     return result;
-  }, [pratos, categorias]);
+  }, [pratos, categorias, selectedCategoryId]);
 
-  // Search filter
+  // Search filter — applies on top of category filter
   const searchLower = searchQuery.toLowerCase().trim();
   const isSearching = searchLower.length > 0;
+
+  const searchPool = selectedCategoryId
+    ? pratos.filter((p) => {
+        const catId = p.categoria_id || p.categoria?.id;
+        return catId === selectedCategoryId;
+      })
+    : pratos;
+
   const searchResults = isSearching
-    ? pratos.filter(
+    ? searchPool.filter(
         (p) =>
           p.nome.toLowerCase().includes(searchLower) ||
           (p.descricao || "").toLowerCase().includes(searchLower)
@@ -361,7 +377,7 @@ export default function CardapioScreen() {
         style={{
           paddingTop: insets.top + 12,
           paddingHorizontal: 20,
-          paddingBottom: 14,
+          paddingBottom: 0,
           backgroundColor: COLORS.surface,
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
@@ -388,6 +404,79 @@ export default function CardapioScreen() {
           {subtitleText}
         </Text>
 
+        {/* Category chips row */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingVertical: 12, gap: 8 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* "Todas" chip */}
+          <Pressable
+            onPress={() => {
+              console.log("[Cardápio] Chip 'Todas' selecionado");
+              setSelectedCategoryId(null);
+            }}
+            style={({ pressed }) => ({
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              borderRadius: 20,
+              backgroundColor: selectedCategoryId === null ? COLORS.primary : COLORS.surfaceSecondary,
+              borderWidth: 1,
+              borderColor: selectedCategoryId === null ? COLORS.primary : COLORS.border,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text
+              style={{
+                fontFamily: selectedCategoryId === null ? "Outfit_700Bold" : "Outfit_500Medium",
+                fontSize: 13,
+                color: selectedCategoryId === null ? "#fff" : COLORS.textSecondary,
+              }}
+            >
+              Todas
+            </Text>
+          </Pressable>
+
+          {/* One chip per category */}
+          {categorias.map((cat) => {
+            const isSelected = selectedCategoryId === cat.id;
+            const icon = getCategoryIcon(cat.nome);
+            return (
+              <Pressable
+                key={cat.id}
+                onPress={() => {
+                  console.log("[Cardápio] Chip categoria selecionado:", cat.nome, "id:", cat.id);
+                  setSelectedCategoryId(isSelected ? null : cat.id);
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                  paddingHorizontal: 14,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  backgroundColor: isSelected ? COLORS.primary : COLORS.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: isSelected ? COLORS.primary : COLORS.border,
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 13 }}>{icon}</Text>
+                <Text
+                  style={{
+                    fontFamily: isSelected ? "Outfit_700Bold" : "Outfit_500Medium",
+                    fontSize: 13,
+                    color: isSelected ? "#fff" : COLORS.textSecondary,
+                  }}
+                >
+                  {cat.nome}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {/* Search bar */}
         <View
           style={{
@@ -397,7 +486,7 @@ export default function CardapioScreen() {
             borderRadius: 12,
             paddingHorizontal: 12,
             paddingVertical: 10,
-            marginTop: 12,
+            marginBottom: 14,
             borderWidth: 1.5,
             borderColor: searchFocused ? COLORS.primary : "transparent",
             gap: 8,

@@ -592,13 +592,14 @@ export default function NovaComandaScreen() {
       setCart([]);
 
       Alert.alert(
-        "Comanda criada com sucesso!",
-        `Pedido enviado para a cozinha — Mesa ${mesaNumeroDisplay}`,
+        "✅ Pedido enviado!",
+        "Seu pedido foi enviado para a cozinha com sucesso!",
         [
           {
             text: "OK",
             onPress: () => {
               console.log("[Comanda] Navegar de volta para Mesas após sucesso");
+              router.dismissAll();
               router.replace("/(tabs)/(mesas)");
             },
           },

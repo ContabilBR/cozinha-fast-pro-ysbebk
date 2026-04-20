@@ -5,10 +5,12 @@ import {
   FlatList,
   RefreshControl,
   Animated,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
@@ -179,12 +181,38 @@ export default function ComandasScreen() {
           borderBottomColor: COLORS.border,
         }}
       >
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Comandas
-        </Text>
-        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          {abertas.length} abertas
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
+              Comandas
+            </Text>
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+              {abertas.length} abertas
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              console.log("[Comandas] Botão Mesas pressionado — navegando para /(tabs)/(mesas)");
+              router.replace("/(tabs)/(mesas)");
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              opacity: pressed ? 0.6 : 1,
+              backgroundColor: COLORS.primaryMuted,
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+            })}
+          >
+            <Ionicons name="arrow-back" size={16} color={COLORS.primary} />
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>
+              Mesas
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {loading ? (

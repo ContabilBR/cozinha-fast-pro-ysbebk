@@ -571,9 +571,9 @@ export default function PedidosGarcomScreen() {
   const [error, setError] = useState("");
 
   const fetchPedidos = useCallback(async () => {
-    console.log("[Pedidos Garçom] Fetching GET /api/garcom/pedidos");
+    console.log("[Pedidos Garçom] Fetching GET /api/pedidos");
     try {
-      const data = await apiGet<any>("/api/garcom/pedidos");
+      const data = await apiGet<any>("/api/pedidos");
       console.log("[Pedidos] raw:", JSON.stringify(data).slice(0, 500));
 
       const list = normaliseComandas(data);
