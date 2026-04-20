@@ -85,19 +85,19 @@ export function registerOrderRoutes(app: App) {
           "Listing comandas for user"
         );
 
-        // Build SQL query with GROUP BY and COUNT
+        // Build SQL query with GROUP BY and COUNT, calculating total from pedidos
         let sqlQuery = sql`
           SELECT
             c.id,
             c.mesa_id,
             c.garcom_id,
             c.status,
-            c.total,
             c.created_at,
             c.closed_at,
             m.numero AS mesa_numero,
             m.capacidade AS mesa_capacidade,
-            COUNT(p.id)::integer AS item_count
+            COUNT(p.id)::integer AS item_count,
+            COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
           LEFT JOIN mesas m ON c.mesa_id = m.id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
@@ -109,7 +109,7 @@ export function registerOrderRoutes(app: App) {
         }
 
         sqlQuery = sql`${sqlQuery}
-          GROUP BY c.id, m.numero, m.capacidade
+          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, c.closed_at, m.numero, m.capacidade
           ORDER BY c.created_at DESC
         `;
 
@@ -226,16 +226,25 @@ export function registerOrderRoutes(app: App) {
           "Creating comanda with auth user id as garcom_id"
         );
 
+        // Calculate total from items before insertion
+        let initialTotal = "0";
+        if (request.body.itens && request.body.itens.length > 0) {
+          const calculatedTotal = request.body.itens.reduce((sum, item) => {
+            return sum + (item.quantidade * item.preco_unitario);
+          }, 0);
+          initialTotal = calculatedTotal.toString();
+        }
+
         // Use transaction to ensure all operations succeed together
         const comanda = await (app.db as any).transaction(async (tx: any) => {
-          // Insert comanda
+          // Insert comanda with calculated total
           const [newComanda] = await tx
             .insert(schema.comandas)
             .values({
               mesaId,
               garcomId,
               status: "aberta",
-              total: "0",
+              total: initialTotal,
             })
             .returning();
 
@@ -257,6 +266,12 @@ export function registerOrderRoutes(app: App) {
               .values(itemsToInsert);
 
             app.logger.info({ itemCount: request.body.itens.length }, "Pedido items inserted");
+
+            // Update comanda total to ensure consistency with pedidos
+            await tx
+              .execute(sql`UPDATE comandas SET total = (
+                SELECT COALESCE(SUM(quantidade * preco_unitario), 0) FROM pedidos WHERE comanda_id = ${newComanda.id}
+              ) WHERE id = ${newComanda.id}`);
           }
 
           // Update mesa status to ocupada
@@ -960,21 +975,23 @@ export function registerOrderRoutes(app: App) {
         const mesaId = request.params.id;
         app.logger.info({ mesaId }, "Fetching current open comanda for mesa");
 
-        // Query to find the most recent open comanda
+        // Query to find the most recent open comanda with dynamic total calculation
         const comandaQuery = sql`
           SELECT
             c.id AS comanda_id,
             c.mesa_id,
             c.garcom_id,
             c.status AS comanda_status,
-            c.total,
             c.created_at AS comanda_created_at,
             COALESCE(u.name, us.nome, 'Garçom') AS garcom_nome,
-            COALESCE(u.email, us.email) AS garcom_email
+            COALESCE(u.email, us.email) AS garcom_email,
+            COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
           LEFT JOIN "user" u ON u.id = c.garcom_id
           LEFT JOIN usuarios us ON us.id::text = c.garcom_id
+          LEFT JOIN pedidos p ON p.comanda_id = c.id
           WHERE c.mesa_id = ${mesaId} AND c.status = 'aberta'
+          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, u.name, u.email, us.nome, us.email
           ORDER BY c.created_at DESC
           LIMIT 1
         `;
