@@ -28,43 +28,125 @@ export async function requireAuth(
     const token = authHeader.slice(7).trim();
     app.logger.debug({ token: token.substring(0, 20) }, "Validating bearer token");
 
-    // Check Better Auth session table first
+    // Step 1: Try custom usuarios_session table first
+    app.logger.debug({ token: token.substring(0, 20) }, "Checking usuarios_session table");
+
+    const usuariosSessions = await app.db
+      .select()
+      .from(schema.usuariosSession)
+      .where(eq(schema.usuariosSession.token, token))
+      .limit(1);
+
+    if (usuariosSessions && usuariosSessions.length > 0) {
+      const usuarioSession = usuariosSessions[0];
+
+      // Check if session has expired
+      if (new Date(usuarioSession.expiresAt) < new Date()) {
+        app.logger.warn({ sessionId: usuarioSession.id }, "Usuarios session expired");
+        reply.status(401).send({ error: "Unauthorized" });
+        return null;
+      }
+
+      app.logger.debug({ userId: usuarioSession.userId }, "Found token in usuarios_session, looking up user");
+
+      // Try to find user in usuarios table first (handle UUID vs text safely)
+      try {
+        const usuarioResults = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.id, usuarioSession.userId as any))
+          .limit(1);
+
+        if (usuarioResults && usuarioResults.length > 0) {
+          const usuario = usuarioResults[0];
+          app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session validation successful");
+
+          return {
+            id: usuario.id.toString(),
+            email: usuario.email,
+            role: usuario.role,
+            name: usuario.nome,
+          };
+        }
+      } catch (castErr) {
+        app.logger.debug({ userId: usuarioSession.userId, err: castErr }, "Failed to lookup in usuarios table, trying user table");
+      }
+
+      // Fall back to Better Auth user table
+      try {
+        const userResults = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, usuarioSession.userId))
+          .limit(1);
+
+        if (userResults && userResults.length > 0) {
+          const user = userResults[0];
+          app.logger.info({ userId: user.id }, "Usuarios session validation successful (Better Auth user)");
+
+          return {
+            id: user.id,
+            email: user.email,
+            role: user.role ?? "garcom",
+            name: user.name || "",
+          };
+        }
+      } catch (err) {
+        app.logger.debug({ userId: usuarioSession.userId, err }, "Failed to lookup in user table");
+      }
+
+      app.logger.warn({ userId: usuarioSession.userId }, "User not found in either usuarios or user table");
+      reply.status(401).send({ error: "User not found" });
+      return null;
+    }
+
+    // Step 2: Fall back to Better Auth session table
+    app.logger.debug({ token: token.substring(0, 20) }, "Token not found in usuarios_session, trying Better Auth session");
+
     const sessions = await app.db
       .select()
       .from(sessionTable)
       .where(eq(sessionTable.token, token))
       .limit(1);
 
-    if (sessions && sessions.length > 0) {
-      const session = sessions[0];
+    if (!sessions || sessions.length === 0) {
+      app.logger.warn({ token: token.substring(0, 20) }, "Session not found in either table");
+      reply.status(401).send({ error: "Unauthorized" });
+      return null;
+    }
 
-      // Check if session has expired
-      if (new Date(session.expiresAt) < new Date()) {
-        app.logger.warn({ sessionId: session.id }, "Better Auth session expired");
-        reply.status(401).send({ error: "Unauthorized" });
-        return null;
-      }
+    const session = sessions[0];
 
-      // Try to find user in user table first
-      const users = await app.db
-        .select()
-        .from(userTable)
-        .where(eq(userTable.id, session.userId))
-        .limit(1);
+    // Check if session has expired
+    if (new Date(session.expiresAt) < new Date()) {
+      app.logger.warn({ sessionId: session.id }, "Better Auth session expired");
+      reply.status(401).send({ error: "Unauthorized" });
+      return null;
+    }
 
-      if (users && users.length > 0) {
-        const user = users[0];
-        app.logger.info({ userId: user.id, email: user.email }, "Better Auth session validation successful");
+    app.logger.debug({ userId: session.userId }, "Found token in Better Auth session, looking up user");
 
-        return {
-          id: user.id,
-          email: user.email,
-          role: user.role ?? "garcom",
-          name: user.name || "",
-        };
-      }
+    // Try to find user in user table first
+    const users = await app.db
+      .select()
+      .from(userTable)
+      .where(eq(userTable.id, session.userId))
+      .limit(1);
 
-      // Fall back to usuarios table if not found in user table
+    if (users && users.length > 0) {
+      const user = users[0];
+      app.logger.info({ userId: user.id, email: user.email }, "Better Auth session validation successful");
+
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role ?? "garcom",
+        name: user.name || "",
+      };
+    }
+
+    // Fall back to usuarios table if not found in user table (with safe casting)
+    try {
       const usuarios = await app.db
         .select()
         .from(schema.usuarios)
@@ -82,75 +164,11 @@ export async function requireAuth(
           name: usuario.nome,
         };
       }
-
-      app.logger.warn({ userId: session.userId }, "User not found in either user or usuarios table");
-      reply.status(401).send({ error: "User not found" });
-      return null;
+    } catch (castErr) {
+      app.logger.debug({ userId: session.userId, err: castErr }, "Failed to lookup in usuarios table");
     }
 
-    // Fall back to custom usuarios_session table
-    app.logger.debug({ token: token.substring(0, 20) }, "Token not found in session, trying usuarios_session");
-
-    const usuariosSessions = await app.db
-      .select()
-      .from(schema.usuariosSession)
-      .where(eq(schema.usuariosSession.token, token))
-      .limit(1);
-
-    if (!usuariosSessions || usuariosSessions.length === 0) {
-      app.logger.warn({ token: token.substring(0, 20) }, "Session not found in either table");
-      reply.status(401).send({ error: "Unauthorized" });
-      return null;
-    }
-
-    const usuarioSession = usuariosSessions[0];
-
-    // Check if session has expired
-    if (new Date(usuarioSession.expiresAt) < new Date()) {
-      app.logger.warn({ sessionId: usuarioSession.id }, "Usuarios session expired");
-      reply.status(401).send({ error: "Unauthorized" });
-      return null;
-    }
-
-    // Try to find user in user table first
-    const userResults = await app.db
-      .select()
-      .from(userTable)
-      .where(eq(userTable.id, usuarioSession.userId))
-      .limit(1);
-
-    if (userResults && userResults.length > 0) {
-      const user = userResults[0];
-      app.logger.info({ userId: user.id }, "Usuarios session validation successful (Better Auth user)");
-
-      return {
-        id: user.id,
-        email: user.email,
-        role: user.role ?? "garcom",
-        name: user.name || "",
-      };
-    }
-
-    // Fall back to usuarios table
-    const usuarioResults = await app.db
-      .select()
-      .from(schema.usuarios)
-      .where(eq(schema.usuarios.id, usuarioSession.userId as any))
-      .limit(1);
-
-    if (usuarioResults && usuarioResults.length > 0) {
-      const usuario = usuarioResults[0];
-      app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session validation successful");
-
-      return {
-        id: usuario.id.toString(),
-        email: usuario.email,
-        role: usuario.role,
-        name: usuario.nome,
-      };
-    }
-
-    app.logger.warn({ userId: usuarioSession.userId }, "User not found in either user or usuarios table");
+    app.logger.warn({ userId: session.userId }, "User not found in either user or usuarios table");
     reply.status(401).send({ error: "User not found" });
     return null;
   } catch (error) {

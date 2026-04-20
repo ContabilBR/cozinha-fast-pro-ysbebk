@@ -261,18 +261,13 @@ export async function seedDatabase(app: App) {
       throw err;
     }
 
-    // Step 2b: Destructively seed usuarios on every startup (BEFORE checking if already seeded)
-    app.logger.info("Seeding usuarios");
+    // Step 2b: Upsert seed usuarios (preserve existing real user accounts across deploys)
+    app.logger.info("Upserting seed usuarios");
 
     try {
       // Hash password "123456" at runtime
       const senhaHash = bcryptjs.hashSync('123456', 10);
       app.logger.info({ hashLength: senhaHash.length, hashStart: senhaHash.substring(0, 20) }, 'Password hashed for seed');
-
-      // Delete all usuarios (destructive seed)
-      app.logger.info("Clearing usuarios table");
-      const deleteResult = await app.db.delete(schema.usuarios);
-      app.logger.info("Usuarios table cleared");
 
       // Prepare seed data
       const seedUsuariosData = [
@@ -282,21 +277,38 @@ export async function seedDatabase(app: App) {
         { nome: 'Cozinheiro', email: 'cozinheiro@cozinhafast.com', role: 'cozinheiro' },
       ];
 
-      // Insert all usuarios
-      app.logger.info({ count: seedUsuariosData.length }, "Inserting seed usuarios");
-      await app.db.insert(schema.usuarios).values(
-        seedUsuariosData.map(u => ({
-          nome: u.nome,
-          email: u.email,
-          senhaHash: senhaHash,
-          role: u.role,
-        }))
-      );
-      app.logger.info("Seed usuarios inserted successfully");
+      // Upsert each usuario: check if exists by email, only insert if not found
+      app.logger.info({ count: seedUsuariosData.length }, "Upserting seed usuarios with INSERT ... ON CONFLICT");
+
+      for (const u of seedUsuariosData) {
+        try {
+          const existing = await app.db
+            .select()
+            .from(schema.usuarios)
+            .where(eq(schema.usuarios.email, u.email))
+            .limit(1);
+
+          if (existing.length === 0) {
+            await app.db.insert(schema.usuarios).values({
+              nome: u.nome,
+              email: u.email,
+              senhaHash: senhaHash,
+              role: u.role,
+            });
+            app.logger.debug({ email: u.email }, 'Inserted new seed usuario');
+          } else {
+            app.logger.debug({ email: u.email }, 'Seed usuario already exists, skipping');
+          }
+        } catch (err) {
+          app.logger.warn({ email: u.email, err }, 'Failed to upsert usuario');
+        }
+      }
+
+      app.logger.info("Seed usuarios upserted successfully");
 
       // Verify
       const allUsuarios = await app.db.select().from(schema.usuarios);
-      app.logger.info({ count: allUsuarios.length }, 'Usuarios seeded - verifying');
+      app.logger.info({ count: allUsuarios.length }, 'Usuarios verified');
 
       allUsuarios.forEach((u, idx) => {
         app.logger.debug({
@@ -307,56 +319,70 @@ export async function seedDatabase(app: App) {
         }, 'Seeded usuario');
       });
     } catch (err) {
-      app.logger.error({ err }, 'Failed to seed usuarios');
+      app.logger.error({ err }, 'Failed to upsert seed usuarios');
     }
 
-    // Check if mesas table has too many rows (over 30 indicates bad seed data)
+    // Check if mesas table needs seeding
     const existingMesas = await app.db.select().from(schema.mesas);
-    if (existingMesas.length > 30) {
-      app.logger.info("Truncating mesas table due to over-seeding");
+    const mesaCount = existingMesas.length;
+
+    app.logger.info({ count: mesaCount }, "Checking mesas table");
+
+    // Only seed/reset if count is outside the valid range (1-25)
+    let shouldSeedMesas = false;
+
+    if (mesaCount > 25) {
+      app.logger.info("Mesas table bloated (> 25 rows), truncating and re-seeding");
       await app.db.delete(schema.mesas);
-    } else if (existingMesas.length > 0) {
-      app.logger.info("Database already seeded with mesas and other data");
-      return;
+      shouldSeedMesas = true;
+    } else if (mesaCount === 0) {
+      app.logger.info("Mesas table empty, seeding");
+      shouldSeedMesas = true;
+    } else {
+      // Count is between 1-25, already seeded correctly
+      app.logger.info({ count: mesaCount }, "Mesas table already seeded correctly, skipping");
+      // Skip to remaining seed steps (categorias, pratos)
     }
 
-    // Seed mesas (20 tables with varied statuses and capacidades)
-    app.logger.info("Seeding mesas");
-    const mesasToSeed = [
-      { numero: 1, capacidade: 2, status: "disponivel" as const },
-      { numero: 2, capacidade: 4, status: "ocupada" as const },
-      { numero: 3, capacidade: 4, status: "disponivel" as const },
-      { numero: 4, capacidade: 6, status: "ocupada" as const },
-      { numero: 5, capacidade: 2, status: "disponivel" as const },
-      { numero: 6, capacidade: 4, status: "reservada" as const },
-      { numero: 7, capacidade: 8, status: "disponivel" as const },
-      { numero: 8, capacidade: 4, status: "ocupada" as const },
-      { numero: 9, capacidade: 2, status: "disponivel" as const },
-      { numero: 10, capacidade: 6, status: "ocupada" as const },
-      { numero: 11, capacidade: 4, status: "disponivel" as const },
-      { numero: 12, capacidade: 2, status: "reservada" as const },
-      { numero: 13, capacidade: 4, status: "disponivel" as const },
-      { numero: 14, capacidade: 8, status: "ocupada" as const },
-      { numero: 15, capacidade: 4, status: "disponivel" as const },
-      { numero: 16, capacidade: 2, status: "disponivel" as const },
-      { numero: 17, capacidade: 6, status: "ocupada" as const },
-      { numero: 18, capacidade: 4, status: "disponivel" as const },
-      { numero: 19, capacidade: 4, status: "reservada" as const },
-      { numero: 20, capacidade: 2, status: "disponivel" as const },
-    ];
+    if (shouldSeedMesas) {
+      // Seed exactly 20 mesas with varied statuses and capacidades
+      app.logger.info("Seeding mesas");
+      const mesasToSeed = [
+        { numero: 1, capacidade: 4, status: "disponivel" as const },
+        { numero: 2, capacidade: 4, status: "disponivel" as const },
+        { numero: 3, capacidade: 4, status: "disponivel" as const },
+        { numero: 4, capacidade: 4, status: "disponivel" as const },
+        { numero: 5, capacidade: 4, status: "disponivel" as const },
+        { numero: 6, capacidade: 4, status: "disponivel" as const },
+        { numero: 7, capacidade: 4, status: "disponivel" as const },
+        { numero: 8, capacidade: 4, status: "disponivel" as const },
+        { numero: 9, capacidade: 4, status: "disponivel" as const },
+        { numero: 10, capacidade: 4, status: "disponivel" as const },
+        { numero: 11, capacidade: 6, status: "ocupada" as const },
+        { numero: 12, capacidade: 6, status: "ocupada" as const },
+        { numero: 13, capacidade: 6, status: "ocupada" as const },
+        { numero: 14, capacidade: 6, status: "ocupada" as const },
+        { numero: 15, capacidade: 6, status: "ocupada" as const },
+        { numero: 16, capacidade: 2, status: "reservada" as const },
+        { numero: 17, capacidade: 2, status: "reservada" as const },
+        { numero: 18, capacidade: 2, status: "reservada" as const },
+        { numero: 19, capacidade: 8, status: "disponivel" as const },
+        { numero: 20, capacidade: 8, status: "disponivel" as const },
+      ];
 
-    for (const mesa of mesasToSeed) {
-      try {
-        await app.db.insert(schema.mesas).values({
-          numero: mesa.numero,
-          capacidade: mesa.capacidade,
-          status: mesa.status,
-        });
-      } catch (err) {
-        app.logger.debug({ numero: mesa.numero, err }, "Mesa insert error");
+      for (const mesa of mesasToSeed) {
+        try {
+          await app.db.insert(schema.mesas).values({
+            numero: mesa.numero,
+            capacidade: mesa.capacidade,
+            status: mesa.status,
+          });
+        } catch (err) {
+          app.logger.debug({ numero: mesa.numero, err }, "Mesa insert error");
+        }
       }
+      app.logger.info("Mesas seeded successfully");
     }
-    app.logger.info("Mesas seeded successfully");
 
     // Seed categorias with upsert
     app.logger.info("Seeding categorias");
