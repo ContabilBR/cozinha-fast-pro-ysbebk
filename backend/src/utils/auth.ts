@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { session as sessionTable, user as userTable } from "../db/schema/auth-schema.js";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
@@ -49,50 +49,42 @@ export async function requireAuth(
 
       app.logger.debug({ userId: usuarioSession.userId }, "Found token in usuarios_session, looking up user");
 
-      // Try to find user in usuarios table first (handle UUID vs text safely)
-      try {
-        const usuarioResults = await app.db
-          .select()
-          .from(schema.usuarios)
-          .where(eq(schema.usuarios.id, usuarioSession.userId as any))
-          .limit(1);
+      // Try to find user in usuarios table first (use safe UUID comparison with id::text = $1)
+      const usuarioResults = await app.db
+        .select()
+        .from(schema.usuarios)
+        .where(sql`${schema.usuarios.id}::text = ${usuarioSession.userId}`)
+        .limit(1);
 
-        if (usuarioResults && usuarioResults.length > 0) {
-          const usuario = usuarioResults[0];
-          app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session validation successful");
+      if (usuarioResults && usuarioResults.length > 0) {
+        const usuario = usuarioResults[0];
+        app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session validation successful");
 
-          return {
-            id: usuario.id.toString(),
-            email: usuario.email,
-            role: usuario.role,
-            name: usuario.nome,
-          };
-        }
-      } catch (castErr) {
-        app.logger.debug({ userId: usuarioSession.userId, err: castErr }, "Failed to lookup in usuarios table, trying user table");
+        return {
+          id: usuario.id.toString(),
+          email: usuario.email,
+          role: usuario.role,
+          name: usuario.nome,
+        };
       }
 
       // Fall back to Better Auth user table
-      try {
-        const userResults = await app.db
-          .select()
-          .from(userTable)
-          .where(eq(userTable.id, usuarioSession.userId))
-          .limit(1);
+      const userResults = await app.db
+        .select()
+        .from(userTable)
+        .where(eq(userTable.id, usuarioSession.userId))
+        .limit(1);
 
-        if (userResults && userResults.length > 0) {
-          const user = userResults[0];
-          app.logger.info({ userId: user.id }, "Usuarios session validation successful (Better Auth user)");
+      if (userResults && userResults.length > 0) {
+        const user = userResults[0];
+        app.logger.info({ userId: user.id }, "Usuarios session validation successful (Better Auth user)");
 
-          return {
-            id: user.id,
-            email: user.email,
-            role: user.role ?? "garcom",
-            name: user.name || "",
-          };
-        }
-      } catch (err) {
-        app.logger.debug({ userId: usuarioSession.userId, err }, "Failed to lookup in user table");
+        return {
+          id: user.id,
+          email: user.email,
+          role: user.role ?? "garcom",
+          name: user.name || "",
+        };
       }
 
       app.logger.warn({ userId: usuarioSession.userId }, "User not found in either usuarios or user table");
@@ -145,27 +137,23 @@ export async function requireAuth(
       };
     }
 
-    // Fall back to usuarios table if not found in user table (with safe casting)
-    try {
-      const usuarios = await app.db
-        .select()
-        .from(schema.usuarios)
-        .where(eq(schema.usuarios.id, session.userId as any))
-        .limit(1);
+    // Fall back to usuarios table if not found in user table (use safe UUID comparison with id::text = $1)
+    const usuarios = await app.db
+      .select()
+      .from(schema.usuarios)
+      .where(sql`${schema.usuarios.id}::text = ${session.userId}`)
+      .limit(1);
 
-      if (usuarios && usuarios.length > 0) {
-        const usuario = usuarios[0];
-        app.logger.info({ userId: usuario.id, email: usuario.email }, "Better Auth session validation successful (usuarios user)");
+    if (usuarios && usuarios.length > 0) {
+      const usuario = usuarios[0];
+      app.logger.info({ userId: usuario.id, email: usuario.email }, "Better Auth session validation successful (usuarios user)");
 
-        return {
-          id: usuario.id.toString(),
-          email: usuario.email,
-          role: usuario.role,
-          name: usuario.nome,
-        };
-      }
-    } catch (castErr) {
-      app.logger.debug({ userId: session.userId, err: castErr }, "Failed to lookup in usuarios table");
+      return {
+        id: usuario.id.toString(),
+        email: usuario.email,
+        role: usuario.role,
+        name: usuario.nome,
+      };
     }
 
     app.logger.warn({ userId: session.userId }, "User not found in either user or usuarios table");

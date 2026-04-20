@@ -184,80 +184,64 @@ export async function seedDatabase(app: App) {
       app.logger.warn({ err }, "Failed to ensure enum values");
     }
 
-    // Step 2: Destructive seed - force recreate the 4 seed users on every startup
-    app.logger.info("Destructively seeding the 4 core users");
+    // Step 2: Upsert seed users (preserve existing users, never delete)
+    app.logger.info("Upserting seed users");
     const now = new Date();
-    const seedEmails = seedUsers.map(u => u.email);
 
     try {
-      // Query for user IDs of the seed emails
-      app.logger.info("Finding existing seed user IDs");
-      const existingUsers = await app.db
-        .select({ id: userTable.id, email: userTable.email })
-        .from(userTable)
-        .where(inArray(userTable.email, seedEmails));
+      // Upsert each seed user: only insert if email doesn't exist
+      app.logger.info({ count: seedUsers.length }, "Upserting seed users with INSERT ... ON CONFLICT");
 
-      const userIdsToDelete = existingUsers.map(u => u.id);
-
-      if (userIdsToDelete.length > 0) {
-        app.logger.info({ count: userIdsToDelete.length }, "Deleting existing sessions for seed users");
-        // Delete sessions first (FK constraint)
-        await app.db
-          .delete(sessionTable)
-          .where(inArray(sessionTable.userId, userIdsToDelete));
-
-        app.logger.info("Deleting existing accounts for seed users");
-        // Delete accounts
-        await app.db
-          .delete(accountTable)
-          .where(inArray(accountTable.userId, userIdsToDelete));
-
-        app.logger.info("Deleting existing seed users");
-        // Delete users
-        await app.db
-          .delete(userTable)
-          .where(inArray(userTable.email, seedEmails));
-      }
-
-      // Create new users with fresh UUIDs
-      app.logger.info("Creating new seed users");
       for (const seedUser of seedUsers) {
-        const userId = randomUUID();
+        try {
+          const existing = await app.db
+            .select({ id: userTable.id })
+            .from(userTable)
+            .where(eq(userTable.email, seedUser.email))
+            .limit(1);
 
-        // Insert into user table
-        await app.db.insert(userTable).values({
-          id: userId,
-          name: seedUser.name,
-          email: seedUser.email,
-          emailVerified: true,
-          role: seedUser.role as any,
-          active: true,
-          createdAt: now,
-          updatedAt: now,
-        });
+          if (existing.length === 0) {
+            const userId = randomUUID();
 
-        app.logger.info({ email: seedUser.email, userId }, "Created seed user");
+            // Insert into user table (will be unique by email)
+            await app.db.insert(userTable).values({
+              id: userId,
+              name: seedUser.name,
+              email: seedUser.email,
+              emailVerified: true,
+              role: seedUser.role as any,
+              active: true,
+              createdAt: now,
+              updatedAt: now,
+            });
 
-        // Hash password and insert into account table
-        const hashedPassword = bcryptjs.hashSync(seedUser.password, 10);
-        const hashPrefix = hashedPassword.substring(0, 10);
+            app.logger.debug({ email: seedUser.email, userId }, "Created new seed user");
 
-        await app.db.insert(accountTable).values({
-          id: randomUUID(),
-          accountId: seedUser.email,
-          providerId: "credential",
-          userId: userId,
-          password: hashedPassword,
-          createdAt: now,
-          updatedAt: now,
-        });
+            // Hash password and insert into account table
+            const hashedPassword = bcryptjs.hashSync(seedUser.password, 10);
 
-        app.logger.info({ email: seedUser.email, hashPrefix }, `Seed user created: ${seedUser.email}`);
+            await app.db.insert(accountTable).values({
+              id: randomUUID(),
+              accountId: seedUser.email,
+              providerId: "credential",
+              userId: userId,
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            app.logger.debug({ email: seedUser.email }, `Seed user created: ${seedUser.email}`);
+          } else {
+            app.logger.debug({ email: seedUser.email }, "Seed user already exists, skipping");
+          }
+        } catch (err) {
+          app.logger.warn({ email: seedUser.email, err }, "Failed to upsert seed user");
+        }
       }
 
-      app.logger.info("Core users destructively seeded successfully");
+      app.logger.info("Seed users upserted successfully");
     } catch (err) {
-      app.logger.error({ err }, "Failed to destructively seed users");
+      app.logger.error({ err }, "Failed to upsert seed users");
       throw err;
     }
 
@@ -333,7 +317,25 @@ export async function seedDatabase(app: App) {
 
     if (mesaCount > 25) {
       app.logger.info("Mesas table bloated (> 25 rows), truncating and re-seeding");
-      await app.db.delete(schema.mesas);
+      // Use raw SQL to delete in correct FK dependency order
+      try {
+        if (typeof (app.db as any).execute === 'function') {
+          await (app.db as any).execute(sql`DELETE FROM pedidos`);
+          await (app.db as any).execute(sql`DELETE FROM comandas`);
+          await (app.db as any).execute(sql`DELETE FROM mesas`);
+        } else {
+          // Fallback to Drizzle ORM if raw execute not available (less safe but functional)
+          const comandasToDelete = await app.db.select({ id: schema.comandas.id }).from(schema.comandas);
+          const comandaIds = comandasToDelete.map(c => c.id);
+          if (comandaIds.length > 0) {
+            await app.db.delete(schema.pedidos).where(inArray(schema.pedidos.comandaId, comandaIds));
+          }
+          await app.db.delete(schema.comandas);
+          await app.db.delete(schema.mesas);
+        }
+      } catch (err) {
+        app.logger.error({ err }, "Failed to delete mesas and dependencies");
+      }
       shouldSeedMesas = true;
     } else if (mesaCount === 0) {
       app.logger.info("Mesas table empty, seeding");
@@ -345,7 +347,7 @@ export async function seedDatabase(app: App) {
     }
 
     if (shouldSeedMesas) {
-      // Seed exactly 20 mesas with varied statuses and capacidades
+      // Seed exactly 20 mesas with specified statuses and capacidades
       app.logger.info("Seeding mesas");
       const mesasToSeed = [
         { numero: 1, capacidade: 4, status: "disponivel" as const },
