@@ -1360,8 +1360,8 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/pedidos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.data).toBeDefined();
-    expect(Array.isArray(data.data)).toBe(true);
+    expect(data.pedidos).toBeDefined();
+    expect(Array.isArray(data.pedidos)).toBe(true);
   });
 
   test("Create pedido", async () => {

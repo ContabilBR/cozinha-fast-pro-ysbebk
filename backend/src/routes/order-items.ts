@@ -25,36 +25,39 @@ function normalizeDecimal(value: any): number {
 }
 
 export function registerOrderItemRoutes(app: App) {
-  // GET /api/pedidos - List all pedidos
+  // GET /api/pedidos - List all pedidos for authenticated user
   app.fastify.get(
     "/api/pedidos",
     {
       schema: {
-        description: "List all pedidos",
+        description: "List all pedidos for authenticated user (requires authentication)",
         tags: ["pedidos"],
         response: {
           200: {
             type: "object",
             properties: {
-              data: {
+              pedidos: {
                 type: "array",
                 items: {
                   type: "object",
                   properties: {
                     id: { type: "string", format: "uuid" },
-                    comandaId: { type: "string", format: "uuid" },
-                    pratoId: { type: "string", format: "uuid" },
-                    pratoNome: { type: "string" },
+                    comanda_id: { type: "string", format: "uuid" },
+                    prato_id: { type: ["string", "null"], format: "uuid" },
+                    prato_nome: { type: ["string", "null"] },
                     quantidade: { type: "number" },
-                    precoUnitario: { type: "string" },
-                    observacao: { type: "string" },
+                    preco_unitario: { type: "string" },
+                    observacao: { type: ["string", "null"] },
                     status: { type: "string" },
-                    createdAt: { type: "string", format: "date-time" },
+                    created_at: { type: "string", format: "date-time" },
+                    mesa_numero: { type: "number" },
+                    comanda_status: { type: "string" },
                   },
                 },
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -63,7 +66,8 @@ export function registerOrderItemRoutes(app: App) {
       if (!session) return;
 
       try {
-        app.logger.info({}, "Listing pedidos");
+        const authUserId = session.userId;
+        app.logger.info({ authUserId }, "Listing pedidos for user");
 
         const pedidos = await app.db
           .select({
@@ -76,21 +80,30 @@ export function registerOrderItemRoutes(app: App) {
             observacao: schema.pedidos.observacao,
             status: schema.pedidos.status,
             createdAt: schema.pedidos.createdAt,
+            mesaNumero: schema.mesas.numero,
+            comandaStatus: schema.comandas.status,
           })
           .from(schema.pedidos)
-          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id));
+          .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
+          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+          .where(eq(schema.comandas.garcomId, authUserId));
+
+        app.logger.info({ count: pedidos.length }, "Pedidos retrieved");
 
         return reply.code(200).send({
-          data: pedidos.map((p) => ({
+          pedidos: pedidos.map((p) => ({
             id: p.id,
-            comandaId: p.comandaId,
-            pratoId: p.pratoId,
-            pratoNome: p.pratoNome || "Desconhecido",
+            comanda_id: p.comandaId,
+            prato_id: p.pratoId,
+            prato_nome: p.pratoNome,
             quantidade: p.quantidade,
-            precoUnitario: p.precoUnitario,
+            preco_unitario: p.precoUnitario,
             observacao: p.observacao,
             status: p.status,
-            createdAt: p.createdAt.toISOString(),
+            created_at: p.createdAt.toISOString(),
+            mesa_numero: p.mesaNumero,
+            comanda_status: p.comandaStatus,
           })),
         });
       } catch (error) {

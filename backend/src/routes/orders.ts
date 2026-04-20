@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, sql, inArray, or } from "drizzle-orm";
+import { eq, sql, inArray, or, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -27,12 +27,12 @@ interface FecharComandaBody {
 }
 
 export function registerOrderRoutes(app: App) {
-  // GET /api/comandas - List all comandas with mesa and items count
+  // GET /api/comandas - List all comandas for authenticated user
   app.fastify.get<{ Querystring: { status?: string } }>(
     "/api/comandas",
     {
       schema: {
-        description: "List all comandas",
+        description: "List all comandas for authenticated user (requires authentication)",
         tags: ["comandas"],
         querystring: {
           type: "object",
@@ -50,16 +50,20 @@ export function registerOrderRoutes(app: App) {
                   type: "object",
                   properties: {
                     id: { type: "string", format: "uuid" },
-                    mesa: { type: "number" },
+                    mesa_id: { type: "string", format: "uuid" },
+                    mesa_numero: { type: "number" },
+                    mesa_status: { type: "string" },
+                    garcom_id: { type: ["string", "null"] },
                     status: { type: "string" },
                     total: { type: "string" },
-                    items_count: { type: "number" },
-                    opened_at: { type: "string", format: "date-time" },
+                    created_at: { type: "string", format: "date-time" },
+                    closed_at: { type: ["string", "null"], format: "date-time" },
                   },
                 },
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -68,93 +72,54 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
-        const userRole = session.profile?.role || session.user?.role;
         const authUserId = session.userId;
-        const authUserEmail = session.user.email;
 
         app.logger.info(
-          { status: request.query.status, userRole, authUserId, authUserEmail },
-          "Listing comandas"
+          { authUserId, status: request.query.status },
+          "Listing comandas for user"
         );
 
-        // Build and execute query with optional garcom filter
-        let baseQuery = app.db
+        // Build where conditions
+        const whereConditions = [eq(schema.comandas.garcomId, authUserId)];
+        if (request.query.status) {
+          whereConditions.push(eq(schema.comandas.status, request.query.status as any));
+        }
+
+        // Combine conditions with AND
+        const whereClause = whereConditions.length > 1
+          ? and(...whereConditions)
+          : whereConditions[0];
+
+        const comandas = await app.db
           .select({
             id: schema.comandas.id,
-            numero: schema.mesas.numero,
+            mesaId: schema.comandas.mesaId,
+            mesaNumero: schema.mesas.numero,
+            mesaStatus: schema.mesas.status,
+            garcomId: schema.comandas.garcomId,
             status: schema.comandas.status,
             total: schema.comandas.total,
             createdAt: schema.comandas.createdAt,
-            garcomId: schema.comandas.garcomId,
+            closedAt: schema.comandas.closedAt,
           })
           .from(schema.comandas)
-          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id));
+          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
+          .where(whereClause)
+          .orderBy(schema.comandas.createdAt);
 
-        // If user is a garcom, filter by their comandas using broad OR strategy
-        let allComandas: any[];
-        if (userRole === "garcom") {
-          // Build broad OR filter to handle stale garcom_id values across deploys
-          // Check: auth user id, usuarios id (if exists), or better auth user id with same email
-          const whereConditions = [
-            eq(schema.comandas.garcomId, authUserId),
-          ];
-
-          // Also check for any usuarios.id (uuid cast to text) with same email
-          const usuarioRecords = await app.db
-            .select({ id: schema.usuarios.id })
-            .from(schema.usuarios)
-            .where(eq(schema.usuarios.email, authUserEmail));
-
-          for (const usuario of usuarioRecords) {
-            whereConditions.push(eq(schema.comandas.garcomId, usuario.id));
-          }
-
-          app.logger.debug(
-            {
-              authUserId,
-              authUserEmail,
-              usuarioIds: usuarioRecords.map(u => u.id),
-              conditionCount: whereConditions.length,
-            },
-            "Garcom filter - checking multiple id sources"
-          );
-
-          const whereClause = whereConditions.length > 1 ? or(...whereConditions) : whereConditions[0];
-          allComandas = await baseQuery.where(whereClause);
-        } else {
-          // Non-garcom users (admin, cozinheiro, etc.) see all comandas
-          allComandas = await baseQuery;
-        }
-
-        app.logger.debug({ comandasCount: allComandas.length }, "Comandas retrieved");
-
-        // Filter by status if provided
-        const comandas = request.query.status
-          ? allComandas.filter((c) => c.status === request.query.status)
-          : allComandas;
-
-        // For each comanda, count pedidos
-        const comandasWithCount = await Promise.all(
-          comandas.map(async (c) => {
-            const pedidosCount = await app.db
-              .select()
-              .from(schema.pedidos)
-              .where(eq(schema.pedidos.comandaId, c.id));
-            return {
-              ...c,
-              itemsCount: pedidosCount.length,
-            };
-          })
-        );
+        app.logger.info({ count: comandas.length }, "Comandas retrieved");
 
         return reply.code(200).send({
-          comandas: comandasWithCount.map((c) => ({
+          comandas: comandas.map((c) => ({
             id: c.id,
-            mesa: c.numero,
+            mesa_id: c.mesaId,
+            mesa_numero: c.mesaNumero,
+            mesa_status: c.mesaStatus,
+            garcom_id: c.garcomId,
             status: c.status,
             total: c.total,
-            items_count: c.itemsCount,
-            opened_at: c.createdAt.toISOString(),
+            created_at: c.createdAt.toISOString(),
+            closed_at: c.closedAt ? c.closedAt.toISOString() : null,
           })),
         });
       } catch (error) {
