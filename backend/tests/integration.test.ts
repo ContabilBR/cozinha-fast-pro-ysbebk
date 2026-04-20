@@ -1021,6 +1021,20 @@ describe("API Integration Tests", () => {
     comandaMesaId = data.mesa.id;
   });
 
+  // ==================== Mesas Get Current Comanda ====================
+  test("Get current comanda for mesa", async () => {
+    const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/comanda`, authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.comanda).toBeDefined();
+    // comanda can be null if no open comanda exists
+  });
+
+  test("Get current comanda for mesa with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/mesas/invalid-uuid/comanda", authToken);
+    await expectStatus(res, 400);
+  });
+
   test("List all comandas", async () => {
     const res = await authenticatedApi("/api/comandas", authToken);
     await expectStatus(res, 200);

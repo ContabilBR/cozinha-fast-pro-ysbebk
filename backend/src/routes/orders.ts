@@ -901,4 +901,144 @@ export function registerOrderRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/mesas/:id/comanda - Get the current open comanda for a mesa
+  app.fastify.get<{ Params: { id: string } }>(
+    "/api/mesas/:id/comanda",
+    {
+      schema: {
+        description: "Get the current open comanda for a mesa with its pedidos",
+        tags: ["mesas"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              comanda: {
+                type: ["object", "null"],
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  mesa_id: { type: "string", format: "uuid" },
+                  garcom_id: { type: "string" },
+                  garcom_nome: { type: "string" },
+                  garcom_email: { type: "string" },
+                  status: { type: "string" },
+                  total: { type: "string" },
+                  created_at: { type: ["string", "null"], format: "date-time" },
+                  pedidos: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string", format: "uuid" },
+                        prato_id: { type: ["string", "null"], format: "uuid" },
+                        prato_nome: { type: ["string", "null"] },
+                        prato_descricao: { type: ["string", "null"] },
+                        prato_imagem: { type: ["string", "null"] },
+                        quantidade: { type: "number" },
+                        preco_unitario: { type: "string" },
+                        observacao: { type: ["string", "null"] },
+                        status: { type: "string" },
+                        created_at: { type: ["string", "null"], format: "date-time" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      try {
+        const mesaId = request.params.id;
+        app.logger.info({ mesaId }, "Fetching current open comanda for mesa");
+
+        // Query to find the most recent open comanda
+        const comandaQuery = sql`
+          SELECT
+            c.id AS comanda_id,
+            c.mesa_id,
+            c.garcom_id,
+            c.status AS comanda_status,
+            c.total,
+            c.created_at AS comanda_created_at,
+            COALESCE(u.name, us.nome, 'Garçom') AS garcom_nome,
+            COALESCE(u.email, us.email) AS garcom_email
+          FROM comandas c
+          LEFT JOIN "user" u ON u.id = c.garcom_id
+          LEFT JOIN usuarios us ON us.id::text = c.garcom_id
+          WHERE c.mesa_id = ${mesaId} AND c.status = 'aberta'
+          ORDER BY c.created_at DESC
+          LIMIT 1
+        `;
+
+        const comandaResult = await (app.db as any).execute(comandaQuery) as any[];
+
+        if (!comandaResult || comandaResult.length === 0) {
+          app.logger.info({ mesaId }, "No open comanda found for mesa");
+          return reply.code(200).send({ comanda: null });
+        }
+
+        const comandaRow = comandaResult[0];
+
+        // Query to get pedidos for this comanda
+        const pedidosQuery = sql`
+          SELECT
+            p.id,
+            p.prato_id,
+            p.quantidade,
+            p.preco_unitario,
+            p.observacao,
+            p.status,
+            p.created_at,
+            pr.nome AS prato_nome,
+            pr.descricao AS prato_descricao,
+            pr.imagem_url AS prato_imagem
+          FROM pedidos p
+          LEFT JOIN pratos pr ON p.prato_id = pr.id
+          WHERE p.comanda_id = ${comandaRow.comanda_id}
+          ORDER BY p.created_at ASC
+        `;
+
+        const pedidosResult = await (app.db as any).execute(pedidosQuery) as any[];
+
+        app.logger.info({ comandaId: comandaRow.comanda_id, pedidoCount: pedidosResult.length }, "Comanda and pedidos retrieved");
+
+        return reply.code(200).send({
+          comanda: {
+            id: comandaRow.comanda_id,
+            mesa_id: comandaRow.mesa_id,
+            garcom_id: comandaRow.garcom_id,
+            garcom_nome: comandaRow.garcom_nome,
+            garcom_email: comandaRow.garcom_email,
+            status: comandaRow.comanda_status,
+            total: comandaRow.total,
+            created_at: comandaRow.comanda_created_at ? new Date(comandaRow.comanda_created_at).toISOString() : null,
+            pedidos: pedidosResult.map((p: any) => ({
+              id: p.id,
+              prato_id: p.prato_id,
+              prato_nome: p.prato_nome,
+              prato_descricao: p.prato_descricao,
+              prato_imagem: p.prato_imagem,
+              quantidade: p.quantidade,
+              preco_unitario: p.preco_unitario,
+              observacao: p.observacao,
+              status: p.status,
+              created_at: p.created_at ? new Date(p.created_at).toISOString() : null,
+            })),
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error, mesaId: request.params.id }, "Failed to fetch comanda for mesa");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }
