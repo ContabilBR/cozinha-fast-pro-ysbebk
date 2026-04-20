@@ -405,7 +405,7 @@ export default function MesasScreen() {
 
   const handleOpenComanda = (mesa: ApiMesa) => {
     console.log("[Mesas] Abrir comanda — mesa:", mesa.numero, "id:", mesa.id, "status:", mesa.status);
-    router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
+    router.push({ pathname: "/comanda/nova", params: { mesa_id: mesa.id, mesa_numero: String(mesa.numero) } });
   };
 
   const handleMesaPress = (mesa: ApiMesa) => {
@@ -413,7 +413,7 @@ export default function MesasScreen() {
     if (isOcupada(mesa.status) && mesa.comanda_id) {
       router.push(`/comanda/${mesa.comanda_id}`);
     } else if (canOpenComanda(mesa.status)) {
-      router.push(`/comanda/nova?mesa_id=${mesa.id}&mesa_numero=${mesa.numero}`);
+      router.push({ pathname: "/comanda/nova", params: { mesa_id: mesa.id, mesa_numero: String(mesa.numero) } });
     } else {
       router.push(`/mesa/${mesa.id}`);
     }
