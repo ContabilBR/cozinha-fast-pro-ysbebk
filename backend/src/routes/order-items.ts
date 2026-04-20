@@ -104,7 +104,7 @@ export function registerOrderItemRoutes(app: App) {
             preco_unitario: p.precoUnitario,
             observacao: p.observacao,
             status: p.status,
-            created_at: p.createdAt.toISOString(),
+            created_at: p.createdAt ? new Date(p.createdAt).toISOString() : null,
             prato_nome: p.pratoNome,
             prato_descricao: p.pratoDescricao,
             prato_imagem: p.pratoImagem,

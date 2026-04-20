@@ -11,6 +11,12 @@ interface CreateComandaBody {
   mesa_id?: string;
   garcomId?: string;
   garcom_id?: string;
+  itens?: Array<{
+    prato_id: string;
+    quantidade: number;
+    preco_unitario: number;
+    observacao?: string;
+  }>;
 }
 
 interface CreatePedidosBody {
@@ -120,8 +126,8 @@ export function registerOrderRoutes(app: App) {
             garcom_id: c.garcom_id,
             status: c.status,
             total: c.total,
-            created_at: c.created_at.toISOString(),
-            closed_at: c.closed_at ? c.closed_at.toISOString() : null,
+            created_at: c.created_at ? new Date(c.created_at).toISOString() : null,
+            closed_at: c.closed_at ? new Date(c.closed_at).toISOString() : null,
             item_count: c.item_count,
           })),
         });
@@ -137,7 +143,7 @@ export function registerOrderRoutes(app: App) {
     "/api/comandas",
     {
       schema: {
-        description: "Open a new comanda for a table (requires authentication)",
+        description: "Open a new comanda for a table with optional items (requires authentication)",
         tags: ["comandas"],
         body: {
           type: "object",
@@ -146,6 +152,19 @@ export function registerOrderRoutes(app: App) {
             mesaId: { type: "string", format: "uuid" },
             garcom_id: { type: "string" },
             garcomId: { type: "string" },
+            itens: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["prato_id", "quantidade", "preco_unitario"],
+                properties: {
+                  prato_id: { type: "string", format: "uuid" },
+                  quantidade: { type: "number" },
+                  preco_unitario: { type: "number" },
+                  observacao: { type: "string" },
+                },
+              },
+            },
           },
         },
         response: {
@@ -207,21 +226,47 @@ export function registerOrderRoutes(app: App) {
           "Creating comanda with auth user id as garcom_id"
         );
 
-        const [comanda] = await app.db
-          .insert(schema.comandas)
-          .values({
-            mesaId,
-            garcomId,
-            status: "aberta",
-            total: "0",
-          })
-          .returning();
+        // Use transaction to ensure all operations succeed together
+        const comanda = await (app.db as any).transaction(async (tx: any) => {
+          // Insert comanda
+          const [newComanda] = await tx
+            .insert(schema.comandas)
+            .values({
+              mesaId,
+              garcomId,
+              status: "aberta",
+              total: "0",
+            })
+            .returning();
 
-        // Update mesa status to ocupada
-        await app.db
-          .update(schema.mesas)
-          .set({ status: "ocupada" })
-          .where(eq(schema.mesas.id, mesaId));
+          // Insert pedido items if provided
+          if (request.body.itens && request.body.itens.length > 0) {
+            app.logger.info({ itemCount: request.body.itens.length }, "Inserting pedido items");
+
+            const itemsToInsert = request.body.itens.map((item) => ({
+              comandaId: newComanda.id,
+              pratoId: item.prato_id,
+              quantidade: item.quantidade,
+              precoUnitario: item.preco_unitario.toString(),
+              observacao: item.observacao || null,
+              status: "pendente" as any,
+            }));
+
+            await tx
+              .insert(schema.pedidos)
+              .values(itemsToInsert);
+
+            app.logger.info({ itemCount: request.body.itens.length }, "Pedido items inserted");
+          }
+
+          // Update mesa status to ocupada
+          await tx
+            .update(schema.mesas)
+            .set({ status: "ocupada" })
+            .where(eq(schema.mesas.id, mesaId));
+
+          return newComanda;
+        });
 
         app.logger.info({ comandaId: comanda.id, mesaId }, "Comanda created successfully");
 
@@ -232,7 +277,7 @@ export function registerOrderRoutes(app: App) {
             garcom_id: comanda.garcomId,
             status: comanda.status,
             total: comanda.total,
-            created_at: comanda.createdAt.toISOString(),
+            created_at: comanda.createdAt ? new Date(comanda.createdAt).toISOString() : null,
             mesa: {
               numero: mesa.numero,
             },
