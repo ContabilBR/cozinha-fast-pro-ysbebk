@@ -362,14 +362,13 @@ function PratoCard({
 
 function CartSummaryItem({
   item,
-  onRemove,
+  mesaNumero,
 }: {
   item: CartItem;
-  onRemove: () => void;
+  mesaNumero: string;
 }) {
   const COLORS = useColors();
-  const subtotalDisplay = formatPreco(Number(item.preco) * item.quantidade);
-  const precoUnit = formatPreco(item.preco);
+  const mesaLabel = `Mesa ${mesaNumero}`;
 
   return (
     <View
@@ -382,78 +381,45 @@ function CartSummaryItem({
         gap: 10,
       }}
     >
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          backgroundColor: COLORS.primaryMuted,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: "Outfit_700Bold",
-            fontSize: 13,
-            color: COLORS.primary,
-          }}
-        >
-          {item.quantidade}
-        </Text>
-      </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           numberOfLines={1}
           style={{
-            fontFamily: "Outfit_600SemiBold",
+            fontFamily: "Outfit_700Bold",
             fontSize: 14,
             color: COLORS.text,
           }}
         >
           {item.nome}
         </Text>
-        {!!item.observacao && (
-          <Text
-            numberOfLines={1}
-            style={{
-              fontFamily: "Outfit_400Regular",
-              fontSize: 11,
-              color: COLORS.textSecondary,
-              fontStyle: "italic",
-            }}
-          >
-            {item.observacao}
-          </Text>
-        )}
         <Text
           style={{
             fontFamily: "Outfit_400Regular",
-            fontSize: 11,
-            color: COLORS.textTertiary,
+            fontSize: 12,
+            color: COLORS.textSecondary,
           }}
         >
-          {precoUnit} cada
+          {mesaLabel}
         </Text>
       </View>
-      <Text
+      <View
         style={{
-          fontFamily: "Outfit_700Bold",
-          fontSize: 14,
-          color: "#22C55E",
+          backgroundColor: "#F59E0B",
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 3,
         }}
       >
-        {subtotalDisplay}
-      </Text>
-      <AnimatedPressable
-        onPress={() => {
-          console.log("[Comanda] Remover item do carrinho:", item.nome);
-          onRemove();
-        }}
-        style={{ padding: 4 }}
-      >
-        <Trash2 size={16} color={COLORS.danger} />
-      </AnimatedPressable>
+        <Text
+          style={{
+            fontFamily: "Outfit_600SemiBold",
+            fontSize: 11,
+            color: "#fff",
+          }}
+        >
+          pendente
+        </Text>
+      </View>
     </View>
   );
 }
@@ -477,8 +443,8 @@ export default function NovaComandaScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
   const successOpacity = useRef(new Animated.Value(0)).current;
 
-  const mesaNumeroDisplay = mesa_numero ?? "—";
-  const titleText = mesa_id ? `Nova Comanda — Mesa ${mesaNumeroDisplay}` : "Nova Comanda";
+  const mesaNumeroDisplay = mesa_numero ? String(mesa_numero) : "?";
+  const titleText = `Comanda — Mesa ${mesaNumeroDisplay}`;
 
   // ── Fetch pratos ────────────────────────────────────────────────────────────
   const fetchPratos = useCallback(async () => {
@@ -1089,7 +1055,7 @@ export default function NovaComandaScreen() {
                   <CartSummaryItem
                     key={item.id}
                     item={item}
-                    onRemove={() => removeItem(item.id)}
+                    mesaNumero={mesaNumeroDisplay}
                   />
                 ))}
               </View>

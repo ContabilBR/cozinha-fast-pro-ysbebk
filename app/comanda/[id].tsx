@@ -349,21 +349,27 @@ export default function ComandaDetailScreen() {
             {pedidosEnviados.length === 0 ? (
               <Text style={styles.emptyText}>Nenhum pedido enviado ainda</Text>
             ) : (
-              pedidosEnviados.map((p) => (
-                <View key={p.id} style={styles.pedidoCard}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pedidoNome}>
-                      {p.prato_id} × {p.quantidade}
-                    </Text>
-                    {p.observacao ? (
-                      <Text style={styles.pedidoObs}>{p.observacao}</Text>
-                    ) : null}
+              pedidosEnviados.map((p) => {
+                const pratoNome = pratos.find((pr) => pr.id === p.prato_id)?.nome ?? p.prato_id;
+                const precoUnit = `R$ ${Number(p.preco_unitario).toFixed(2).replace('.', ',')}`;
+                const qtyPreco = `Qtd: ${p.quantidade} × ${precoUnit}`;
+                return (
+                  <View key={p.id} style={styles.pedidoCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.pedidoNome, { fontWeight: '700' }]}>
+                        {pratoNome}
+                      </Text>
+                      <Text style={styles.pedidoObs}>{qtyPreco}</Text>
+                      {p.observacao ? (
+                        <Text style={[styles.pedidoObs, { fontStyle: 'italic' }]}>{p.observacao}</Text>
+                      ) : null}
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor(p.status) }]}>
+                      <Text style={styles.statusText}>{p.status}</Text>
+                    </View>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor(p.status) }]}>
-                    <Text style={styles.statusText}>{p.status}</Text>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
 
             {pedidosEnviados.length > 0 && (
