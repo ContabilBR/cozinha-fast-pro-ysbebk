@@ -68,7 +68,7 @@ function formatBRL(value: number): string {
 type FechamentoModalProps = {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (result: any) => void;
   comandaId: string;
   subtotal: number;
   mesaCapacidade?: number;
@@ -148,9 +148,7 @@ function FechamentoModal({
         num_pessoas: numPessoas,
       });
       console.log('[FechamentoModal] fechar response:', JSON.stringify(res));
-      Alert.alert('Sucesso', 'Comanda encerrada com sucesso!', [
-        { text: 'OK', onPress: onSuccess },
-      ]);
+      onSuccess(res);
     } catch (e: any) {
       console.error('[FechamentoModal] fechar error:', e?.message);
       Alert.alert('Erro', e?.message || 'Não foi possível fechar a comanda. Tente novamente.');
@@ -487,10 +485,23 @@ export default function ComandaDetailScreen() {
     setFechamentoVisible(true);
   };
 
-  const handleFechamentoSuccess = () => {
-    console.log('[ComandaDetail] fechamento success — navigating to mesas tab');
+  const handleFechamentoSuccess = (result: any) => {
+    console.log('[ComandaDetail] fechamento success — navigating to comprovante', result);
     setFechamentoVisible(false);
-    router.replace('/(tabs)/(home)');
+    router.replace({
+      pathname: '/comanda/comprovante',
+      params: {
+        mesa_numero: String(result?.mesa_numero ?? ''),
+        subtotal: String(result?.subtotal ?? 0),
+        gorjeta: String(result?.gorjeta ?? 0),
+        total_final: String(result?.total_final ?? 0),
+        num_pessoas: String(result?.num_pessoas ?? 1),
+        valor_por_pessoa: String(result?.valor_por_pessoa ?? 0),
+        created_at: result?.created_at ?? '',
+        closed_at: result?.closed_at ?? '',
+        itens: JSON.stringify(result?.itens ?? []),
+      },
+    });
   };
 
   const formatPrice = (price: number | string) =>
