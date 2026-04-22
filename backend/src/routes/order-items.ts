@@ -531,6 +531,7 @@ export function registerOrderItemRoutes(app: App) {
       try {
         app.logger.info({ pedidoId: request.params.id }, "Deleting pedido");
 
+        // Step a: Fetch the pedido
         const existing = await app.db
           .select()
           .from(schema.pedidos)
@@ -542,28 +543,105 @@ export function registerOrderItemRoutes(app: App) {
 
         const pedido = existing[0];
 
-        // Delete the pedido
+        // Step b: Fetch prato nome
+        let pratoNome: string | null = null;
+        if (pedido.pratoId) {
+          const pratoResult = await app.db
+            .select({ nome: schema.pratos.nome })
+            .from(schema.pratos)
+            .where(eq(schema.pratos.id, pedido.pratoId));
+
+          if (pratoResult.length) {
+            pratoNome = pratoResult[0].nome;
+          }
+        }
+
+        // Step c: Delete the pedido
         await app.db.delete(schema.pedidos).where(eq(schema.pedidos.id, request.params.id));
 
-        // Recalculate and update parent comanda's total
-        if (typeof (app.db as any).execute === 'function') {
-          await (app.db as any).execute(
-            sql`UPDATE comandas SET total = (SELECT COALESCE(SUM(quantidade * preco_unitario), 0) FROM pedidos WHERE comanda_id = ${pedido.comandaId}) WHERE id = ${pedido.comandaId}`
-          );
-        } else {
-          // Fallback: manually calculate and update
-          const result = await app.db
-            .select({
-              total: sql<number>`COALESCE(SUM(quantidade * preco_unitario), 0)`,
-            })
-            .from(schema.pedidos)
-            .where(eq(schema.pedidos.comandaId, pedido.comandaId));
+        // Step d: Recalculate and update parent comanda's total
+        const result = await app.db
+          .select({
+            total: sql<number>`COALESCE(SUM(quantidade * preco_unitario), 0)`,
+          })
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.comandaId, pedido.comandaId));
 
-          const newTotal = result[0]?.total || 0;
-          await app.db
-            .update(schema.comandas)
-            .set({ total: newTotal.toString() as any })
+        const newTotal = result[0]?.total || 0;
+        await app.db
+          .update(schema.comandas)
+          .set({ total: newTotal.toString() as any })
+          .where(eq(schema.comandas.id, pedido.comandaId));
+
+        // Step e: Check remaining pedidos count
+        const remainingPedidos = await app.db
+          .select()
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.comandaId, pedido.comandaId));
+
+        const remainingCount = remainingPedidos.length;
+
+        // Step f: If no more pedidos, archive the comanda and pedido
+        if (remainingCount === 0) {
+          // Fetch the comanda and mesa info
+          const comandaInfo = await app.db
+            .select({
+              id: schema.comandas.id,
+              mesaId: schema.comandas.mesaId,
+              garcomId: schema.comandas.garcomId,
+              status: schema.comandas.status,
+              total: schema.comandas.total,
+              createdAt: schema.comandas.createdAt,
+              closedAt: schema.comandas.closedAt,
+              mesaNumero: schema.mesas.numero,
+            })
+            .from(schema.comandas)
+            .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
             .where(eq(schema.comandas.id, pedido.comandaId));
+
+          if (comandaInfo.length) {
+            const comanda = comandaInfo[0];
+
+            // Archive comanda and pedido using Drizzle ORM
+            await app.db.insert(schema.comandasHistorico).values({
+              id: comanda.id,
+              mesaId: comanda.mesaId,
+              mesaNumero: comanda.mesaNumero,
+              garcomId: comanda.garcomId,
+              status: comanda.status,
+              total: comanda.total as any,
+              createdAt: comanda.createdAt,
+              closedAt: comanda.closedAt,
+              archivedAt: new Date(),
+            });
+
+            await app.db.insert(schema.pedidosHistorico).values({
+              id: pedido.id,
+              comandaId: pedido.comandaId,
+              pratoId: pedido.pratoId,
+              pratoNome,
+              quantidade: pedido.quantidade,
+              precoUnitario: pedido.precoUnitario as any,
+              observacao: pedido.observacao,
+              status: pedido.status,
+              createdAt: pedido.createdAt,
+              archivedAt: new Date(),
+            });
+
+            await app.db.delete(schema.comandas).where(eq(schema.comandas.id, pedido.comandaId));
+
+            await app.db
+              .update(schema.mesas)
+              .set({ status: "disponivel" })
+              .where(eq(schema.mesas.id, comanda.mesaId));
+
+            app.logger.info(
+              { pedidoId: request.params.id, comandaId: pedido.comandaId },
+              "Pedido deleted and comanda archived"
+            );
+
+            return reply.code(204).send();
+          }
         }
 
         app.logger.info({ pedidoId: request.params.id }, "Pedido deleted successfully");

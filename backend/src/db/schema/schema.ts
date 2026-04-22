@@ -112,3 +112,30 @@ export const usuariosSession = pgTable("usuarios_session", {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
 });
+
+// Comandas Historico (Archived Orders)
+export const comandasHistorico = pgTable("comandas_historico", {
+  id: uuid("id").primaryKey(),
+  mesaId: uuid("mesa_id"),
+  mesaNumero: integer("mesa_numero"),
+  garcomId: text("garcom_id"),
+  status: text("status").notNull(),
+  total: numeric("total", { precision: 10, scale: 2 }).default("0").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Pedidos Historico (Archived Order Items)
+export const pedidosHistorico = pgTable("pedidos_historico", {
+  id: uuid("id").primaryKey(),
+  comandaId: uuid("comanda_id").notNull(),
+  pratoId: uuid("prato_id"),
+  pratoNome: text("prato_nome"),
+  quantidade: integer("quantidade").notNull(),
+  precoUnitario: numeric("preco_unitario", { precision: 10, scale: 2 }).notNull(),
+  observacao: text("observacao"),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),
+});

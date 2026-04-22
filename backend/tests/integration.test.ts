@@ -2165,6 +2165,25 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.usuarios)).toBe(true);
   });
 
+  // ==================== Historico ====================
+  test("Get all archived comandas from historico", async () => {
+    const res = await api("/api/historico");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+    // Verify response structure if data exists
+    if (data.length > 0) {
+      const comanda = data[0];
+      expect(comanda.id).toBeDefined();
+      expect(comanda.mesa_id).toBeDefined();
+      expect(comanda.status).toBeDefined();
+      expect(comanda.total).toBeDefined();
+      expect(comanda.created_at).toBeDefined();
+      expect(comanda.archived_at).toBeDefined();
+      expect(Array.isArray(comanda.pedidos)).toBe(true);
+    }
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing
