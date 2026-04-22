@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
-import { count } from "drizzle-orm";
 
 interface CreateCategoriaBody {
   nome: string;
@@ -252,7 +251,6 @@ export function registerCategoriasRoutes(app: App) {
               success: { type: "boolean" },
             },
           },
-          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -279,19 +277,11 @@ export function registerCategoriasRoutes(app: App) {
           return reply.code(404).send({ error: "Category não encontrada." });
         }
 
-        // Check for associated pratos
-        const asociatedPratos = await app.db
-          .select({ count: count().mapWith(Number) })
-          .from(schema.pratos)
+        // Nullify categoria_id on all linked pratos
+        await app.db
+          .update(schema.pratos)
+          .set({ categoriaId: null })
           .where(eq(schema.pratos.categoriaId, request.params.id));
-
-        if (asociatedPratos[0].count > 0) {
-          app.logger.warn(
-            { categoriaId: request.params.id, pratoCount: asociatedPratos[0].count },
-            "Cannot delete categoria with associated pratos"
-          );
-          return reply.code(400).send({ error: "Category possui pratos associados e não pode ser excluída." });
-        }
 
         // Delete categoria
         await app.db.delete(schema.categorias).where(eq(schema.categorias.id, request.params.id));
