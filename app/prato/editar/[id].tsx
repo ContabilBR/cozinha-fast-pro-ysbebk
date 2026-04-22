@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -62,8 +62,17 @@ export default function EditarPratoScreen() {
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoad = useRef(true);
+
+  // Keep latest field values accessible inside doSave without stale closure
+  const fieldsRef = useRef({ nome, descricao, preco, categoriaId, imagemUrl, disponivel });
+  useEffect(() => {
+    fieldsRef.current = { nome, descricao, preco, categoriaId, imagemUrl, disponivel };
+  }, [nome, descricao, preco, categoriaId, imagemUrl, disponivel]);
 
   useEffect(() => {
     console.log("[EditarPrato] GET /api/pratos/" + id + " e /api/categorias");
@@ -87,6 +96,53 @@ export default function EditarPratoScreen() {
       setError("Não foi possível carregar o prato.");
     }).finally(() => setLoading(false));
   }, [id]);
+
+  // Mark initial load complete after data loads
+  useEffect(() => {
+    if (!loading) {
+      // Small delay to let all setState calls settle before enabling auto-save
+      const t = setTimeout(() => { isInitialLoad.current = false; }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [loading]);
+
+  const doSave = useCallback(async () => {
+    const { nome: n, descricao: d, preco: p, categoriaId: cid, imagemUrl: iu, disponivel: disp } = fieldsRef.current;
+    if (!n.trim()) return;
+    const precoNum = parseFloat(p.replace(",", "."));
+    if (isNaN(precoNum) || precoNum < 0) return;
+    console.log("[EditarPrato] Auto-save PUT /api/pratos/" + id, "nome:", n);
+    const payload: any = {
+      nome: n.trim(),
+      descricao: d.trim() || undefined,
+      preco: precoNum,
+      disponivel: disp,
+    };
+    if (cid) payload.categoria_id = cid;
+    if (iu.trim() && !localImageUri) payload.imagem_url = iu.trim();
+    await apiPut(`/api/pratos/${id}`, payload);
+    console.log("[EditarPrato] Auto-save concluído");
+  }, [id, localImageUri]);
+
+  const triggerAutoSave = useCallback(() => {
+    if (isInitialLoad.current) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setSaveStatus("saving");
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await doSave();
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch (e) {
+        console.error("[EditarPrato] Erro no auto-save:", e);
+        setSaveStatus("error");
+      }
+    }, 1500);
+  }, [doSave]);
+
+  useEffect(() => {
+    triggerAutoSave();
+  }, [nome, descricao, preco, categoriaId, imagemUrl, disponivel]);
 
   const selectedCat = categorias.find((c) => c.id === categoriaId);
 
@@ -145,37 +201,6 @@ export default function EditarPratoScreen() {
     }
   };
 
-  const handleSave = async () => {
-    if (!nome.trim()) { setError("Nome é obrigatório."); return; }
-    const precoNum = parseFloat(preco.replace(",", "."));
-    if (isNaN(precoNum) || precoNum < 0) { setError("Preço inválido."); return; }
-    console.log("[EditarPrato] Salvar alterações pressionado:", id, "nome:", nome, "categoria:", categoriaId);
-    setSubmitting(true);
-    setError("");
-    try {
-      const payload: any = {
-        nome: nome.trim(),
-        descricao: descricao.trim() || undefined,
-        preco: precoNum,
-        disponivel,
-      };
-      if (categoriaId) payload.categoria_id = categoriaId;
-      if (imagemUrl.trim() && !localImageUri) payload.imagem_url = imagemUrl.trim();
-      console.log("[EditarPrato] PUT /api/pratos/" + id);
-      await apiPut(`/api/pratos/${id}`, payload);
-      console.log("[EditarPrato] Prato atualizado com sucesso");
-      if (localImageUri) {
-        await uploadFoto();
-      }
-      router.back();
-    } catch (e: any) {
-      console.error("[EditarPrato] Erro ao salvar:", e);
-      setError(e instanceof Error ? e.message : "Não foi possível salvar as alterações.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const inputStyle = {
     backgroundColor: COLORS.surfaceSecondary,
     borderRadius: 12,
@@ -188,6 +213,19 @@ export default function EditarPratoScreen() {
   };
 
   const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
+
+  const saveStatusNode =
+    saveStatus === "saving" ? (
+      <ActivityIndicator size="small" color={COLORS.textSecondary} />
+    ) : saveStatus === "saved" ? (
+      <Text style={{ color: "#34C759", fontSize: 13, fontWeight: "600", fontFamily: "Outfit_600SemiBold" }}>
+        Salvo ✓
+      </Text>
+    ) : saveStatus === "error" ? (
+      <Text style={{ color: "#FF3B30", fontSize: 13, fontFamily: "Outfit_400Regular" }}>
+        Erro
+      </Text>
+    ) : null;
 
   if (loading) {
     return (
@@ -242,6 +280,9 @@ export default function EditarPratoScreen() {
           }}>
             Editar Prato
           </Text>
+          <View style={{ marginLeft: "auto", zIndex: 1 }}>
+            {saveStatusNode}
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
@@ -358,6 +399,19 @@ export default function EditarPratoScreen() {
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Galeria</Text>
                 </AnimatedPressable>
               </View>
+              {localImageUri ? (
+                <AnimatedPressable
+                  onPress={() => { console.log("[EditarPrato] Upload de foto pressionado"); uploadFoto(); }}
+                  disabled={uploading}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 12, opacity: uploading ? 0.7 : 1 }}
+                >
+                  {uploading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>Enviar foto</Text>
+                  )}
+                </AnimatedPressable>
+              ) : null}
             </View>
           </FormField>
 
@@ -374,18 +428,6 @@ export default function EditarPratoScreen() {
           {error ? (
             <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
           ) : null}
-
-          <AnimatedPressable
-            onPress={() => { console.log("[EditarPrato] Salvar alterações pressionado"); handleSave(); }}
-            disabled={submitting || uploading}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1 }}
-          >
-            {submitting || uploading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar alterações</Text>
-            )}
-          </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>
 
