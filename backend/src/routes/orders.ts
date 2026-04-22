@@ -176,6 +176,7 @@ export function registerOrderRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   mesa_id: { type: "string", format: "uuid" },
+                  mesa_numero: { type: "number" },
                   garcom_id: { type: "string" },
                   status: { type: "string" },
                   total: { type: "string" },
@@ -289,13 +290,11 @@ export function registerOrderRoutes(app: App) {
           comanda: {
             id: comanda.id,
             mesa_id: comanda.mesaId,
+            mesa_numero: mesa.numero,
             garcom_id: comanda.garcomId,
             status: comanda.status,
             total: comanda.total,
             created_at: comanda.createdAt ? new Date(comanda.createdAt).toISOString() : null,
-            mesa: {
-              numero: mesa.numero,
-            },
           },
         });
       } catch (error) {
@@ -673,7 +672,14 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Update mesa status back to livre
+        // Fetch mesa info to get mesa_numero
+        const mesaInfo = await app.db
+          .select({ numero: schema.mesas.numero })
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, updated.mesaId))
+          .limit(1);
+
+        // Update mesa status back to disponivel
         await app.db
           .update(schema.mesas)
           .set({ status: "disponivel" })
@@ -684,6 +690,7 @@ export function registerOrderRoutes(app: App) {
         return reply.code(200).send({
           comanda: {
             id: updated.id,
+            mesa_numero: mesaInfo[0]?.numero,
             status: updated.status,
             closed_at: updated.closedAt?.toISOString(),
           },
@@ -738,7 +745,14 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Update mesa status back to livre
+        // Fetch mesa info to get mesa_numero
+        const mesaInfo = await app.db
+          .select({ numero: schema.mesas.numero })
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, updated.mesaId))
+          .limit(1);
+
+        // Update mesa status back to disponivel
         await app.db
           .update(schema.mesas)
           .set({ status: "disponivel" })
@@ -748,12 +762,13 @@ export function registerOrderRoutes(app: App) {
 
         return reply.code(200).send({
           id: updated.id,
-          mesaId: updated.mesaId,
-          garcomId: updated.garcomId,
+          mesa_id: updated.mesaId,
+          mesa_numero: mesaInfo[0]?.numero,
+          garcom_id: updated.garcomId,
           status: updated.status,
           total: updated.total,
-          closedAt: updated.closedAt?.toISOString(),
-          createdAt: updated.createdAt.toISOString(),
+          closed_at: updated.closedAt?.toISOString(),
+          created_at: updated.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to cancel comanda");
@@ -938,6 +953,7 @@ export function registerOrderRoutes(app: App) {
                 properties: {
                   id: { type: "string", format: "uuid" },
                   mesa_id: { type: "string", format: "uuid" },
+                  mesa_numero: { type: "number" },
                   garcom_id: { type: "string" },
                   garcom_nome: { type: "string" },
                   garcom_email: { type: "string" },
@@ -983,15 +999,17 @@ export function registerOrderRoutes(app: App) {
             c.garcom_id,
             c.status AS comanda_status,
             c.created_at AS comanda_created_at,
+            m.numero AS mesa_numero,
             COALESCE(u.name, us.nome, 'Garçom') AS garcom_nome,
             COALESCE(u.email, us.email) AS garcom_email,
             COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
+          LEFT JOIN mesas m ON c.mesa_id = m.id
           LEFT JOIN "user" u ON u.id = c.garcom_id
           LEFT JOIN usuarios us ON us.id::text = c.garcom_id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
           WHERE c.mesa_id = ${mesaId} AND c.status = 'aberta'
-          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, u.name, u.email, us.nome, us.email
+          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, m.numero, u.name, u.email, us.nome, us.email
           ORDER BY c.created_at DESC
           LIMIT 1
         `;
@@ -1032,6 +1050,7 @@ export function registerOrderRoutes(app: App) {
           comanda: {
             id: comandaRow.comanda_id,
             mesa_id: comandaRow.mesa_id,
+            mesa_numero: comandaRow.mesa_numero,
             garcom_id: comandaRow.garcom_id,
             garcom_nome: comandaRow.garcom_nome,
             garcom_email: comandaRow.garcom_email,

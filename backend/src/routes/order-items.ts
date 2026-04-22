@@ -256,7 +256,21 @@ export function registerOrderItemRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              comanda_id: { type: "string", format: "uuid" },
+              prato_id: { type: ["string", "null"], format: "uuid" },
+              prato_nome: { type: "string" },
+              mesa_numero: { type: ["number", "null"] },
+              quantidade: { type: "number" },
+              preco_unitario: { type: "string" },
+              observacao: { type: ["string", "null"] },
+              status: { type: "string" },
+              created_at: { type: "string", format: "date-time" },
+            },
+          },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -279,9 +293,12 @@ export function registerOrderItemRoutes(app: App) {
             observacao: schema.pedidos.observacao,
             status: schema.pedidos.status,
             createdAt: schema.pedidos.createdAt,
+            mesaNumero: schema.mesas.numero,
           })
           .from(schema.pedidos)
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+          .leftJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .where(eq(schema.pedidos.id, request.params.id));
 
         if (!pedidos.length) {
@@ -291,14 +308,15 @@ export function registerOrderItemRoutes(app: App) {
         const p = pedidos[0];
         return reply.code(200).send({
           id: p.id,
-          comandaId: p.comandaId,
-          pratoId: p.pratoId,
-          pratoNome: p.pratoNome || "Desconhecido",
+          comanda_id: p.comandaId,
+          prato_id: p.pratoId,
+          prato_nome: p.pratoNome || "Desconhecido",
+          mesa_numero: p.mesaNumero,
           quantidade: p.quantidade,
-          precoUnitario: p.precoUnitario,
+          preco_unitario: p.precoUnitario,
           observacao: p.observacao,
           status: p.status,
-          createdAt: p.createdAt.toISOString(),
+          created_at: p.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get pedido");
