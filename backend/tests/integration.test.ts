@@ -826,6 +826,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Get mesa by ID without authentication returns 401", async () => {
+    const res = await api(`/api/mesas/${testTableId}`);
+    await expectStatus(res, 401);
+  });
+
   test("Get non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
@@ -1088,6 +1093,11 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.comandas).toBeDefined();
     expect(Array.isArray(data.comandas)).toBe(true);
+  });
+
+  test("List comandas without authentication returns 401", async () => {
+    const res = await api("/api/comandas");
+    await expectStatus(res, 401);
   });
 
   test("Create comanda", async () => {
@@ -1460,6 +1470,11 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.pedidos)).toBe(true);
   });
 
+  test("List pedidos without authentication returns 401", async () => {
+    const res = await api("/api/pedidos");
+    await expectStatus(res, 401);
+  });
+
   test("Create pedido", async () => {
     const res = await authenticatedApi("/api/pedidos", authToken, {
       method: "POST",
@@ -1643,6 +1658,11 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.data).toBeDefined();
     expect(Array.isArray(data.data)).toBe(true);
+  });
+
+  test("List usuarios without authentication returns 401", async () => {
+    const res = await api("/api/usuarios");
+    await expectStatus(res, 401);
   });
 
   test("Create usuario", async () => {
