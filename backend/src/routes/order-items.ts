@@ -388,12 +388,129 @@ export function registerOrderItemRoutes(app: App) {
     }
   );
 
+  // PUT /api/pedidos/:id - Update a pedido
+  app.fastify.put<{ Params: { id: string }; Body: { quantidade?: number; observacao?: string; status?: string } }>(
+    "/api/pedidos/:id",
+    {
+      schema: {
+        description: "Update a pedido (requires authentication)",
+        tags: ["pedidos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          properties: {
+            quantidade: { type: "number" },
+            observacao: { type: "string" },
+            status: { type: "string", enum: ["pendente", "em_preparo", "pronto", "entregue", "cancelado"] },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              comanda_id: { type: "string", format: "uuid" },
+              prato_id: { type: ["string", "null"], format: "uuid" },
+              quantidade: { type: "number" },
+              preco_unitario: { type: "string" },
+              observacao: { type: ["string", "null"] },
+              status: { type: "string" },
+              createdAt: { type: "string", format: "date-time" },
+            },
+          },
+          404: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: { quantidade?: number; observacao?: string; status?: string } }>,
+      reply: FastifyReply
+    ) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      try {
+        app.logger.info({ pedidoId: request.params.id, body: request.body }, "Updating pedido");
+
+        const existing = await app.db
+          .select()
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.id, request.params.id));
+
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Pedido not found" });
+        }
+
+        const pedido = existing[0];
+        const updates: any = {};
+
+        if (request.body.quantidade !== undefined) {
+          updates.quantidade = request.body.quantidade;
+        }
+        if (request.body.observacao !== undefined) {
+          updates.observacao = request.body.observacao;
+        }
+        if (request.body.status !== undefined) {
+          updates.status = request.body.status as any;
+        }
+
+        const [updated] = await app.db
+          .update(schema.pedidos)
+          .set(updates)
+          .where(eq(schema.pedidos.id, request.params.id))
+          .returning();
+
+        // Recalculate and update parent comanda's total
+        if (typeof (app.db as any).execute === 'function') {
+          await (app.db as any).execute(
+            sql`UPDATE comandas SET total = (SELECT COALESCE(SUM(quantidade * preco_unitario), 0) FROM pedidos WHERE comanda_id = ${pedido.comandaId}) WHERE id = ${pedido.comandaId}`
+          );
+        } else {
+          // Fallback: manually calculate and update
+          const result = await app.db
+            .select({
+              total: sql<number>`COALESCE(SUM(quantidade * preco_unitario), 0)`,
+            })
+            .from(schema.pedidos)
+            .where(eq(schema.pedidos.comandaId, pedido.comandaId));
+
+          const newTotal = result[0]?.total || 0;
+          await app.db
+            .update(schema.comandas)
+            .set({ total: newTotal.toString() as any })
+            .where(eq(schema.comandas.id, pedido.comandaId));
+        }
+
+        app.logger.info({ pedidoId: updated.id }, "Pedido updated successfully");
+
+        return reply.code(200).send({
+          id: updated.id,
+          comanda_id: updated.comandaId,
+          prato_id: updated.pratoId,
+          quantidade: updated.quantidade,
+          preco_unitario: updated.precoUnitario.toString(),
+          observacao: updated.observacao,
+          status: updated.status,
+          createdAt: updated.createdAt.toISOString(),
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to update pedido");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
   // DELETE /api/pedidos/:id - Delete a pedido
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/pedidos/:id",
     {
       schema: {
-        description: "Delete a pedido",
+        description: "Delete a pedido (requires authentication)",
         tags: ["pedidos"],
         params: {
           type: "object",
@@ -401,8 +518,9 @@ export function registerOrderItemRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Pedido deleted" },
+          204: {},
           404: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -422,7 +540,31 @@ export function registerOrderItemRoutes(app: App) {
           return reply.code(404).send({ error: "Pedido not found" });
         }
 
+        const pedido = existing[0];
+
+        // Delete the pedido
         await app.db.delete(schema.pedidos).where(eq(schema.pedidos.id, request.params.id));
+
+        // Recalculate and update parent comanda's total
+        if (typeof (app.db as any).execute === 'function') {
+          await (app.db as any).execute(
+            sql`UPDATE comandas SET total = (SELECT COALESCE(SUM(quantidade * preco_unitario), 0) FROM pedidos WHERE comanda_id = ${pedido.comandaId}) WHERE id = ${pedido.comandaId}`
+          );
+        } else {
+          // Fallback: manually calculate and update
+          const result = await app.db
+            .select({
+              total: sql<number>`COALESCE(SUM(quantidade * preco_unitario), 0)`,
+            })
+            .from(schema.pedidos)
+            .where(eq(schema.pedidos.comandaId, pedido.comandaId));
+
+          const newTotal = result[0]?.total || 0;
+          await app.db
+            .update(schema.comandas)
+            .set({ total: newTotal.toString() as any })
+            .where(eq(schema.comandas.id, pedido.comandaId));
+        }
 
         app.logger.info({ pedidoId: request.params.id }, "Pedido deleted successfully");
 
