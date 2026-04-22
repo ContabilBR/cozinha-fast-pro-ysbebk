@@ -151,6 +151,21 @@ function ConfirmDeleteModal({
   onConfirm: () => void;
 }) {
   const COLORS = useColors();
+  // Guard: ensure onConfirm fires at most once per modal open
+  const confirmedRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) {
+      confirmedRef.current = false;
+    }
+  }, [visible]);
+
+  const handleConfirm = () => {
+    if (confirmedRef.current) return;
+    confirmedRef.current = true;
+    onConfirm();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -227,7 +242,7 @@ function ConfirmDeleteModal({
               </Text>
             </Pressable>
             <Pressable
-              onPress={onConfirm}
+              onPress={handleConfirm}
               style={({ pressed }) => ({
                 flex: 1,
                 paddingVertical: 12,
@@ -798,6 +813,64 @@ function SkeletonCard() {
   );
 }
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function Toast({ message, visible }: { message: string; visible: boolean }) {
+  const translateY = useRef(new Animated.Value(40)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateY, { toValue: 40, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible, translateY, opacity]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        bottom: 80,
+        left: 0,
+        right: 0,
+        alignItems: "center",
+        opacity,
+        transform: [{ translateY }],
+        zIndex: 999,
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: "#333",
+          borderRadius: 24,
+          paddingHorizontal: 20,
+          paddingVertical: 11,
+          maxWidth: 280,
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: "Outfit_500Medium",
+            fontSize: 14,
+            color: "#fff",
+            textAlign: "center",
+          }}
+        >
+          {message}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function PedidosGarcomScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
@@ -808,6 +881,27 @@ export default function PedidosGarcomScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Toast state
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    setToastVisible(true);
+    toastTimerRef.current = setTimeout(() => setToastVisible(false), 2000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  // Track IDs already deleted to prevent double-delete
+  const deletedIdsRef = useRef<Set<string>>(new Set());
 
   const fetchPedidos = useCallback(async () => {
     console.log("[Pedidos Garçom] Fetching GET /api/pedidos");
@@ -855,13 +949,27 @@ export default function PedidosGarcomScreen() {
   };
 
   const handleDeleteItem = useCallback(async (comandaId: string, itemId: string) => {
+    // Guard 1: block concurrent deletes
+    if (deletingId) {
+      console.log("[Pedidos] Delete already in progress, ignoring:", itemId);
+      return;
+    }
+    // Guard 2: block re-deleting an already-deleted id
+    if (deletedIdsRef.current.has(itemId)) {
+      console.log("[Pedidos] Item already deleted, ignoring duplicate:", itemId);
+      return;
+    }
+
     console.log("[Pedidos] DELETE /api/pedidos/" + itemId + " (comanda:", comandaId + ")");
 
     // Snapshot for rollback
     const snapshot = pedidos;
 
-    // 1. Optimistic removal
+    // Mark as deleted immediately before the fetch
+    deletedIdsRef.current.add(itemId);
     setDeletingId(itemId);
+
+    // Optimistic removal
     setPedidos((prev) =>
       prev
         .map((p) =>
@@ -875,24 +983,27 @@ export default function PedidosGarcomScreen() {
     try {
       await apiDelete(`/api/pedidos/${itemId}`);
       console.log("[Pedidos] Item deletado com sucesso:", itemId);
-      // 3. Server sync — re-fetch to get accurate totals/counts
+      showToast("Item excluído com sucesso");
+      // Server sync — re-fetch to get accurate totals/counts
       await fetchPedidos();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Pedidos] Erro ao deletar item:", msg);
-      // 4. Error recovery — restore snapshot
+      // Error recovery — restore snapshot and remove from deleted set
+      deletedIdsRef.current.delete(itemId);
       setPedidos(snapshot);
       Alert.alert("Erro", "Não foi possível remover o prato. Tente novamente.");
     } finally {
       setDeletingId(null);
     }
-  }, [pedidos, fetchPedidos]);
+  }, [deletingId, pedidos, fetchPedidos, showToast]);
 
   const handleDeleteComanda = useCallback(async (comandaId: string) => {
     console.log("[Pedidos] DELETE /api/comandas/" + comandaId);
     try {
       await apiDelete(`/api/comandas/${comandaId}`);
       console.log("[Pedidos] Comanda deletada com sucesso:", comandaId);
+      showToast("Item excluído com sucesso");
       // Remove entire comanda from local state
       setPedidos((prev) => prev.filter((p) => p.comanda_id !== comandaId));
       // Refresh to sync totals
@@ -902,7 +1013,7 @@ export default function PedidosGarcomScreen() {
       console.error("[Pedidos] Erro ao deletar comanda:", msg);
       Alert.alert("Erro", "Não foi possível remover o pedido. Tente novamente.");
     }
-  }, [fetchPedidos]);
+  }, [fetchPedidos, showToast]);
 
   const handleUpdateItem = useCallback(
     async (comandaId: string, itemId: string, fields: { quantidade?: number; observacao?: string }) => {
@@ -920,10 +1031,11 @@ export default function PedidosGarcomScreen() {
             : p
         )
       );
+      showToast("Pedido atualizado");
       // Refresh to sync comanda totals from backend
       fetchPedidos();
     },
-    [fetchPedidos]
+    [fetchPedidos, showToast]
   );
 
   const pedidoCount = pedidos.length;
@@ -1149,6 +1261,7 @@ export default function PedidosGarcomScreen() {
           )}
         </ScrollView>
       )}
+      <Toast message={toastMessage} visible={toastVisible} />
     </View>
   );
 }

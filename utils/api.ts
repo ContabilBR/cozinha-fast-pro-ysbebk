@@ -99,6 +99,12 @@ export const apiRequest = async <T = any>(
     throw new Error(message || `HTTP ${response.status}`);
   }
 
+  // 204 No Content or explicitly empty body — skip JSON parsing to avoid
+  // "Unexpected end of JSON input" on DELETE endpoints that return no body.
+  if (response.status === 204 || response.headers.get("content-length") === "0") {
+    return null as any;
+  }
+
   return response.json();
 };
 
