@@ -8,6 +8,7 @@ import {
   Pressable,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet, apiPatch, apiDelete } from "@/utils/api";
+import { apiGet, apiPut, apiDelete } from "@/utils/api";
+import { Plus, Minus } from "lucide-react-native";
 
 // ─── API response types ───────────────────────────────────────────────────────
 
@@ -156,45 +158,94 @@ function formatDateTime(iso: string): string {
 function ItemRow({
   item,
   onDelete,
+  onUpdate,
 }: {
   item: GarcomPedidoItem;
   onDelete: (id: string) => void;
+  onUpdate: (id: string, fields: { quantidade?: number; observacao?: string }) => void;
 }) {
   const COLORS = useColors();
   const cfg = getStatusConfig(item.status);
-  const quantLabel = `${item.quantidade}x`;
 
   const [obsValue, setObsValue] = useState(item.observacao ?? "");
   const [obsFocused, setObsFocused] = useState(false);
+  const [quantidade, setQuantidade] = useState(item.quantidade);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const handleObsBlur = useCallback(async () => {
-    setObsFocused(false);
-    const trimmed = obsValue.trim();
-    const original = (item.observacao ?? "").trim();
-    if (trimmed === original) return;
+  // Debounce ref for observacao
+  const obsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    console.log("[Pedidos] PATCH /api/pedidos/" + item.id + "/observacao — observacao:", trimmed);
-    setSaving(true);
+  // Keep local state in sync if parent refreshes the item
+  useEffect(() => {
+    setObsValue(item.observacao ?? "");
+    setQuantidade(item.quantidade);
+  }, [item.observacao, item.quantidade]);
+
+  const saveField = useCallback(
+    async (fields: { quantidade?: number; observacao?: string }) => {
+      console.log("[Pedidos] PUT /api/pedidos/" + item.id, fields);
+      setSaving(true);
+      setSaveError("");
+      try {
+        await apiPut<any>(`/api/pedidos/${item.id}`, fields);
+        console.log("[Pedidos] Pedido atualizado:", item.id, fields);
+        onUpdate(item.id, fields);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[Pedidos] Erro ao atualizar pedido:", msg);
+        setSaveError("Não foi possível salvar");
+        // Revert local state on error
+        setObsValue(item.observacao ?? "");
+        setQuantidade(item.quantidade);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [item.id, item.observacao, item.quantidade, onUpdate]
+  );
+
+  const handleObsChange = (t: string) => {
+    setObsValue(t);
     setSaveError("");
-    try {
-      await apiPatch<any>(`/api/pedidos/${item.id}/observacao`, { observacao: trimmed });
-      console.log("[Pedidos] Observação atualizada para pedido:", item.id);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[Pedidos] Erro ao salvar observação:", msg);
-      setSaveError("Não foi possível salvar");
-    } finally {
-      setSaving(false);
-    }
-  }, [item.id, item.observacao, obsValue]);
+    if (obsDebounceRef.current) clearTimeout(obsDebounceRef.current);
+    obsDebounceRef.current = setTimeout(() => {
+      const trimmed = t.trim();
+      const original = (item.observacao ?? "").trim();
+      if (trimmed !== original) {
+        console.log("[Pedidos] Debounce disparado — salvar observacao pedido:", item.id);
+        saveField({ observacao: trimmed });
+      }
+    }, 800);
+  };
+
+  // Clear debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (obsDebounceRef.current) clearTimeout(obsDebounceRef.current);
+    };
+  }, []);
+
+  const handleDecrement = () => {
+    if (quantidade <= 1) return;
+    const next = quantidade - 1;
+    console.log("[Pedidos] Diminuir quantidade — pedido:", item.id, "->", next);
+    setQuantidade(next);
+    saveField({ quantidade: next });
+  };
+
+  const handleIncrement = () => {
+    const next = quantidade + 1;
+    console.log("[Pedidos] Aumentar quantidade — pedido:", item.id, "->", next);
+    setQuantidade(next);
+    saveField({ quantidade: next });
+  };
 
   const handleDeletePress = () => {
     console.log("[Pedidos] Trash icon pressed — pedido item:", item.id, "prato:", item.prato_nome);
     Alert.alert(
-      "Excluir prato?",
-      "Tem certeza que deseja remover este prato do pedido?",
+      "Excluir item",
+      "Tem certeza que deseja excluir este item do pedido?",
       [
         {
           text: "Cancelar",
@@ -215,38 +266,19 @@ function ItemRow({
 
   return (
     <View style={{ paddingVertical: 10 }}>
-      {/* Top row: qty + name + status badge + delete */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text
-              style={{
-                fontFamily: "Outfit_700Bold",
-                fontSize: 14,
-                color: COLORS.primary,
-                minWidth: 24,
-              }}
-            >
-              {quantLabel}
-            </Text>
-            <Text
-              style={{
-                fontFamily: "Outfit_500Medium",
-                fontSize: 14,
-                color: COLORS.text,
-                flex: 1,
-              }}
-            >
-              {item.prato_nome}
-            </Text>
-          </View>
-        </View>
+      {/* Top row: name + status badge + delete */}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <Text
+          style={{
+            fontFamily: "Outfit_500Medium",
+            fontSize: 14,
+            color: COLORS.text,
+            flex: 1,
+            marginRight: 8,
+          }}
+        >
+          {item.prato_nome}
+        </Text>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View
@@ -258,13 +290,7 @@ function ItemRow({
               alignSelf: "flex-start",
             }}
           >
-            <Text
-              style={{
-                fontFamily: "Outfit_600SemiBold",
-                fontSize: 11,
-                color: cfg.text,
-              }}
-            >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: cfg.text }}>
               {cfg.label}
             </Text>
           </View>
@@ -273,18 +299,60 @@ function ItemRow({
           <Pressable
             onPress={handleDeletePress}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.5 : 1,
-              padding: 2,
-            })}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 2 })}
           >
             <Ionicons name="trash-outline" size={17} color="#EF4444" />
           </Pressable>
         </View>
       </View>
 
+      {/* Quantity controls */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
+        <Pressable
+          onPress={handleDecrement}
+          disabled={saving || quantidade <= 1}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={({ pressed }) => ({
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: COLORS.surfaceSecondary,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed || quantidade <= 1 ? 0.4 : 1,
+          })}
+        >
+          <Minus size={13} color={COLORS.text} />
+        </Pressable>
+
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary, minWidth: 20, textAlign: "center" }}>
+          {quantidade}
+        </Text>
+
+        <Pressable
+          onPress={handleIncrement}
+          disabled={saving}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={({ pressed }) => ({
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            backgroundColor: COLORS.primaryMuted,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Plus size={13} color={COLORS.primary} />
+        </Pressable>
+
+        {saving && (
+          <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 4 }} />
+        )}
+      </View>
+
       {/* Observações field */}
-      <View style={{ marginTop: 8, marginLeft: 30 }}>
+      <View style={{ marginTop: 8 }}>
         <Text
           style={{
             fontFamily: "Outfit_500Medium",
@@ -299,18 +367,16 @@ function ItemRow({
         </Text>
         <TextInput
           value={obsValue}
-          onChangeText={(t) => {
-            setObsValue(t);
-            setSaveError("");
-          }}
+          onChangeText={handleObsChange}
           onFocus={() => {
             console.log("[Pedidos] Campo observação focado — pedido:", item.id);
             setObsFocused(true);
           }}
-          onBlur={handleObsBlur}
+          onBlur={() => setObsFocused(false)}
           placeholder="Ex: sem cebola, bem passado..."
           placeholderTextColor={COLORS.textTertiary ?? "#bbb"}
           multiline
+          editable={!saving}
           style={{
             fontFamily: "Outfit_400Regular",
             fontSize: 13,
@@ -323,20 +389,9 @@ function ItemRow({
             paddingVertical: 7,
             minHeight: 36,
             lineHeight: 18,
+            opacity: saving ? 0.6 : 1,
           }}
         />
-        {saving && (
-          <Text
-            style={{
-              fontFamily: "Outfit_400Regular",
-              fontSize: 11,
-              color: COLORS.textSecondary,
-              marginTop: 3,
-            }}
-          >
-            Salvando...
-          </Text>
-        )}
         {!!saveError && (
           <Text
             style={{
@@ -359,11 +414,13 @@ function PedidoCard({
   index,
   onDeleteItem,
   onDeleteComanda,
+  onUpdateItem,
 }: {
   pedido: GarcomPedido;
   index: number;
   onDeleteItem: (comandaId: string, itemId: string) => void;
   onDeleteComanda: (comandaId: string) => void;
+  onUpdateItem: (comandaId: string, itemId: string, fields: { quantidade?: number; observacao?: string }) => void;
 }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -517,6 +574,7 @@ function PedidoCard({
               <ItemRow
                 item={item}
                 onDelete={(itemId) => onDeleteItem(pedido.comanda_id, itemId)}
+                onUpdate={(itemId, fields) => onUpdateItem(pedido.comanda_id, itemId, fields)}
               />
               {i < pedido.itens.length - 1 && (
                 <View
@@ -691,12 +749,36 @@ export default function PedidosGarcomScreen() {
       console.log("[Pedidos] Comanda deletada com sucesso:", comandaId);
       // Remove entire comanda from local state
       setPedidos((prev) => prev.filter((p) => p.comanda_id !== comandaId));
+      // Refresh to sync totals
+      fetchPedidos();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Pedidos] Erro ao deletar comanda:", msg);
       Alert.alert("Erro", "Não foi possível remover o pedido. Tente novamente.");
     }
-  }, []);
+  }, [fetchPedidos]);
+
+  const handleUpdateItem = useCallback(
+    async (comandaId: string, itemId: string, fields: { quantidade?: number; observacao?: string }) => {
+      console.log("[Pedidos] handleUpdateItem — comanda:", comandaId, "item:", itemId, fields);
+      // Update local state optimistically
+      setPedidos((prev) =>
+        prev.map((p) =>
+          p.comanda_id === comandaId
+            ? {
+                ...p,
+                itens: p.itens.map((it) =>
+                  it.id === itemId ? { ...it, ...fields } : it
+                ),
+              }
+            : p
+        )
+      );
+      // Refresh to sync comanda totals from backend
+      fetchPedidos();
+    },
+    [fetchPedidos]
+  );
 
   const pedidoCount = pedidos.length;
   const pedidoCountLabel = `${pedidoCount} ${pedidoCount === 1 ? "pedido" : "pedidos"}`;
@@ -914,6 +996,7 @@ export default function PedidosGarcomScreen() {
                 index={index}
                 onDeleteItem={handleDeleteItem}
                 onDeleteComanda={handleDeleteComanda}
+                onUpdateItem={handleUpdateItem}
               />
             ))
           )}
