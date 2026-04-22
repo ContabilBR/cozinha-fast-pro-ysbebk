@@ -7,8 +7,9 @@ import {
   Animated,
   Pressable,
   TextInput,
-  Alert,
+  Modal,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -134,6 +135,125 @@ function normalisePedidos(raw: any): GarcomPedido[] {
   });
 }
 
+// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+
+function ConfirmDeleteModal({
+  visible,
+  title,
+  message,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  title: string;
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const COLORS = useColors();
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <Pressable
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.45)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 32,
+        }}
+        onPress={onCancel}
+      >
+        <Pressable
+          style={{
+            backgroundColor: COLORS.surface,
+            borderRadius: 18,
+            padding: 24,
+            width: "100%",
+            maxWidth: 340,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.18,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+          onPress={() => {}}
+        >
+          <Text
+            style={{
+              fontFamily: "Outfit_700Bold",
+              fontSize: 17,
+              color: COLORS.text,
+              marginBottom: 8,
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              lineHeight: 20,
+              marginBottom: 24,
+            }}
+          >
+            {message}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: COLORS.surfaceSecondary,
+                alignItems: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 15,
+                  color: COLORS.text,
+                }}
+              >
+                Cancelar
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => ({
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: "#EF4444",
+                alignItems: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 15,
+                  color: "#fff",
+                }}
+              >
+                Excluir
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   aguardando: { label: "Aguardando", bg: "#F59E0B", text: "#fff" },
   preparando: { label: "Em Preparação", bg: "#3B82F6", text: "#fff" },
@@ -172,6 +292,7 @@ function ItemRow({
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   // Debounce ref for observacao
   const obsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -243,29 +364,29 @@ function ItemRow({
 
   const handleDeletePress = () => {
     console.log("[Pedidos] Trash icon pressed — pedido item:", item.id, "prato:", item.prato_nome);
-    Alert.alert(
-      "Excluir item",
-      "Tem certeza que deseja excluir este item do pedido?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-          onPress: () => console.log("[Pedidos] Exclusão de item cancelada:", item.id),
-        },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: () => {
-            console.log("[Pedidos] Confirmado — DELETE /api/pedidos/" + item.id);
-            onDelete(item.id);
-          },
-        },
-      ]
-    );
+    setConfirmDeleteVisible(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    console.log("[Pedidos] Confirmado — DELETE /api/pedidos/" + item.id);
+    setConfirmDeleteVisible(false);
+    onDelete(item.id);
+  };
+
+  const handleDeleteCancel = () => {
+    console.log("[Pedidos] Exclusão de item cancelada:", item.id);
+    setConfirmDeleteVisible(false);
   };
 
   return (
     <View style={{ paddingVertical: 10 }}>
+      <ConfirmDeleteModal
+        visible={confirmDeleteVisible}
+        title="Excluir item"
+        message="Tem certeza que deseja excluir este item do pedido?"
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+      />
       {/* Top row: name + status badge + delete */}
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
         <Text
@@ -449,27 +570,22 @@ function PedidoCard({
   const pedidoLabel = `Pedido #${pedido.numero_sequencial}`;
   const mesaLabel = `Mesa ${pedido.mesa_numero}`;
 
+  const [confirmDeleteComandaVisible, setConfirmDeleteComandaVisible] = useState(false);
+
   const handleDeleteComandaPress = () => {
     console.log("[Pedidos] Trash icon pressed — comanda:", pedido.comanda_id, "mesa:", pedido.mesa_numero);
-    Alert.alert(
-      "Excluir pedido?",
-      "Isso irá remover todos os pratos desta comanda. Deseja continuar?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-          onPress: () => console.log("[Pedidos] Exclusão de comanda cancelada:", pedido.comanda_id),
-        },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: () => {
-            console.log("[Pedidos] Confirmado — DELETE /api/comandas/" + pedido.comanda_id);
-            onDeleteComanda(pedido.comanda_id);
-          },
-        },
-      ]
-    );
+    setConfirmDeleteComandaVisible(true);
+  };
+
+  const handleDeleteComandaConfirm = () => {
+    console.log("[Pedidos] Confirmado — DELETE /api/comandas/" + pedido.comanda_id);
+    setConfirmDeleteComandaVisible(false);
+    onDeleteComanda(pedido.comanda_id);
+  };
+
+  const handleDeleteComandaCancel = () => {
+    console.log("[Pedidos] Exclusão de comanda cancelada:", pedido.comanda_id);
+    setConfirmDeleteComandaVisible(false);
   };
 
   return (
@@ -481,6 +597,13 @@ function PedidoCard({
         marginBottom: 14,
       }}
     >
+      <ConfirmDeleteModal
+        visible={confirmDeleteComandaVisible}
+        title="Excluir pedido?"
+        message="Isso irá remover todos os pratos desta comanda. Deseja continuar?"
+        onCancel={handleDeleteComandaCancel}
+        onConfirm={handleDeleteComandaConfirm}
+      />
       <View
         style={{
           backgroundColor: COLORS.surface,
