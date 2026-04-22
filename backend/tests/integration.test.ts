@@ -1382,13 +1382,19 @@ describe("API Integration Tests", () => {
 
   test("Close comanda", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}/fechar`, authToken, {
-      method: "PUT",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        total: "50.00",
+        gorjeta: 5.00,
+        num_pessoas: 2,
       }),
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+    expect(data.subtotal).toBeDefined();
+    expect(data.gorjeta).toBeDefined();
+    expect(data.total_final).toBeDefined();
   });
 
   test("Close non-existent comanda returns 404", async () => {
@@ -1396,9 +1402,9 @@ describe("API Integration Tests", () => {
       "/api/comandas/00000000-0000-0000-0000-000000000000/fechar",
       authToken,
       {
-        method: "PUT",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ total: "10.00" }),
+        body: JSON.stringify({ gorjeta: 5.00 }),
       }
     );
     await expectStatus(res, 404);
@@ -1406,9 +1412,9 @@ describe("API Integration Tests", () => {
 
   test("Close comanda with invalid UUID format returns 400", async () => {
     const res = await authenticatedApi("/api/comandas/bad-uuid/fechar", authToken, {
-      method: "PUT",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ total: "10.00" }),
+      body: JSON.stringify({ gorjeta: 5.00 }),
     });
     await expectStatus(res, 400);
   });

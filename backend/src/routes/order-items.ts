@@ -82,12 +82,13 @@ export function registerOrderItemRoutes(app: App) {
             pratoNome: schema.pratos.nome,
             pratoDescricao: schema.pratos.descricao,
             pratoImagem: schema.pratos.imagemUrl,
-            mesaNumero: schema.comandas.mesaNumero,
+            mesaNumero: schema.mesas.numero,
             comandaStatus: schema.comandas.status,
             garcomId: schema.comandas.garcomId,
           })
           .from(schema.pedidos)
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+          .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
           .where(eq(schema.comandas.garcomId, authUserId))
           .orderBy(desc(schema.pedidos.createdAt));

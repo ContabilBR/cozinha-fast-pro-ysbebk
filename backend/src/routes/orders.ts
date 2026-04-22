@@ -29,7 +29,8 @@ interface CreatePedidosBody {
 }
 
 interface FecharComandaBody {
-  total?: string;
+  gorjeta?: number;
+  num_pessoas?: number;
 }
 
 export function registerOrderRoutes(app: App) {
@@ -90,7 +91,7 @@ export function registerOrderRoutes(app: App) {
           SELECT
             c.id,
             c.mesa_id,
-            c.mesa_numero,
+            m.numero AS mesa_numero,
             c.garcom_id,
             c.status,
             c.created_at,
@@ -98,6 +99,7 @@ export function registerOrderRoutes(app: App) {
             COUNT(p.id)::integer AS item_count,
             COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
+          LEFT JOIN mesas m ON m.id = c.mesa_id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
           WHERE c.garcom_id = ${authUserId}
         `;
@@ -107,7 +109,7 @@ export function registerOrderRoutes(app: App) {
         }
 
         sqlQuery = sql`${sqlQuery}
-          GROUP BY c.id, c.mesa_id, c.mesa_numero, c.garcom_id, c.status, c.created_at, c.closed_at
+          GROUP BY c.id, c.mesa_id, m.numero, c.garcom_id, c.status, c.created_at, c.closed_at
           ORDER BY c.created_at DESC
         `;
 
@@ -367,18 +369,19 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
-        // Get comanda with mesa_numero from denormalized column
+        // Get comanda with mesa_numero from JOIN with mesas
         const comandas = await app.db
           .select({
             id: schema.comandas.id,
             mesaId: schema.comandas.mesaId,
-            mesaNumero: schema.comandas.mesaNumero,
+            mesaNumero: schema.mesas.numero,
             garcomId: schema.comandas.garcomId,
             status: schema.comandas.status,
             total: schema.comandas.total,
             createdAt: schema.comandas.createdAt,
           })
           .from(schema.comandas)
+          .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
           .where(eq(schema.comandas.id, request.params.id));
 
         if (!comandas.length) {
@@ -604,12 +607,12 @@ export function registerOrderRoutes(app: App) {
     }
   );
 
-  // PUT /api/comandas/:id/fechar - Close a comanda
-  app.fastify.put<{ Params: { id: string }; Body: FecharComandaBody }>(
+  // POST /api/comandas/:id/fechar - Close and archive a comanda
+  app.fastify.post<{ Params: { id: string }; Body: FecharComandaBody }>(
     "/api/comandas/:id/fechar",
     {
       schema: {
-        description: "Close a comanda",
+        description: "Close and archive a comanda with optional tip and split information",
         tags: ["comandas"],
         params: {
           type: "object",
@@ -619,11 +622,25 @@ export function registerOrderRoutes(app: App) {
         body: {
           type: "object",
           properties: {
-            total: { type: "string" },
+            gorjeta: { type: "number", default: 0 },
+            num_pessoas: { type: "integer", default: 0 },
           },
         },
         response: {
-          200: { type: "object" },
+          200: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              subtotal: { type: "number" },
+              gorjeta: { type: "number" },
+              total_final: { type: "number" },
+              num_pessoas: { type: ["number", "null"] },
+              valor_por_pessoa: { type: ["number", "null"] },
+              mesa_numero: { type: "number" },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -636,59 +653,126 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
-        app.logger.info({ comandaId: request.params.id }, "Closing comanda");
+        app.logger.info({ comandaId: request.params.id }, "Closing and archiving comanda");
 
-        const existing = await app.db
-          .select()
+        // Fetch comanda with mesa info
+        const comandas = await app.db
+          .select({
+            id: schema.comandas.id,
+            mesaId: schema.comandas.mesaId,
+            mesaNumero: schema.mesas.numero,
+            garcomId: schema.comandas.garcomId,
+            status: schema.comandas.status,
+            total: schema.comandas.total,
+            createdAt: schema.comandas.createdAt,
+          })
           .from(schema.comandas)
+          .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
           .where(eq(schema.comandas.id, request.params.id));
 
-        if (!existing.length) {
+        if (!comandas.length) {
           return reply.code(404).send({ error: "Comanda not found" });
         }
 
-        // Calculate total from pedidos if not provided
-        let total = request.body.total || "0";
-        if (!request.body.total) {
-          const pedidos = await app.db
-            .select()
-            .from(schema.pedidos)
-            .where(eq(schema.pedidos.comandaId, request.params.id));
+        const comanda = comandas[0];
 
-          const calculatedTotal = pedidos.reduce((sum, p) => {
-            return sum + parseFloat(p.precoUnitario) * p.quantidade;
-          }, 0);
-          total = calculatedTotal.toFixed(2);
+        // Check if comanda is open
+        if (comanda.status !== "aberta") {
+          return reply.code(400).send({ error: "comanda não está aberta" });
         }
 
-        const [updated] = await app.db
-          .update(schema.comandas)
-          .set({
+        // Extract parameters with defaults
+        const gorjeta = request.body.gorjeta ?? 0;
+        const numPessoas = request.body.num_pessoas ?? 0;
+
+        // Calculate totals
+        const subtotal = parseFloat(comanda.total || "0");
+        const totalFinal = subtotal + gorjeta;
+        const valorPorPessoa = numPessoas > 0 ? totalFinal / numPessoas : null;
+
+        // Use transaction for atomic operations
+        await (app.db as any).transaction(async (tx: any) => {
+          // Archive comanda to historico
+          await tx.insert(schema.comandasHistorico).values({
+            id: comanda.id,
+            mesaId: comanda.mesaId,
+            mesaNumero: comanda.mesaNumero,
+            garcomId: comanda.garcomId,
             status: "fechada",
-            total,
+            total: totalFinal.toString(),
+            createdAt: comanda.createdAt,
             closedAt: new Date(),
-          })
-          .where(eq(schema.comandas.id, request.params.id))
-          .returning();
+            archivedAt: new Date(),
+          });
 
-        // Update mesa status back to disponivel
-        await app.db
-          .update(schema.mesas)
-          .set({ status: "disponivel" })
-          .where(eq(schema.mesas.id, updated.mesaId));
+          // Fetch pedidos to archive
+          const pedidos = await tx
+            .select({
+              id: schema.pedidos.id,
+              comandaId: schema.pedidos.comandaId,
+              pratoId: schema.pedidos.pratoId,
+              quantidade: schema.pedidos.quantidade,
+              precoUnitario: schema.pedidos.precoUnitario,
+              observacao: schema.pedidos.observacao,
+              status: schema.pedidos.status,
+              createdAt: schema.pedidos.createdAt,
+              pratoNome: schema.pratos.nome,
+            })
+            .from(schema.pedidos)
+            .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+            .where(eq(schema.pedidos.comandaId, request.params.id));
 
-        app.logger.info({ comandaId: updated.id }, "Comanda closed successfully");
+          // Archive pedidos to historico
+          if (pedidos.length > 0) {
+            await tx.insert(schema.pedidosHistorico).values(
+              pedidos.map((p) => ({
+                id: p.id,
+                comandaId: p.comandaId,
+                pratoId: p.pratoId,
+                pratoNome: p.pratoNome,
+                quantidade: p.quantidade,
+                precoUnitario: p.precoUnitario,
+                observacao: p.observacao,
+                status: p.status,
+                createdAt: p.createdAt,
+                archivedAt: new Date(),
+              }))
+            );
+          }
+
+          // Delete pedidos
+          await tx
+            .delete(schema.pedidos)
+            .where(eq(schema.pedidos.comandaId, request.params.id));
+
+          // Delete comanda
+          await tx
+            .delete(schema.comandas)
+            .where(eq(schema.comandas.id, request.params.id));
+
+          // Update mesa status
+          await tx
+            .update(schema.mesas)
+            .set({ status: "disponivel" })
+            .where(eq(schema.mesas.id, comanda.mesaId));
+        });
+
+        app.logger.info(
+          { comandaId: request.params.id, subtotal, gorjeta, totalFinal },
+          "Comanda archived successfully"
+        );
 
         return reply.code(200).send({
-          comanda: {
-            id: updated.id,
-            mesa_numero: updated.mesaNumero,
-            status: updated.status,
-            closed_at: updated.closedAt?.toISOString(),
-          },
+          success: true,
+          subtotal,
+          gorjeta,
+          total_final: totalFinal,
+          num_pessoas: numPessoas > 0 ? numPessoas : null,
+          valor_por_pessoa: valorPorPessoa,
+          mesa_numero: comanda.mesaNumero,
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to close comanda");
+        app.logger.error({ err: error }, "Failed to close and archive comanda");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
