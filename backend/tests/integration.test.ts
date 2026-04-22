@@ -388,11 +388,16 @@ describe("API Integration Tests", () => {
 
   // ==================== Categorias CRUD ====================
   test("List all categorias", async () => {
-    const res = await api("/api/categorias");
+    const res = await authenticatedApi("/api/categorias", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.categorias).toBeDefined();
     expect(Array.isArray(data.categorias)).toBe(true);
+  });
+
+  test("List categorias without authentication returns 401", async () => {
+    const res = await api("/api/categorias");
+    await expectStatus(res, 401);
   });
 
   test("Create categoria", async () => {
@@ -409,8 +414,19 @@ describe("API Integration Tests", () => {
     testCategoryId = data.categoria.id;
   });
 
-  test("Create categoria missing required field returns 400", async () => {
+  test("Create categoria without authentication returns 401", async () => {
     const res = await api("/api/categorias", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Categoria",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Create categoria missing required field returns 400", async () => {
+    const res = await authenticatedApi("/api/categorias", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -457,7 +473,7 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "DELETE",
     });
-    await expectStatus(res, 204);
+    await expectStatus(res, 200);
   });
 
   test("Delete categoria without authentication returns 401", async () => {
@@ -1900,7 +1916,7 @@ describe("API Integration Tests", () => {
     });
   });
 
-  test("List garcons without authentication returns 401", async () => {
+  test("List usuarios garcons without authentication returns 401", async () => {
     const res = await api("/api/usuarios/garcons");
     await expectStatus(res, 401);
   });

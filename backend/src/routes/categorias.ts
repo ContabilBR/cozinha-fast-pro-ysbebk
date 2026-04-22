@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { count } from "drizzle-orm";
 
 interface CreateCategoriaBody {
   nome: string;
@@ -20,7 +21,7 @@ export function registerCategoriasRoutes(app: App) {
     "/api/categorias",
     {
       schema: {
-        description: "List all categorias",
+        description: "List all categorias (requires authentication)",
         tags: ["categorias"],
         response: {
           200: {
@@ -34,15 +35,20 @@ export function registerCategoriasRoutes(app: App) {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
                     descricao: { type: ["string", "null"] },
+                    createdAt: { type: "string", format: "date-time" },
                   },
                 },
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
       try {
         app.logger.info({}, "Listing categorias");
 
@@ -56,6 +62,7 @@ export function registerCategoriasRoutes(app: App) {
             id: c.id,
             nome: c.nome,
             descricao: c.descricao,
+            createdAt: c.createdAt.toISOString(),
           })),
         });
       } catch (error) {
@@ -70,7 +77,7 @@ export function registerCategoriasRoutes(app: App) {
     "/api/categorias",
     {
       schema: {
-        description: "Create a new categoria",
+        description: "Create a new categoria (requires authentication)",
         tags: ["categorias"],
         body: {
           type: "object",
@@ -82,20 +89,22 @@ export function registerCategoriasRoutes(app: App) {
         },
         response: {
           201: {
+            description: "Categoria created successfully",
             type: "object",
             properties: {
               categoria: {
                 type: "object",
                 properties: {
-                  id: { type: "string" },
+                  id: { type: "string", format: "uuid" },
                   nome: { type: "string" },
                   descricao: { type: ["string", "null"] },
-                  createdAt: { type: "string" },
+                  createdAt: { type: "string", format: "date-time" },
                 },
               },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -142,7 +151,7 @@ export function registerCategoriasRoutes(app: App) {
     "/api/categorias/:id",
     {
       schema: {
-        description: "Update a categoria",
+        description: "Update a categoria (requires authentication)",
         tags: ["categorias"],
         params: {
           type: "object",
@@ -158,19 +167,21 @@ export function registerCategoriasRoutes(app: App) {
         },
         response: {
           200: {
+            description: "Categoria updated successfully",
             type: "object",
             properties: {
               categoria: {
                 type: "object",
                 properties: {
-                  id: { type: "string" },
+                  id: { type: "string", format: "uuid" },
                   nome: { type: "string" },
                   descricao: { type: ["string", "null"] },
-                  createdAt: { type: "string" },
+                  createdAt: { type: "string", format: "date-time" },
                 },
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -179,8 +190,8 @@ export function registerCategoriasRoutes(app: App) {
       request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoriaBody }>,
       reply: FastifyReply
     ) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
         app.logger.info({ categoriaId: request.params.id }, "Updating categoria");
@@ -234,7 +245,14 @@ export function registerCategoriasRoutes(app: App) {
           properties: { id: { type: "string", format: "uuid" } },
         },
         response: {
-          204: { description: "Categoria deleted successfully" },
+          200: {
+            description: "Categoria deleted successfully",
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -250,22 +268,39 @@ export function registerCategoriasRoutes(app: App) {
       try {
         app.logger.info({ categoriaId: request.params.id }, "Deleting categoria");
 
+        // Check if categoria exists
         const existing = await app.db
           .select()
           .from(schema.categorias)
           .where(eq(schema.categorias.id, request.params.id));
 
         if (!existing.length) {
-          return reply.code(404).send({ error: "Categoria not found" });
+          app.logger.warn({ categoriaId: request.params.id }, "Categoria not found");
+          return reply.code(404).send({ error: "Category não encontrada." });
         }
 
+        // Check for associated pratos
+        const asociatedPratos = await app.db
+          .select({ count: count().mapWith(Number) })
+          .from(schema.pratos)
+          .where(eq(schema.pratos.categoriaId, request.params.id));
+
+        if (asociatedPratos[0].count > 0) {
+          app.logger.warn(
+            { categoriaId: request.params.id, pratoCount: asociatedPratos[0].count },
+            "Cannot delete categoria with associated pratos"
+          );
+          return reply.code(400).send({ error: "Category possui pratos associados e não pode ser excluída." });
+        }
+
+        // Delete categoria
         await app.db.delete(schema.categorias).where(eq(schema.categorias.id, request.params.id));
 
         app.logger.info({ categoriaId: request.params.id }, "Categoria deleted successfully");
 
-        return reply.code(204).send();
+        return reply.code(200).send({ success: true });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete categoria");
+        app.logger.error({ err: error, categoriaId: request.params.id }, "Failed to delete categoria");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
