@@ -981,9 +981,18 @@ export default function PedidosGarcomScreen() {
     );
 
     try {
-      await apiDelete(`/api/pedidos/${itemId}`);
-      console.log("[Pedidos] Item deletado com sucesso:", itemId);
-      showToast("Item excluído com sucesso");
+      const deleteRes = await apiDelete<{ success: boolean; comandaArchived?: boolean }>(`/api/pedidos/${itemId}`);
+      console.log("[Pedidos] DELETE /api/pedidos/" + itemId + " response:", JSON.stringify(deleteRes));
+
+      if (deleteRes?.comandaArchived === true) {
+        console.log("[Pedidos] Comanda arquivada automaticamente — removendo grupo comanda:", comandaId);
+        // Remove the entire comanda group from state
+        setPedidos((prev) => prev.filter((p) => p.comanda_id !== comandaId));
+        showToast("Comanda encerrada e arquivada");
+      } else {
+        console.log("[Pedidos] Item deletado com sucesso:", itemId);
+        showToast("Item excluído com sucesso");
+      }
       // Server sync — re-fetch to get accurate totals/counts
       await fetchPedidos();
     } catch (e: unknown) {

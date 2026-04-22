@@ -25,7 +25,10 @@ interface ApiComanda {
   mesa_capacidade?: number;
   status: string;
   total: number;
-  item_count: number;
+  item_count?: number;
+  items_count?: number;
+  pedidos_count?: number;
+  pedidos?: unknown[];
   opened_at?: string;
   created_at?: string;
 }
@@ -46,7 +49,11 @@ function ComandaCard({ comanda, onPress, index }: { comanda: ApiComanda; onPress
   const timeOpen = formatRelativeTime(comanda.opened_at ?? comanda.created_at ?? "");
   const rawTotal = Number(comanda.total);
   const total = `R$ ${(isNaN(rawTotal) ? 0 : rawTotal).toFixed(2).replace(".", ",")}`;
-  const itemCount = comanda.item_count;
+  const itemCount =
+    comanda.item_count ??
+    comanda.items_count ??
+    comanda.pedidos_count ??
+    (Array.isArray(comanda.pedidos) ? comanda.pedidos.length : 0);
   const itemCountDisplay = `${itemCount} ${itemCount === 1 ? "item" : "itens"}`;
 
   const statusColors: Record<string, string> = {
