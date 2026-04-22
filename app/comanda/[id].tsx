@@ -9,9 +9,12 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiGet, apiPost } from '@/utils/api';
@@ -52,6 +55,245 @@ type Comanda = {
   total: number | string;
 };
 
+// Brazilian currency formatter: 1234.5 → "R$ 1.234,50"
+function formatBRL(value: number): string {
+  const fixed = value.toFixed(2);
+  const [intPart, decPart] = fixed.split('.');
+  const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${intFormatted},${decPart}`;
+}
+
+// ─── Fechar Comanda Modal ────────────────────────────────────────────────────
+
+type FechamentoModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  comandaId: string;
+  subtotal: number;
+  mesaCapacidade?: number;
+};
+
+function FechamentoModal({
+  visible,
+  onClose,
+  onSuccess,
+  comandaId,
+  subtotal,
+  mesaCapacidade,
+}: FechamentoModalProps) {
+  const insets = useSafeAreaInsets();
+
+  const [tipMode, setTipMode] = useState<'none' | '10' | 'custom'>('none');
+  const [gorjetaInput, setGorjetaInput] = useState('0');
+  const [numPessoasInput, setNumPessoasInput] = useState(
+    String(mesaCapacidade && mesaCapacidade > 0 ? mesaCapacidade : 1)
+  );
+  const [confirming, setConfirming] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (visible) {
+      setTipMode('none');
+      setGorjetaInput('0');
+      setNumPessoasInput(String(mesaCapacidade && mesaCapacidade > 0 ? mesaCapacidade : 1));
+      setConfirming(false);
+    }
+  }, [visible, mesaCapacidade]);
+
+  const gorjetaValue = Math.max(0, parseFloat(gorjetaInput.replace(',', '.')) || 0);
+  const numPessoas = Math.max(1, parseInt(numPessoasInput, 10) || 1);
+  const totalFinal = subtotal + gorjetaValue;
+  const valorPorPessoa = numPessoas > 0 ? totalFinal / numPessoas : totalFinal;
+
+  const subtotalDisplay = formatBRL(subtotal);
+  const gorjetaDisplay = formatBRL(gorjetaValue);
+  const totalDisplay = formatBRL(totalFinal);
+  const porPessoaDisplay = formatBRL(valorPorPessoa);
+
+  const handleSelectNone = () => {
+    console.log('[FechamentoModal] gorjeta mode selected: none');
+    setTipMode('none');
+    setGorjetaInput('0');
+  };
+
+  const handleSelect10 = () => {
+    console.log('[FechamentoModal] gorjeta mode selected: 10%');
+    const tip10 = subtotal * 0.1;
+    setTipMode('10');
+    setGorjetaInput(tip10.toFixed(2).replace('.', ','));
+  };
+
+  const handleGorjetaChange = (text: string) => {
+    setTipMode('custom');
+    // Allow digits, comma and dot
+    const cleaned = text.replace(/[^0-9.,]/g, '');
+    setGorjetaInput(cleaned);
+  };
+
+  const handleConfirm = async () => {
+    console.log('[FechamentoModal] Confirmar Fechamento pressed', {
+      comandaId,
+      gorjeta: gorjetaValue,
+      num_pessoas: numPessoas,
+    });
+    setConfirming(true);
+    try {
+      console.log(`[FechamentoModal] POST /api/comandas/${comandaId}/fechar`, {
+        gorjeta: gorjetaValue,
+        num_pessoas: numPessoas,
+      });
+      const res = await apiPost(`/api/comandas/${comandaId}/fechar`, {
+        gorjeta: gorjetaValue,
+        num_pessoas: numPessoas,
+      });
+      console.log('[FechamentoModal] fechar response:', JSON.stringify(res));
+      Alert.alert('Sucesso', 'Comanda encerrada com sucesso!', [
+        { text: 'OK', onPress: onSuccess },
+      ]);
+    } catch (e: any) {
+      console.error('[FechamentoModal] fechar error:', e?.message);
+      Alert.alert('Erro', e?.message || 'Não foi possível fechar a comanda. Tente novamente.');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <Pressable style={modalStyles.backdrop} onPress={onClose} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={modalStyles.kvWrapper}
+        pointerEvents="box-none"
+      >
+        <View style={[modalStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+          {/* Handle */}
+          <View style={modalStyles.handle} />
+
+          {/* Header */}
+          <View style={modalStyles.sheetHeader}>
+            <Text style={modalStyles.sheetTitle}>Fechar Comanda</Text>
+            <Pressable onPress={() => { console.log('[FechamentoModal] close pressed'); onClose(); }} hitSlop={8}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Resumo */}
+            <View style={modalStyles.section}>
+              <Text style={modalStyles.sectionLabel}>Resumo da conta</Text>
+              <View style={modalStyles.summaryRow}>
+                <Text style={modalStyles.summaryKey}>Subtotal</Text>
+                <Text style={modalStyles.summaryVal}>{subtotalDisplay}</Text>
+              </View>
+            </View>
+
+            <View style={modalStyles.divider} />
+
+            {/* Gorjeta */}
+            <View style={modalStyles.section}>
+              <Text style={modalStyles.sectionLabel}>Gorjeta</Text>
+              <View style={modalStyles.tipBtnRow}>
+                <Pressable
+                  style={[modalStyles.tipBtn, tipMode === 'none' && modalStyles.tipBtnActive]}
+                  onPress={handleSelectNone}
+                >
+                  <Text style={[modalStyles.tipBtnText, tipMode === 'none' && modalStyles.tipBtnTextActive]}>
+                    Sem gorjeta
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[modalStyles.tipBtn, tipMode === '10' && modalStyles.tipBtnActive]}
+                  onPress={handleSelect10}
+                >
+                  <Text style={[modalStyles.tipBtnText, tipMode === '10' && modalStyles.tipBtnTextActive]}>
+                    10%
+                  </Text>
+                </Pressable>
+              </View>
+              <Text style={modalStyles.inputLabel}>Outro valor (R$)</Text>
+              <TextInput
+                style={modalStyles.input}
+                value={gorjetaInput}
+                onChangeText={handleGorjetaChange}
+                keyboardType="decimal-pad"
+                placeholder="0,00"
+                placeholderTextColor="#9ca3af"
+                selectTextOnFocus
+              />
+              <View style={modalStyles.summaryRow}>
+                <Text style={modalStyles.summaryKey}>Gorjeta</Text>
+                <Text style={[modalStyles.summaryVal, { color: '#f59e0b' }]}>{gorjetaDisplay}</Text>
+              </View>
+            </View>
+
+            <View style={modalStyles.divider} />
+
+            {/* Número de pessoas */}
+            <View style={modalStyles.section}>
+              <Text style={modalStyles.sectionLabel}>Divisão da conta</Text>
+              <Text style={modalStyles.inputLabel}>Nº de pessoas</Text>
+              <TextInput
+                style={[modalStyles.input, { width: 100 }]}
+                value={numPessoasInput}
+                onChangeText={(t) => {
+                  console.log('[FechamentoModal] num_pessoas changed:', t);
+                  setNumPessoasInput(t.replace(/[^0-9]/g, ''));
+                }}
+                keyboardType="number-pad"
+                placeholder="1"
+                placeholderTextColor="#9ca3af"
+                selectTextOnFocus
+              />
+              <View style={modalStyles.summaryRow}>
+                <Text style={modalStyles.summaryKey}>Valor por pessoa</Text>
+                <Text style={[modalStyles.summaryVal, { color: '#007AFF' }]}>{porPessoaDisplay}</Text>
+              </View>
+            </View>
+
+            <View style={modalStyles.divider} />
+
+            {/* Total final */}
+            <View style={[modalStyles.section, modalStyles.totalSection]}>
+              <Text style={modalStyles.totalLabel}>Total Final</Text>
+              <Text style={modalStyles.totalValue}>{totalDisplay}</Text>
+            </View>
+
+            {/* Buttons */}
+            <View style={modalStyles.btnRow}>
+              <Pressable
+                style={modalStyles.cancelBtn}
+                onPress={() => { console.log('[FechamentoModal] Cancelar pressed'); onClose(); }}
+              >
+                <Text style={modalStyles.cancelBtnText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={[modalStyles.confirmBtn, confirming && modalStyles.confirmBtnDisabled]}
+                onPress={handleConfirm}
+                disabled={confirming}
+              >
+                {confirming ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={modalStyles.confirmBtnText}>Confirmar Fechamento</Text>
+                )}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
 export default function ComandaDetailScreen() {
   const { id, mesa_numero: mesaNumeroParam, mesa_id: mesaIdParam } = useLocalSearchParams<{ id: string; mesa_numero?: string; mesa_id?: string }>();
   const router = useRouter();
@@ -64,6 +306,8 @@ export default function ComandaDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [fechamentoVisible, setFechamentoVisible] = useState(false);
+
   // Resolved mesa number — seeded immediately from route param so the title
   // shows the correct number even before the API call completes.
   const seedNum = mesaNumeroParam ? Number(mesaNumeroParam) : null;
@@ -238,6 +482,17 @@ export default function ComandaDetailScreen() {
     }
   };
 
+  const handleFecharComanda = () => {
+    console.log('[ComandaDetail] Fechar Comanda button pressed', { comandaId: id });
+    setFechamentoVisible(true);
+  };
+
+  const handleFechamentoSuccess = () => {
+    console.log('[ComandaDetail] fechamento success — navigating to mesas tab');
+    setFechamentoVisible(false);
+    router.replace('/(tabs)/(home)');
+  };
+
   const formatPrice = (price: number | string) =>
     `R$ ${Number(price).toFixed(2).replace('.', ',')}`;
 
@@ -261,6 +516,13 @@ export default function ComandaDetailScreen() {
   const mesaNum = mesaNumero ?? '?';
   const headerTitle = `Comanda — Mesa ${mesaNum}`;
 
+  const canFechar = comanda?.status === 'aberta' && pedidosEnviados.length > 0;
+
+  // Subtotal for the modal: prefer comanda.total, fall back to computed total
+  const subtotalForModal = comanda?.total != null && Number(comanda.total) > 0
+    ? Number(comanda.total)
+    : total;
+
   const NavBar = ({ title }: { title: string }) => (
     <View style={styles.navBar}>
       <Pressable onPress={() => { console.log('[ComandaDetail] back pressed'); router.back(); }} style={styles.backBtn}>
@@ -268,6 +530,13 @@ export default function ComandaDetailScreen() {
         <Text style={styles.backText}>Voltar</Text>
       </Pressable>
       <Text style={styles.navTitle} numberOfLines={1}>{title}</Text>
+      {canFechar ? (
+        <Pressable onPress={handleFecharComanda} style={styles.fecharHeaderBtn}>
+          <Text style={styles.fecharHeaderBtnText}>Fechar</Text>
+        </Pressable>
+      ) : (
+        <View style={{ width: 60 }} />
+      )}
     </View>
   );
 
@@ -436,6 +705,17 @@ export default function ComandaDetailScreen() {
               <Text style={styles.totalLabel}>Total:</Text>
               <Text style={styles.totalValue}>{totalDisplay}</Text>
             </View>
+
+            {/* Fechar Comanda button inside pedido tab */}
+            {canFechar ? (
+              <Pressable
+                onPress={handleFecharComanda}
+                style={styles.fecharBtn}
+              >
+                <Ionicons name="checkmark-circle-outline" size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.fecharBtnText}>Fechar Comanda</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         )}
       </View>
@@ -457,9 +737,21 @@ export default function ComandaDetailScreen() {
             : 'Salvar e Enviar Pedido'}
         </Text>
       </Pressable>
+
+      {/* Fechamento Modal */}
+      <FechamentoModal
+        visible={fechamentoVisible}
+        onClose={() => { console.log('[ComandaDetail] fechamento modal closed'); setFechamentoVisible(false); }}
+        onSuccess={handleFechamentoSuccess}
+        comandaId={id ?? ''}
+        subtotal={subtotalForModal}
+        mesaCapacidade={comanda?.mesa_capacidade}
+      />
     </SafeAreaView>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
@@ -476,6 +768,13 @@ const styles = StyleSheet.create({
   backBtn: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
   backText: { color: '#007AFF', fontSize: 16, marginLeft: 4 },
   navTitle: { fontSize: 17, fontWeight: '700', color: '#111827', flex: 1 },
+  fecharHeaderBtn: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  fecharHeaderBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: 'white',
@@ -593,6 +892,17 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 16, fontWeight: '700', color: '#111827' },
   totalValue: { fontSize: 16, fontWeight: '700', color: '#22c55e' },
+  fecharBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  fecharBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
   sendBtn: { margin: 16, padding: 16, borderRadius: 12, alignItems: 'center' },
   sendBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
   retryBtn: {
@@ -600,5 +910,172 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  kvWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '90%',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 16,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d1d5db',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  section: {
+    paddingVertical: 12,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  summaryKey: {
+    fontSize: 15,
+    color: '#374151',
+  },
+  summaryVal: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  tipBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  tipBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  tipBtnActive: {
+    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239,68,68,0.06)',
+  },
+  tipBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  tipBtnTextActive: {
+    color: '#ef4444',
+  },
+  inputLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: '#fafafa',
+    marginBottom: 10,
+  },
+  totalSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  totalValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ef4444',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmBtn: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+  },
+  confirmBtnDisabled: {
+    backgroundColor: '#fca5a5',
+  },
+  confirmBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'white',
   },
 });
