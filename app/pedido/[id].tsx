@@ -69,7 +69,7 @@ export default function PedidoDetailScreen() {
 
   const statusColor = getPedidoStatusColor(pedido?.status ?? "pendente");
   const statusLabel = getPedidoStatusLabel(pedido?.status ?? "pendente");
-  const mesaNum = pedido?.mesa?.numero ?? "?";
+  const mesaNum = pedido?.mesa_numero ?? pedido?.mesa?.numero ?? "?";
   const garcomName = pedido?.garcom?.name ?? "—";
   const navTitle = `Detalhes do Pedido`;
 

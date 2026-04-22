@@ -55,6 +55,7 @@ export interface Pedido {
   prato_id?: string;
   prato?: Prato;
   mesa_id?: string;
+  mesa_numero?: number;
   mesa?: Mesa;
   garcom_id?: string;
   garcom?: User;
