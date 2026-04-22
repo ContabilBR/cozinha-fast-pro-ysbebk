@@ -53,7 +53,7 @@ type Comanda = {
 };
 
 export default function ComandaDetailScreen() {
-  const { id, mesa_numero: mesaNumeroParam } = useLocalSearchParams<{ id: string; mesa_numero?: string }>();
+  const { id, mesa_numero: mesaNumeroParam, mesa_id: mesaIdParam } = useLocalSearchParams<{ id: string; mesa_numero?: string; mesa_id?: string }>();
   const router = useRouter();
 
   const [comanda, setComanda] = useState<Comanda | null>(null);
@@ -64,6 +64,12 @@ export default function ComandaDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // Resolved mesa number — seeded immediately from route param so the title
+  // shows the correct number even before the API call completes.
+  const seedNum = mesaNumeroParam ? Number(mesaNumeroParam) : null;
+  const [mesaNumero, setMesaNumero] = useState<number | null>(
+    seedNum != null && !isNaN(seedNum) ? seedNum : null
+  );
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -78,12 +84,60 @@ export default function ComandaDetailScreen() {
       ]);
 
       // Support both direct object and wrapped { comanda: ... }
-      const found: Comanda | null = comandaRes?.id
-        ? comandaRes
-        : comandaRes?.comanda ?? null;
+      const raw: any = comandaRes?.id ? comandaRes : comandaRes?.comanda ?? null;
       console.log('[ComandaDetail] comanda raw response:', JSON.stringify(comandaRes));
-      console.log('[ComandaDetail] comanda loaded:', found?.id, 'mesa_numero:', found?.mesa_numero);
+
+      // Attempt 1: field directly on the comanda object
+      let resolvedMesaNumero: number | undefined =
+        raw?.mesa_numero != null ? Number(raw.mesa_numero) :
+        raw?.mesa?.numero != null ? Number(raw.mesa?.numero) :
+        mesaNumeroParam ? Number(mesaNumeroParam) :
+        undefined;
+
+      // Determine the best mesa_id to use for fallback lookups
+      const fallbackMesaId = raw?.mesa_id ?? mesaIdParam ?? null;
+
+      // Attempt 2: if still missing and we have mesa_id, fetch the mesa directly
+      if ((resolvedMesaNumero === undefined || isNaN(resolvedMesaNumero)) && fallbackMesaId) {
+        console.log('[ComandaDetail] mesa_numero missing — fetching GET /api/mesas/' + fallbackMesaId);
+        try {
+          const mesaRes = await apiGet<any>(`/api/mesas/${fallbackMesaId}`);
+          const mesaRaw: any = mesaRes?.mesa ?? mesaRes;
+          const num = mesaRaw?.numero ?? mesaRaw?.mesa_numero;
+          if (num != null) {
+            resolvedMesaNumero = Number(num);
+            console.log('[ComandaDetail] mesa_numero resolved from /api/mesas/:id:', resolvedMesaNumero);
+          }
+        } catch (mesaErr) {
+          console.warn('[ComandaDetail] Could not fetch mesa for mesa_numero:', mesaErr);
+        }
+      }
+
+      // Attempt 3: scan /api/mesas list as last resort
+      if ((resolvedMesaNumero === undefined || isNaN(resolvedMesaNumero)) && fallbackMesaId) {
+        console.log('[ComandaDetail] mesa_numero still missing — scanning GET /api/mesas');
+        try {
+          const mesasRes = await apiGet<any>('/api/mesas');
+          const mesasList: any[] = Array.isArray(mesasRes) ? mesasRes : mesasRes?.mesas ?? [];
+          const found = mesasList.find((m: any) => String(m.id) === String(fallbackMesaId));
+          if (found?.numero != null) {
+            resolvedMesaNumero = Number(found.numero);
+            console.log('[ComandaDetail] mesa_numero resolved from /api/mesas list:', resolvedMesaNumero);
+          }
+        } catch (listErr) {
+          console.warn('[ComandaDetail] Could not scan mesas list:', listErr);
+        }
+      }
+
+      const found: Comanda | null = raw
+        ? { ...raw, mesa_numero: resolvedMesaNumero }
+        : null;
+
+      console.log('[ComandaDetail] comanda loaded:', found?.id, 'mesa_numero:', found?.mesa_numero, '(raw mesa_numero:', raw?.mesa_numero, ', mesa.numero:', raw?.mesa?.numero, ', param:', mesaNumeroParam, ')');
       setComanda(found);
+      if (resolvedMesaNumero != null && !isNaN(resolvedMesaNumero)) {
+        setMesaNumero(resolvedMesaNumero);
+      }
 
       const allPratos: Prato[] = Array.isArray(pratosRes)
         ? pratosRes
@@ -99,7 +153,7 @@ export default function ComandaDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, mesaNumeroParam, mesaIdParam]);
 
   useEffect(() => {
     fetchData();
@@ -204,8 +258,8 @@ export default function ComandaDetailScreen() {
   const totalDisplay = `R$ ${total.toFixed(2).replace(".", ",")}`;
   console.log("[ComandaDetail] total calculado:", totalDisplay, "— pedidos:", pedidosEnviados.length);
 
-  const mesaNum = comanda?.mesa_numero ?? '?';
-  const headerTitle = comanda ? `Comanda — Mesa ${mesaNum}` : 'Comanda';
+  const mesaNum = mesaNumero ?? '?';
+  const headerTitle = `Comanda — Mesa ${mesaNum}`;
 
   const NavBar = ({ title }: { title: string }) => (
     <View style={styles.navBar}>
@@ -220,7 +274,7 @@ export default function ComandaDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centered} edges={['top', 'left', 'right']}>
-        <NavBar title="Comanda" />
+        <NavBar title={headerTitle} />
         <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 40 }} />
         <Text style={{ marginTop: 12, color: '#6b7280' }}>Carregando...</Text>
       </SafeAreaView>
@@ -230,7 +284,7 @@ export default function ComandaDetailScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.centered} edges={['top', 'left', 'right']}>
-        <NavBar title="Comanda" />
+        <NavBar title={headerTitle} />
         <Text style={{ color: '#ef4444', marginTop: 40, marginBottom: 16, textAlign: 'center' }}>{error}</Text>
         <Pressable onPress={fetchData} style={styles.retryBtn}>
           <Text style={{ color: 'white', fontWeight: '600' }}>Tentar novamente</Text>

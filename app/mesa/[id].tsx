@@ -143,7 +143,8 @@ export default function MesaDetailScreen() {
   const mesaNumero = mesa?.numero;
   const mesaCapacidade = mesa?.capacidade;
   const mesaStatus = mesa?.status ?? "livre";
-  const comandaId = (mesa as any)?.comanda_id;
+  // comanda_id may live on the mesa object directly OR come from the fetched comanda
+  const comandaId = (mesa as any)?.comanda_id ?? comanda?.id ?? null;
   const garcomName = (mesa as any)?.garcom?.name;
 
   const isOcupada = (mesaStatus as string) === "ocupada";
@@ -371,7 +372,7 @@ export default function MesaDetailScreen() {
           {/* Action buttons */}
           {comandaId ? (
             <AnimatedPressable
-              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", comandaId); router.push(`/comanda/${comandaId}`); }}
+              onPress={() => { console.log("[Mesa] Ver comanda pressionado:", comandaId, "mesa_numero:", mesaNumero, "mesa_id:", mesa?.id); router.push({ pathname: `/comanda/${comandaId}`, params: { mesa_numero: String(mesa?.numero ?? ''), mesa_id: String(mesa?.id ?? '') } }); }}
               style={{ backgroundColor: COLORS.primaryMuted, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.primary + "30" }}
             >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.primary }}>Ver comanda ativa</Text>

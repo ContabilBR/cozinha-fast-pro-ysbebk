@@ -254,8 +254,8 @@ export default function ComandasScreen() {
             <ComandaCard
               comanda={item}
               onPress={() => {
-                console.log("[Comandas] Comanda pressed:", item.id);
-                router.push(`/comanda/${item.id}`);
+                console.log("[Comandas] Comanda pressed:", item.id, "mesa_numero:", item.mesa_numero, "mesa_id:", item.mesa_id);
+                router.push({ pathname: `/comanda/${item.id}`, params: { mesa_numero: String(item.mesa_numero ?? ''), mesa_id: String(item.mesa_id ?? '') } });
               }}
               index={index}
             />
