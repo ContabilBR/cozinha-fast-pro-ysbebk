@@ -279,10 +279,12 @@ function ItemRow({
   item,
   onDelete,
   onUpdate,
+  isDeleting,
 }: {
   item: GarcomPedidoItem;
   onDelete: (id: string) => void;
   onUpdate: (id: string, fields: { quantidade?: number; observacao?: string }) => void;
+  isDeleting?: boolean;
 }) {
   const COLORS = useColors();
   const cfg = getStatusConfig(item.status);
@@ -291,6 +293,7 @@ function ItemRow({
   const [obsFocused, setObsFocused] = useState(false);
   const [quantidade, setQuantidade] = useState(item.quantidade);
   const [saving, setSaving] = useState(false);
+  const trashDisabled = isDeleting || saving;
   const [saveError, setSaveError] = useState("");
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
@@ -419,10 +422,15 @@ function ItemRow({
           {/* Delete item button */}
           <Pressable
             onPress={handleDeletePress}
+            disabled={trashDisabled}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 2 })}
+            style={({ pressed }) => ({ opacity: trashDisabled ? 0.4 : pressed ? 0.5 : 1, padding: 2 })}
           >
-            <Ionicons name="trash-outline" size={17} color="#EF4444" />
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#EF4444" style={{ width: 17, height: 17 }} />
+            ) : (
+              <Ionicons name="trash-outline" size={17} color="#EF4444" />
+            )}
           </Pressable>
         </View>
       </View>
@@ -536,12 +544,14 @@ function PedidoCard({
   onDeleteItem,
   onDeleteComanda,
   onUpdateItem,
+  deletingId,
 }: {
   pedido: GarcomPedido;
   index: number;
   onDeleteItem: (comandaId: string, itemId: string) => void;
   onDeleteComanda: (comandaId: string) => void;
   onUpdateItem: (comandaId: string, itemId: string, fields: { quantidade?: number; observacao?: string }) => void;
+  deletingId: string | null;
 }) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -698,6 +708,7 @@ function PedidoCard({
                 item={item}
                 onDelete={(itemId) => onDeleteItem(pedido.comanda_id, itemId)}
                 onUpdate={(itemId, fields) => onUpdateItem(pedido.comanda_id, itemId, fields)}
+                isDeleting={deletingId === item.id}
               />
               {i < pedido.itens.length - 1 && (
                 <View
@@ -796,6 +807,7 @@ export default function PedidosGarcomScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchPedidos = useCallback(async () => {
     console.log("[Pedidos Garçom] Fetching GET /api/pedidos");
@@ -844,26 +856,37 @@ export default function PedidosGarcomScreen() {
 
   const handleDeleteItem = useCallback(async (comandaId: string, itemId: string) => {
     console.log("[Pedidos] DELETE /api/pedidos/" + itemId + " (comanda:", comandaId + ")");
+
+    // Snapshot for rollback
+    const snapshot = pedidos;
+
+    // 1. Optimistic removal
+    setDeletingId(itemId);
+    setPedidos((prev) =>
+      prev
+        .map((p) =>
+          p.comanda_id === comandaId
+            ? { ...p, itens: p.itens.filter((it) => it.id !== itemId) }
+            : p
+        )
+        .filter((p) => p.itens.length > 0)
+    );
+
     try {
       await apiDelete(`/api/pedidos/${itemId}`);
       console.log("[Pedidos] Item deletado com sucesso:", itemId);
-      // Remove item from local state
-      setPedidos((prev) =>
-        prev
-          .map((p) =>
-            p.comanda_id === comandaId
-              ? { ...p, itens: p.itens.filter((it) => it.id !== itemId) }
-              : p
-          )
-          // Remove comanda if it has no more items
-          .filter((p) => p.itens.length > 0)
-      );
+      // 3. Server sync — re-fetch to get accurate totals/counts
+      await fetchPedidos();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Pedidos] Erro ao deletar item:", msg);
+      // 4. Error recovery — restore snapshot
+      setPedidos(snapshot);
       Alert.alert("Erro", "Não foi possível remover o prato. Tente novamente.");
+    } finally {
+      setDeletingId(null);
     }
-  }, []);
+  }, [pedidos, fetchPedidos]);
 
   const handleDeleteComanda = useCallback(async (comandaId: string) => {
     console.log("[Pedidos] DELETE /api/comandas/" + comandaId);
@@ -1120,6 +1143,7 @@ export default function PedidosGarcomScreen() {
                 onDeleteItem={handleDeleteItem}
                 onDeleteComanda={handleDeleteComanda}
                 onUpdateItem={handleUpdateItem}
+                deletingId={deletingId}
               />
             ))
           )}
