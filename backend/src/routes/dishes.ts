@@ -18,6 +18,7 @@ interface UpdatePratoBody {
   descricao?: string;
   preco?: string;
   categoriaId?: string;
+  categoria_id?: string;
   imagemUrl?: string;
   imagem_url?: string;
   disponivel?: boolean;
@@ -315,6 +316,7 @@ export function registerDishRoutes(app: App) {
             descricao: { type: ["string", "null"] },
             preco: { type: "string" },
             categoriaId: { type: ["string", "null"] },
+            categoria_id: { type: ["string", "null"] },
             imagemUrl: { type: ["string", "null"] },
             imagem_url: { type: ["string", "null"] },
             disponivel: { type: "boolean" },
@@ -369,7 +371,8 @@ export function registerDishRoutes(app: App) {
         if (request.body.nome !== undefined) updates.nome = request.body.nome;
         if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
         if (request.body.preco !== undefined) updates.preco = normalizeDecimal(request.body.preco).toString();
-        if (request.body.categoriaId !== undefined) updates.categoriaId = request.body.categoriaId;
+        const categoriaId = request.body.categoriaId !== undefined ? request.body.categoriaId : request.body.categoria_id;
+        if (categoriaId !== undefined) updates.categoriaId = categoriaId;
         const imagemUrl = request.body.imagemUrl || request.body.imagem_url;
         if (imagemUrl !== undefined) updates.imagemUrl = imagemUrl;
         if (request.body.disponivel !== undefined) updates.disponivel = request.body.disponivel;

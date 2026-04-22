@@ -388,7 +388,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Categorias CRUD ====================
   test("List all categorias", async () => {
-    const res = await authenticatedApi("/api/categorias", authToken);
+    const res = await api("/api/categorias");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.categorias).toBeDefined();
@@ -410,7 +410,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Create categoria missing required field returns 400", async () => {
-    const res = await authenticatedApi("/api/categorias", authToken, {
+    const res = await api("/api/categorias", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -486,7 +486,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Delete categoria as non-admin returns 403", async () => {
-    // Create a categoria first
+    // Create a categoria first with admin token
     const createRes = await authenticatedApi("/api/categorias", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -521,7 +521,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List all pratos", async () => {
-    const res = await authenticatedApi("/api/pratos", authToken);
+    const res = await api("/api/pratos");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.pratos).toBeDefined();
@@ -815,7 +815,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Mesas CRUD ====================
   test("List all mesas", async () => {
-    const res = await authenticatedApi("/api/mesas", authToken);
+    const res = await api("/api/mesas");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.mesas).toBeDefined();
@@ -823,10 +823,7 @@ describe("API Integration Tests", () => {
   });
 
   test("List mesas filtered by status", async () => {
-    const res = await authenticatedApi(
-      "/api/mesas?status=disponivel",
-      authToken
-    );
+    const res = await api("/api/mesas?status=disponivel");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.mesas).toBeDefined();
@@ -1121,7 +1118,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Mesas Get Current Comanda ====================
   test("Get current comanda for mesa", async () => {
-    const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/comanda`, authToken);
+    const res = await api(`/api/mesas/${comandaMesaId}/comanda`);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.comanda).toBeDefined();
@@ -1129,7 +1126,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get current comanda for mesa with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi("/api/mesas/invalid-uuid/comanda", authToken);
+    const res = await api("/api/mesas/invalid-uuid/comanda");
     await expectStatus(res, 400);
   });
 
@@ -1578,10 +1575,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get non-existent pedido returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/pedidos/00000000-0000-0000-0000-000000000000",
-      authToken
-    );
+    const res = await authenticatedApi("/api/pedidos/00000000-0000-0000-0000-000000000000", authToken);
     await expectStatus(res, 404);
   });
 
