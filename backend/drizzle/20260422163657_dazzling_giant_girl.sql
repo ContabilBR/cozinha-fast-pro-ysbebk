@@ -1,0 +1,1 @@
+ALTER TABLE "comandas" ADD COLUMN "mesa_numero" integer;

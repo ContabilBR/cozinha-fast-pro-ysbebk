@@ -82,13 +82,12 @@ export function registerOrderItemRoutes(app: App) {
             pratoNome: schema.pratos.nome,
             pratoDescricao: schema.pratos.descricao,
             pratoImagem: schema.pratos.imagemUrl,
-            mesaNumero: schema.mesas.numero,
+            mesaNumero: schema.comandas.mesaNumero,
             comandaStatus: schema.comandas.status,
             garcomId: schema.comandas.garcomId,
           })
           .from(schema.pedidos)
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
-          .innerJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
           .where(eq(schema.comandas.garcomId, authUserId))
           .orderBy(desc(schema.pedidos.createdAt));
@@ -293,12 +292,11 @@ export function registerOrderItemRoutes(app: App) {
             observacao: schema.pedidos.observacao,
             status: schema.pedidos.status,
             createdAt: schema.pedidos.createdAt,
-            mesaNumero: schema.mesas.numero,
+            mesaNumero: schema.comandas.mesaNumero,
           })
           .from(schema.pedidos)
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
           .leftJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
-          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .where(eq(schema.pedidos.id, request.params.id));
 
         if (!pedidos.length) {
@@ -601,7 +599,7 @@ export function registerOrderItemRoutes(app: App) {
 
         // Step f: If no more pedidos, archive the comanda and pedido
         if (remainingCount === 0) {
-          // Fetch the comanda and mesa info
+          // Fetch the comanda with denormalized mesa_numero
           const comandaInfo = await app.db
             .select({
               id: schema.comandas.id,
@@ -611,10 +609,9 @@ export function registerOrderItemRoutes(app: App) {
               total: schema.comandas.total,
               createdAt: schema.comandas.createdAt,
               closedAt: schema.comandas.closedAt,
-              mesaNumero: schema.mesas.numero,
+              mesaNumero: schema.comandas.mesaNumero,
             })
             .from(schema.comandas)
-            .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
             .where(eq(schema.comandas.id, pedido.comandaId));
 
           if (comandaInfo.length) {

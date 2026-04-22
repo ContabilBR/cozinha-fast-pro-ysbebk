@@ -57,8 +57,7 @@ export function registerOrderRoutes(app: App) {
                   properties: {
                     id: { type: "string", format: "uuid" },
                     mesa_id: { type: "string", format: "uuid" },
-                    mesa_numero: { type: "number" },
-                    mesa_capacidade: { type: "number" },
+                    mesa_numero: { type: ["number", "null"] },
                     garcom_id: { type: ["string", "null"] },
                     status: { type: "string" },
                     total: { type: "number" },
@@ -91,16 +90,14 @@ export function registerOrderRoutes(app: App) {
           SELECT
             c.id,
             c.mesa_id,
+            c.mesa_numero,
             c.garcom_id,
             c.status,
             c.created_at,
             c.closed_at,
-            m.numero AS mesa_numero,
-            m.capacidade AS mesa_capacidade,
             COUNT(p.id)::integer AS item_count,
             COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
-          LEFT JOIN mesas m ON c.mesa_id = m.id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
           WHERE c.garcom_id = ${authUserId}
         `;
@@ -110,7 +107,7 @@ export function registerOrderRoutes(app: App) {
         }
 
         sqlQuery = sql`${sqlQuery}
-          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, c.closed_at, m.numero, m.capacidade
+          GROUP BY c.id, c.mesa_id, c.mesa_numero, c.garcom_id, c.status, c.created_at, c.closed_at
           ORDER BY c.created_at DESC
         `;
 
@@ -123,7 +120,6 @@ export function registerOrderRoutes(app: App) {
             id: c.id,
             mesa_id: c.mesa_id,
             mesa_numero: Number(c.mesa_numero),
-            mesa_capacidade: Number(c.mesa_capacidade),
             garcom_id: c.garcom_id,
             status: c.status,
             total: Number(c.total),
@@ -239,11 +235,12 @@ export function registerOrderRoutes(app: App) {
 
         // Use transaction to ensure all operations succeed together
         const comanda = await (app.db as any).transaction(async (tx: any) => {
-          // Insert comanda with calculated total
+          // Insert comanda with calculated total and mesa_numero
           const [newComanda] = await tx
             .insert(schema.comandas)
             .values({
               mesaId,
+              mesaNumero: mesa.numero,
               garcomId,
               status: "aberta",
               total: initialTotal,
@@ -291,7 +288,7 @@ export function registerOrderRoutes(app: App) {
           comanda: {
             id: comanda.id,
             mesa_id: comanda.mesaId,
-            mesa_numero: mesa.numero,
+            mesa_numero: comanda.mesaNumero,
             garcom_id: comanda.garcomId,
             status: comanda.status,
             total: comanda.total,
@@ -323,8 +320,8 @@ export function registerOrderRoutes(app: App) {
             properties: {
               id: { type: "string", format: "uuid" },
               mesa_id: { type: "string", format: "uuid" },
-              mesa_numero: { type: "number" },
-              garcom_id: { type: "string" },
+              mesa_numero: { type: ["number", "null"] },
+              garcom_id: { type: ["string", "null"] },
               status: { type: "string" },
               total: { type: "string" },
               created_at: { type: "string", format: "date-time" },
@@ -370,19 +367,18 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
-        // Get comanda with mesa
+        // Get comanda with mesa_numero from denormalized column
         const comandas = await app.db
           .select({
             id: schema.comandas.id,
             mesaId: schema.comandas.mesaId,
-            mesaNumero: schema.mesas.numero,
+            mesaNumero: schema.comandas.mesaNumero,
             garcomId: schema.comandas.garcomId,
             status: schema.comandas.status,
             total: schema.comandas.total,
             createdAt: schema.comandas.createdAt,
           })
           .from(schema.comandas)
-          .leftJoin(schema.mesas, eq(schema.comandas.mesaId, schema.mesas.id))
           .where(eq(schema.comandas.id, request.params.id));
 
         if (!comandas.length) {
@@ -675,13 +671,6 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Fetch mesa info to get mesa_numero
-        const mesaInfo = await app.db
-          .select({ numero: schema.mesas.numero })
-          .from(schema.mesas)
-          .where(eq(schema.mesas.id, updated.mesaId))
-          .limit(1);
-
         // Update mesa status back to disponivel
         await app.db
           .update(schema.mesas)
@@ -693,7 +682,7 @@ export function registerOrderRoutes(app: App) {
         return reply.code(200).send({
           comanda: {
             id: updated.id,
-            mesa_numero: mesaInfo[0]?.numero,
+            mesa_numero: updated.mesaNumero,
             status: updated.status,
             closed_at: updated.closedAt?.toISOString(),
           },
@@ -748,13 +737,6 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Fetch mesa info to get mesa_numero
-        const mesaInfo = await app.db
-          .select({ numero: schema.mesas.numero })
-          .from(schema.mesas)
-          .where(eq(schema.mesas.id, updated.mesaId))
-          .limit(1);
-
         // Update mesa status back to disponivel
         await app.db
           .update(schema.mesas)
@@ -766,7 +748,7 @@ export function registerOrderRoutes(app: App) {
         return reply.code(200).send({
           id: updated.id,
           mesa_id: updated.mesaId,
-          mesa_numero: mesaInfo[0]?.numero,
+          mesa_numero: updated.mesaNumero,
           garcom_id: updated.garcomId,
           status: updated.status,
           total: updated.total,
@@ -999,20 +981,19 @@ export function registerOrderRoutes(app: App) {
           SELECT
             c.id AS comanda_id,
             c.mesa_id,
+            c.mesa_numero,
             c.garcom_id,
             c.status AS comanda_status,
             c.created_at AS comanda_created_at,
-            m.numero AS mesa_numero,
             COALESCE(u.name, us.nome, 'Garçom') AS garcom_nome,
             COALESCE(u.email, us.email) AS garcom_email,
             COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
           FROM comandas c
-          LEFT JOIN mesas m ON c.mesa_id = m.id
           LEFT JOIN "user" u ON u.id = c.garcom_id
           LEFT JOIN usuarios us ON us.id::text = c.garcom_id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
           WHERE c.mesa_id = ${mesaId} AND c.status = 'aberta'
-          GROUP BY c.id, c.mesa_id, c.garcom_id, c.status, c.created_at, m.numero, u.name, u.email, us.nome, us.email
+          GROUP BY c.id, c.mesa_id, c.mesa_numero, c.garcom_id, c.status, c.created_at, u.name, u.email, us.nome, us.email
           ORDER BY c.created_at DESC
           LIMIT 1
         `;

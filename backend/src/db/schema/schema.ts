@@ -62,6 +62,7 @@ export const pratos = pgTable("pratos", {
 export const comandas = pgTable("comandas", {
   id: uuid("id").primaryKey().defaultRandom(),
   mesaId: uuid("mesa_id").notNull().references(() => mesas.id, { onDelete: "restrict" }),
+  mesaNumero: integer("mesa_numero"),
   garcomId: text("garcom_id"),
   status: comandaStatusEnum("status").default("aberta").notNull(),
   total: numeric("total", { precision: 10, scale: 2 }).default("0").notNull(),

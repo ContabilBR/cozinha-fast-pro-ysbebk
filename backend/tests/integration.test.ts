@@ -562,6 +562,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Get prato by ID without authentication returns 401", async () => {
+    const res = await api(`/api/pratos/${testDishId}`);
+    await expectStatus(res, 401);
+  });
+
   test("Get non-existent prato returns 404", async () => {
     const res = await authenticatedApi(
       "/api/pratos/00000000-0000-0000-0000-000000000000",
@@ -597,6 +602,17 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+  });
+
+  test("Update prato without authentication returns 401", async () => {
+    const res = await api(`/api/pratos/${testDishId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Update non-existent prato returns 404", async () => {
@@ -656,6 +672,26 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 400);
+  });
+
+  test("Delete prato without authentication returns 401", async () => {
+    // Create a prato for this test
+    const createRes = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Prato Delete 401",
+        preco: "15.99",
+        categoriaId: pratoCategoryId,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    const res = await api(`/api/pratos/${data.prato.id}`, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
   });
 
   test("Delete prato as non-admin returns 403", async () => {
@@ -888,6 +924,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Update mesa without authentication returns 401", async () => {
+    const res = await api(`/api/mesas/${testTableId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "disponivel",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Update non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000",
@@ -1003,6 +1050,16 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 204);
+  });
+
+  test("Force delete mesa without authentication returns 401", async () => {
+    const res = await api(
+      "/api/mesas/00000000-0000-0000-0000-000000000000/force",
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 401);
   });
 
   test("Force delete non-existent mesa returns 404", async () => {
@@ -1140,6 +1197,11 @@ describe("API Integration Tests", () => {
   test("Get comanda by ID", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}`, authToken);
     await expectStatus(res, 200);
+  });
+
+  test("Get comanda by ID without authentication returns 401", async () => {
+    const res = await api(`/api/comandas/${testCommandaId}`);
+    await expectStatus(res, 401);
   });
 
   test("Get non-existent comanda returns 404", async () => {
@@ -1619,6 +1681,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Update pedido without authentication returns 401", async () => {
+    const res = await api(`/api/pedidos/${testPedidoId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quantidade: 5,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Delete pedido", async () => {
     const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken, {
       method: "DELETE",
@@ -1647,6 +1720,38 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 400);
+  });
+
+  test("Delete pedido without authentication returns 401", async () => {
+    // Create a fresh comanda for this test (previous one may have been deleted)
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+    const freshComandaId = comandaData.comanda.id;
+
+    // Create a pedido in the fresh comanda
+    const createRes = await authenticatedApi("/api/pedidos", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: freshComandaId,
+        prato_id: pedidoPratoId,
+        quantidade: 1,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const data = await createRes.json();
+
+    const res = await api(`/api/pedidos/${data.pedido.id}`, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
   });
 
   // ==================== Usuarios CRUD ====================
@@ -1810,6 +1915,11 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data)).toBe(true);
   });
 
+  test("List garcons without authentication returns 401", async () => {
+    const res = await api("/api/garcons");
+    await expectStatus(res, 401);
+  });
+
   test("Create garcon", async () => {
     const res = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
@@ -1900,6 +2010,17 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+  });
+
+  test("Update garcon without authentication returns 401", async () => {
+    const res = await api(`/api/garcons/${testGarcomId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Update non-existent garcon returns 404", async () => {
