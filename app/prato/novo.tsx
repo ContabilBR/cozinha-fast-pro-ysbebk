@@ -9,6 +9,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -55,7 +57,7 @@ export default function NovoPratoScreen() {
   const [imagemUrl, setImagemUrl] = useState("");
   const [disponivel, setDisponivel] = useState(true);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [showCatPicker, setShowCatPicker] = useState(false);
+  const [showCatModal, setShowCatModal] = useState(false);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -171,7 +173,7 @@ export default function NovoPratoScreen() {
     borderColor: COLORS.border,
   };
 
-  const imageSource = resolveImageSource(localImageUri ?? undefined);
+  const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -213,46 +215,56 @@ export default function NovoPratoScreen() {
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
           <FormField label="Nome *">
-            <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Frango Grelhado" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
+            <TextInput
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Ex: Frango Grelhado"
+              placeholderTextColor={COLORS.textTertiary}
+              style={inputStyle}
+              autoFocus
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              keyboardType="default"
+            />
           </FormField>
 
           <FormField label="Descrição">
-            <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição do prato" placeholderTextColor={COLORS.textTertiary} multiline numberOfLines={3} style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]} />
+            <TextInput
+              value={descricao}
+              onChangeText={setDescricao}
+              placeholder="Descrição do prato"
+              placeholderTextColor={COLORS.textTertiary}
+              multiline
+              numberOfLines={3}
+              style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]}
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              keyboardType="default"
+            />
           </FormField>
 
           <FormField label="Preço (R$) *">
-            <TextInput value={preco} onChangeText={setPreco} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
+            <TextInput
+              value={preco}
+              onChangeText={setPreco}
+              placeholder="0,00"
+              placeholderTextColor={COLORS.textTertiary}
+              keyboardType="decimal-pad"
+              style={inputStyle}
+            />
           </FormField>
 
           <FormField label="Categoria">
-            <AnimatedPressable
-              onPress={() => { console.log("[NovoPrato] Seletor de categoria alternado"); setShowCatPicker((v) => !v); }}
+            <TouchableOpacity
+              onPress={() => { console.log("[NovoPrato] Abrir modal de categoria"); setShowCatModal(true); }}
               style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
+              activeOpacity={0.7}
             >
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
-                {selectedCat?.nome ?? "Selecionar categoria"}
+                {selectedCatNome}
               </Text>
               <ChevronDown size={16} color={COLORS.textSecondary} />
-            </AnimatedPressable>
-            {showCatPicker && (
-              <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
-                {categorias.length === 0 ? (
-                  <View style={{ padding: 14 }}>
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhuma categoria disponível</Text>
-                  </View>
-                ) : (
-                  categorias.map((cat) => (
-                    <AnimatedPressable
-                      key={cat.id}
-                      onPress={() => { console.log("[NovoPrato] Categoria selecionada:", cat.nome); setCategoriaId(cat.id); setShowCatPicker(false); }}
-                      style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
-                    >
-                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>{cat.nome}</Text>
-                    </AnimatedPressable>
-                  ))
-                )}
-              </View>
-            )}
+            </TouchableOpacity>
           </FormField>
 
           <FormField label="URL da imagem">
@@ -262,6 +274,7 @@ export default function NovoPratoScreen() {
               placeholder="https://exemplo.com/imagem.jpg"
               placeholderTextColor={COLORS.textTertiary}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="url"
               style={inputStyle}
             />
@@ -345,6 +358,70 @@ export default function NovoPratoScreen() {
           </AnimatedPressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Category Modal */}
+      <Modal visible={showCatModal} transparent animationType="slide" onRequestClose={() => setShowCatModal(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}
+          activeOpacity={1}
+          onPress={() => { console.log("[NovoPrato] Modal categoria fechado (overlay)"); setShowCatModal(false); }}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32 }}>
+              <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border }} />
+              </View>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, paddingHorizontal: 20, paddingVertical: 14 }}>
+                Categoria
+              </Text>
+              <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+                {categorias.length === 0 ? (
+                  <View style={{ padding: 24, alignItems: "center" }}>
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhuma categoria disponível</Text>
+                  </View>
+                ) : (
+                  categorias.map((cat) => {
+                    const isSelected = categoriaId === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        onPress={() => {
+                          console.log("[NovoPrato] Categoria selecionada:", cat.nome, cat.id);
+                          setCategoriaId(cat.id);
+                          setShowCatModal(false);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: 20,
+                          paddingVertical: 16,
+                          borderBottomWidth: 1,
+                          borderBottomColor: COLORS.border,
+                          backgroundColor: isSelected ? COLORS.primaryMuted : "transparent",
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: isSelected ? "Outfit_600SemiBold" : "Outfit_400Regular", fontSize: 15, color: isSelected ? COLORS.primary : COLORS.text }}>
+                          {cat.nome}
+                        </Text>
+                        {isSelected ? <Ionicons name="checkmark" size={18} color={COLORS.primary} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => { console.log("[NovoPrato] Modal categoria cancelado"); setShowCatModal(false); }}
+                style={{ marginHorizontal: 20, marginTop: 12, height: 48, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center" }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.textSecondary }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }

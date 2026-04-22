@@ -193,6 +193,9 @@ export default function EditarUsuarioScreen() {
               placeholder="Nome completo"
               placeholderTextColor={COLORS.textTertiary}
               style={inputStyle}
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              keyboardType="default"
             />
           </FormField>
 
@@ -204,6 +207,7 @@ export default function EditarUsuarioScreen() {
               placeholderTextColor={COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
               style={inputStyle}
             />
           </FormField>
@@ -215,6 +219,9 @@ export default function EditarUsuarioScreen() {
               placeholder="Deixe em branco para manter"
               placeholderTextColor={COLORS.textTertiary}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="default"
               style={inputStyle}
             />
           </FormField>

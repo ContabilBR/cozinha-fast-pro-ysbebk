@@ -257,12 +257,12 @@ export default function CategoriasScreen() {
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
-              <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Entradas" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
+              <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Entradas" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus autoCorrect={true} autoCapitalize="sentences" keyboardType="default" />
             </View>
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Descrição</Text>
-              <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição opcional" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+              <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição opcional" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoCorrect={true} autoCapitalize="sentences" keyboardType="default" />
             </View>
 
             {modalError ? (

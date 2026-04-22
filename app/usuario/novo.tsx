@@ -133,6 +133,9 @@ export default function NovoUsuarioScreen() {
               placeholderTextColor={COLORS.textTertiary}
               style={inputStyle}
               autoFocus
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              keyboardType="default"
             />
           </FormField>
 
@@ -144,6 +147,7 @@ export default function NovoUsuarioScreen() {
               placeholderTextColor={COLORS.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
               style={inputStyle}
             />
           </FormField>
@@ -155,6 +159,9 @@ export default function NovoUsuarioScreen() {
               placeholder="Senha"
               placeholderTextColor={COLORS.textTertiary}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="default"
               style={inputStyle}
             />
           </FormField>

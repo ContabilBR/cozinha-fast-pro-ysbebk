@@ -27,10 +27,10 @@ const ROLE_COLORS: Record<UserRole, string> = {
 };
 
 function FormField({
-  label, value, onChangeText, placeholder, keyboardType, autoCapitalize, secureTextEntry,
+  label, value, onChangeText, placeholder, keyboardType, autoCapitalize, autoCorrect, secureTextEntry,
 }: {
   label: string; value: string; onChangeText: (t: string) => void;
-  placeholder?: string; keyboardType?: any; autoCapitalize?: any; secureTextEntry?: boolean;
+  placeholder?: string; keyboardType?: any; autoCapitalize?: any; autoCorrect?: boolean; secureTextEntry?: boolean;
 }) {
   const COLORS = useColors();
   return (
@@ -41,8 +41,9 @@ function FormField({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={COLORS.textTertiary}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize ?? "words"}
+        keyboardType={keyboardType ?? "default"}
+        autoCapitalize={autoCapitalize ?? "sentences"}
+        autoCorrect={autoCorrect ?? true}
         secureTextEntry={secureTextEntry}
         style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 14, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, height: 52 }}
       />

@@ -27,10 +27,10 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
 }
 
 function FormField({
-  label, value, onChangeText, placeholder, multiline, keyboardType,
+  label, value, onChangeText, placeholder, multiline, keyboardType, autoCapitalize, autoCorrect,
 }: {
   label: string; value: string; onChangeText: (t: string) => void;
-  placeholder?: string; multiline?: boolean; keyboardType?: any;
+  placeholder?: string; multiline?: boolean; keyboardType?: any; autoCapitalize?: any; autoCorrect?: boolean;
 }) {
   const COLORS = useColors();
   return (
@@ -42,7 +42,9 @@ function FormField({
         placeholder={placeholder}
         placeholderTextColor={COLORS.textTertiary}
         multiline={multiline}
-        keyboardType={keyboardType}
+        keyboardType={keyboardType ?? "default"}
+        autoCapitalize={autoCapitalize ?? "sentences"}
+        autoCorrect={autoCorrect ?? true}
         style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, padding: 14, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, minHeight: multiline ? 80 : 52, textAlignVertical: multiline ? "top" : "center" }}
       />
     </View>
@@ -142,9 +144,9 @@ export default function NewDishScreen() {
           )}
         </View>
 
-        <FormField label="URL da Imagem" value={imageUrl} onChangeText={setImageUrl} placeholder="https://..." />
-        <FormField label="Nome *" value={name} onChangeText={setName} placeholder="Ex: Frango Grelhado" />
-        <FormField label="Descrição" value={description} onChangeText={setDescription} placeholder="Descrição do prato..." multiline />
+        <FormField label="URL da Imagem" value={imageUrl} onChangeText={setImageUrl} placeholder="https://..." autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+        <FormField label="Nome *" value={name} onChangeText={setName} placeholder="Ex: Frango Grelhado" autoCapitalize="sentences" autoCorrect={true} />
+        <FormField label="Descrição" value={description} onChangeText={setDescription} placeholder="Descrição do prato..." multiline autoCapitalize="sentences" autoCorrect={true} />
 
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Categoria</Text>
