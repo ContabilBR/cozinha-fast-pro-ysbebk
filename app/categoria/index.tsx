@@ -135,7 +135,7 @@ export default function CategoriasScreen() {
   const doDelete = async (ids: string[]) => {
     console.log('[Categorias] Excluindo categorias, ids:', ids);
     setDeleting(true);
-    const errors: string[] = [];
+    let errorMsg: string | null = null;
     for (const id of ids) {
       try {
         console.log('[Categorias] DELETE /api/categorias/' + id);
@@ -143,20 +143,15 @@ export default function CategoriasScreen() {
         console.log('[Categorias] Categoria excluída com sucesso, id:', id);
       } catch (e: any) {
         console.error('[Categorias] Erro ao excluir id:', id, e);
-        const msg = e?.message ?? '';
-        if (msg.includes('pratos')) {
-          errors.push(`Categoria possui pratos associados.`);
-        } else {
-          errors.push(msg || 'Erro ao excluir.');
-        }
+        errorMsg = e?.response?.data?.error ?? e?.message ?? 'Erro ao excluir categoria.';
       }
     }
     setSelected(new Set());
     setSelectMode(false);
     setDeleting(false);
     await fetchCategorias();
-    if (errors.length > 0) {
-      Alert.alert('Atenção', errors[0]);
+    if (errorMsg) {
+      Alert.alert('Erro', errorMsg);
     }
   };
 
