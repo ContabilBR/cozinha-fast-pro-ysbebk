@@ -631,12 +631,26 @@ export function registerOrderRoutes(app: App) {
             type: "object",
             properties: {
               success: { type: "boolean" },
+              mesa_numero: { type: "number" },
               subtotal: { type: "number" },
               gorjeta: { type: "number" },
               total_final: { type: "number" },
               num_pessoas: { type: ["number", "null"] },
               valor_por_pessoa: { type: ["number", "null"] },
-              mesa_numero: { type: "number" },
+              created_at: { type: "string", format: "date-time" },
+              closed_at: { type: "string", format: "date-time" },
+              itens: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    prato_nome: { type: "string" },
+                    quantidade: { type: "number" },
+                    preco_unitario: { type: "number" },
+                    subtotal_item: { type: "number" },
+                  },
+                },
+              },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
@@ -690,6 +704,35 @@ export function registerOrderRoutes(app: App) {
         const totalFinal = subtotal + gorjeta;
         const valorPorPessoa = numPessoas > 0 ? totalFinal / numPessoas : null;
 
+        // Capture timestamps
+        const createdAt = comanda.createdAt;
+        const closedAt = new Date();
+
+        // Fetch pedidos before transaction to include in response
+        const pedidos = await app.db
+          .select({
+            id: schema.pedidos.id,
+            comandaId: schema.pedidos.comandaId,
+            pratoId: schema.pedidos.pratoId,
+            quantidade: schema.pedidos.quantidade,
+            precoUnitario: schema.pedidos.precoUnitario,
+            observacao: schema.pedidos.observacao,
+            status: schema.pedidos.status,
+            createdAt: schema.pedidos.createdAt,
+            pratoNome: schema.pratos.nome,
+          })
+          .from(schema.pedidos)
+          .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+          .where(eq(schema.pedidos.comandaId, request.params.id));
+
+        // Build itens array from pedidos
+        const itens = pedidos.map((p) => ({
+          prato_nome: p.pratoNome || "N/A",
+          quantidade: p.quantidade,
+          preco_unitario: parseFloat(p.precoUnitario || "0"),
+          subtotal_item: p.quantidade * parseFloat(p.precoUnitario || "0"),
+        }));
+
         // Use transaction for atomic operations
         await (app.db as any).transaction(async (tx: any) => {
           // Archive comanda to historico
@@ -700,27 +743,10 @@ export function registerOrderRoutes(app: App) {
             garcomId: comanda.garcomId,
             status: "fechada",
             total: totalFinal.toString(),
-            createdAt: comanda.createdAt,
-            closedAt: new Date(),
-            archivedAt: new Date(),
+            createdAt: createdAt,
+            closedAt: closedAt,
+            archivedAt: closedAt,
           });
-
-          // Fetch pedidos to archive
-          const pedidos = await tx
-            .select({
-              id: schema.pedidos.id,
-              comandaId: schema.pedidos.comandaId,
-              pratoId: schema.pedidos.pratoId,
-              quantidade: schema.pedidos.quantidade,
-              precoUnitario: schema.pedidos.precoUnitario,
-              observacao: schema.pedidos.observacao,
-              status: schema.pedidos.status,
-              createdAt: schema.pedidos.createdAt,
-              pratoNome: schema.pratos.nome,
-            })
-            .from(schema.pedidos)
-            .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-            .where(eq(schema.pedidos.comandaId, request.params.id));
 
           // Archive pedidos to historico
           if (pedidos.length > 0) {
@@ -735,7 +761,7 @@ export function registerOrderRoutes(app: App) {
                 observacao: p.observacao,
                 status: p.status,
                 createdAt: p.createdAt,
-                archivedAt: new Date(),
+                archivedAt: closedAt,
               }))
             );
           }
@@ -758,18 +784,21 @@ export function registerOrderRoutes(app: App) {
         });
 
         app.logger.info(
-          { comandaId: request.params.id, subtotal, gorjeta, totalFinal },
+          { comandaId: request.params.id, subtotal, gorjeta, totalFinal, itemCount: itens.length },
           "Comanda archived successfully"
         );
 
         return reply.code(200).send({
           success: true,
+          mesa_numero: comanda.mesaNumero,
           subtotal,
           gorjeta,
           total_final: totalFinal,
           num_pessoas: numPessoas > 0 ? numPessoas : null,
           valor_por_pessoa: valorPorPessoa,
-          mesa_numero: comanda.mesaNumero,
+          created_at: createdAt.toISOString(),
+          closed_at: closedAt.toISOString(),
+          itens,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to close and archive comanda");
