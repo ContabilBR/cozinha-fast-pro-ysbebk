@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Modal,
   TouchableOpacity,
 } from "react-native";
@@ -64,15 +62,9 @@ export default function EditarPratoScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isInitialLoad = useRef(true);
-
-  // Keep latest field values accessible inside doSave without stale closure
-  const fieldsRef = useRef({ nome, descricao, preco, categoriaId, imagemUrl, disponivel });
-  useEffect(() => {
-    fieldsRef.current = { nome, descricao, preco, categoriaId, imagemUrl, disponivel };
-  }, [nome, descricao, preco, categoriaId, imagemUrl, disponivel]);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     console.log("[EditarPrato] GET /api/pratos/" + id + " e /api/categorias");
@@ -97,54 +89,50 @@ export default function EditarPratoScreen() {
     }).finally(() => setLoading(false));
   }, [id]);
 
-  // Mark initial load complete after data loads
-  useEffect(() => {
-    if (!loading) {
-      // Small delay to let all setState calls settle before enabling auto-save
-      const t = setTimeout(() => { isInitialLoad.current = false; }, 100);
-      return () => clearTimeout(t);
-    }
-  }, [loading]);
-
-  const doSave = useCallback(async () => {
-    const { nome: n, descricao: d, preco: p, categoriaId: cid, imagemUrl: iu, disponivel: disp } = fieldsRef.current;
-    if (!n.trim()) return;
-    const precoNum = parseFloat(p.replace(",", "."));
-    if (isNaN(precoNum) || precoNum < 0) return;
-    console.log("[EditarPrato] Auto-save PUT /api/pratos/" + id, "nome:", n);
-    const payload: any = {
-      nome: n.trim(),
-      descricao: d.trim() || undefined,
-      preco: precoNum,
-      disponivel: disp,
-    };
-    if (cid) payload.categoria_id = cid;
-    if (iu.trim() && !localImageUri) payload.imagem_url = iu.trim();
-    await apiPut(`/api/pratos/${id}`, payload);
-    console.log("[EditarPrato] Auto-save concluído");
-  }, [id, localImageUri]);
-
-  const triggerAutoSave = useCallback(() => {
-    if (isInitialLoad.current) return;
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    setSaveStatus("saving");
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        await doSave();
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 2000);
-      } catch (e) {
-        console.error("[EditarPrato] Erro no auto-save:", e);
-        setSaveStatus("error");
-      }
-    }, 1500);
-  }, [doSave]);
-
-  useEffect(() => {
-    triggerAutoSave();
-  }, [nome, descricao, preco, categoriaId, imagemUrl, disponivel]);
-
   const selectedCat = categorias.find((c) => c.id === categoriaId);
+  const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
+
+  const handleSave = async () => {
+    const precoNum = parseFloat(preco.replace(",", "."));
+    if (!nome.trim()) throw new Error("Nome obrigatório");
+    if (isNaN(precoNum) || precoNum < 0) throw new Error("Preço inválido");
+    console.log("[EditarPrato] PUT /api/pratos/" + id, "nome:", nome, "categoria_id:", categoriaId || null);
+    const payload: any = {
+      nome: nome.trim(),
+      descricao: descricao.trim() || null,
+      preco: precoNum,
+      disponivel,
+      categoria_id: categoriaId || null,
+    };
+    if (imagemUrl.trim() && !localImageUri) payload.imagem_url = imagemUrl.trim();
+    await apiPut(`/api/pratos/${id}`, payload);
+    console.log("[EditarPrato] PUT concluído");
+  };
+
+  const handleSavePress = () => {
+    console.log("[EditarPrato] Botão Salvar alterações pressionado");
+    setShowSaveConfirm(true);
+  };
+
+  const confirmSave = async () => {
+    console.log("[EditarPrato] Confirmação de salvar pressionada");
+    setSaving(true);
+    try {
+      await handleSave();
+      setShowSaveConfirm(false);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        router.back();
+      }, 1500);
+    } catch (e) {
+      console.error("[EditarPrato] Erro ao salvar:", e);
+      setSaving(false);
+      Alert.alert("Erro", "Não foi possível salvar o prato.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const pickImage = async (source: "camera" | "gallery") => {
     console.log("[EditarPrato] Selecionar imagem, fonte:", source);
@@ -212,21 +200,6 @@ export default function EditarPratoScreen() {
     borderColor: COLORS.border,
   };
 
-  const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
-
-  const saveStatusNode =
-    saveStatus === "saving" ? (
-      <ActivityIndicator size="small" color={COLORS.textSecondary} />
-    ) : saveStatus === "saved" ? (
-      <Text style={{ color: "#34C759", fontSize: 13, fontWeight: "600", fontFamily: "Outfit_600SemiBold" }}>
-        Salvo ✓
-      </Text>
-    ) : saveStatus === "error" ? (
-      <Text style={{ color: "#FF3B30", fontSize: 13, fontFamily: "Outfit_400Regular" }}>
-        Erro
-      </Text>
-    ) : null;
-
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -246,190 +219,196 @@ export default function EditarPratoScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        {/* Nav bar */}
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
+      {/* Fixed nav bar */}
+      <View style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: 56,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+        backgroundColor: COLORS.surface,
+      }}>
+        <AnimatedPressable
+          onPress={() => { console.log("[EditarPrato] Botão voltar pressionado"); router.back(); }}
+          style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+        >
+          <Ionicons name="chevron-back" size={26} color="#007AFF" />
+          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+        </AnimatedPressable>
+        <Text style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          fontSize: 17,
+          fontWeight: "700",
+          color: COLORS.text,
           height: 56,
-          paddingHorizontal: 16,
-          borderBottomWidth: 1,
-          borderBottomColor: COLORS.border,
-          backgroundColor: COLORS.surface,
+          lineHeight: 56,
         }}>
-          <AnimatedPressable
-            onPress={() => { console.log("[EditarPrato] Botão voltar pressionado"); router.back(); }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          Editar Prato
+        </Text>
+      </View>
+
+      {/* Scrollable form */}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 16 }}
+      >
+        <FormField label="Nome *">
+          <TextInput
+            value={nome}
+            onChangeText={setNome}
+            placeholder="Nome do prato"
+            placeholderTextColor={COLORS.textTertiary}
+            style={inputStyle}
+            autoCorrect={true}
+            autoCapitalize="sentences"
+            keyboardType="default"
+          />
+        </FormField>
+
+        <FormField label="Descrição">
+          <TextInput
+            value={descricao}
+            onChangeText={setDescricao}
+            placeholder="Descrição"
+            placeholderTextColor={COLORS.textTertiary}
+            multiline
+            numberOfLines={3}
+            style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]}
+            autoCorrect={true}
+            autoCapitalize="sentences"
+            keyboardType="default"
+          />
+        </FormField>
+
+        <FormField label="Preço (R$) *">
+          <TextInput
+            value={preco}
+            onChangeText={setPreco}
+            placeholder="0,00"
+            placeholderTextColor={COLORS.textTertiary}
+            keyboardType="decimal-pad"
+            style={inputStyle}
+          />
+        </FormField>
+
+        <FormField label="Categoria">
+          <TouchableOpacity
+            onPress={() => { console.log("[EditarPrato] Abrir modal de categoria"); setShowCatModal(true); }}
+            style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
+            activeOpacity={0.7}
           >
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </AnimatedPressable>
-          <Text style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            fontSize: 17,
-            fontWeight: "700",
-            color: COLORS.text,
-            height: 56,
-            lineHeight: 56,
-          }}>
-            Editar Prato
-          </Text>
-          <View style={{ marginLeft: "auto", zIndex: 1 }}>
-            {saveStatusNode}
-          </View>
-        </View>
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
+              {selectedCatNome}
+            </Text>
+            <ChevronDown size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </FormField>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
-          <FormField label="Nome *">
-            <TextInput
-              value={nome}
-              onChangeText={setNome}
-              placeholder="Nome do prato"
-              placeholderTextColor={COLORS.textTertiary}
-              style={inputStyle}
-              autoCorrect={true}
-              autoCapitalize="sentences"
-              keyboardType="default"
-            />
-          </FormField>
+        <FormField label="URL da imagem">
+          <TextInput
+            value={imagemUrl}
+            onChangeText={(t) => { console.log("[EditarPrato] imagem_url alterada"); setImagemUrl(t); setLocalImageUri(null); }}
+            placeholder="https://exemplo.com/imagem.jpg"
+            placeholderTextColor={COLORS.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={inputStyle}
+          />
+          {imagemUrl.trim() && !localImageUri ? (
+            <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
+              <Image source={resolveImageSource(imagemUrl)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              <AnimatedPressable
+                onPress={() => { console.log("[EditarPrato] Remover URL pressionado"); setImagemUrl(""); }}
+                style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="close" size={16} color="#fff" />
+              </AnimatedPressable>
+            </View>
+          ) : null}
+        </FormField>
 
-          <FormField label="Descrição">
-            <TextInput
-              value={descricao}
-              onChangeText={setDescricao}
-              placeholder="Descrição"
-              placeholderTextColor={COLORS.textTertiary}
-              multiline
-              numberOfLines={3}
-              style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]}
-              autoCorrect={true}
-              autoCapitalize="sentences"
-              keyboardType="default"
-            />
-          </FormField>
-
-          <FormField label="Preço (R$) *">
-            <TextInput
-              value={preco}
-              onChangeText={setPreco}
-              placeholder="0,00"
-              placeholderTextColor={COLORS.textTertiary}
-              keyboardType="decimal-pad"
-              style={inputStyle}
-            />
-          </FormField>
-
-          <FormField label="Categoria">
-            <TouchableOpacity
-              onPress={() => { console.log("[EditarPrato] Abrir modal de categoria"); setShowCatModal(true); }}
-              style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
-                {selectedCatNome}
-              </Text>
-              <ChevronDown size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </FormField>
-
-          <FormField label="URL da imagem">
-            <TextInput
-              value={imagemUrl}
-              onChangeText={(t) => { console.log("[EditarPrato] imagem_url alterada"); setImagemUrl(t); setLocalImageUri(null); }}
-              placeholder="https://exemplo.com/imagem.jpg"
-              placeholderTextColor={COLORS.textTertiary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={inputStyle}
-            />
-            {imagemUrl.trim() && !localImageUri ? (
-              <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary, marginTop: 8 }}>
-                <Image source={resolveImageSource(imagemUrl)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+        <FormField label="Foto do prato (câmera/galeria)">
+          <View style={{ gap: 10 }}>
+            {localImageUri ? (
+              <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
+                <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: 200 }} contentFit="cover" />
                 <AnimatedPressable
-                  onPress={() => { console.log("[EditarPrato] Remover URL pressionado"); setImagemUrl(""); }}
+                  onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); }}
                   style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                 >
                   <Ionicons name="close" size={16} color="#fff" />
                 </AnimatedPressable>
-              </View>
-            ) : null}
-          </FormField>
-
-          <FormField label="Foto do prato (câmera/galeria)">
-            <View style={{ gap: 10 }}>
-              {localImageUri ? (
-                <View style={{ width: "100%", height: 200, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                  <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: 200 }} contentFit="cover" />
-                  <AnimatedPressable
-                    onPress={() => { console.log("[EditarPrato] Remover foto pressionado"); setLocalImageUri(null); }}
-                    style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Ionicons name="close" size={16} color="#fff" />
-                  </AnimatedPressable>
-                  <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
-                  </View>
+                <View style={{ position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: "#fff" }}>Nova foto selecionada</Text>
                 </View>
-              ) : imagemUrl.trim() ? null : (
-                <View style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <UtensilsCrossed size={28} color={COLORS.textTertiary} />
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Sem imagem</Text>
-                </View>
-              )}
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <AnimatedPressable
-                  onPress={() => { console.log("[EditarPrato] Câmera pressionada"); pickImage("camera"); }}
-                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
-                >
-                  <Camera size={18} color={COLORS.primary} />
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Tirar Foto</Text>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  onPress={() => { console.log("[EditarPrato] Galeria pressionada"); pickImage("gallery"); }}
-                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
-                >
-                  <ImageIcon size={18} color={COLORS.primary} />
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Galeria</Text>
-                </AnimatedPressable>
               </View>
-              {localImageUri ? (
-                <AnimatedPressable
-                  onPress={() => { console.log("[EditarPrato] Upload de foto pressionado"); uploadFoto(); }}
-                  disabled={uploading}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 12, opacity: uploading ? 0.7 : 1 }}
-                >
-                  {uploading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>Enviar foto</Text>
-                  )}
-                </AnimatedPressable>
-              ) : null}
+            ) : imagemUrl.trim() ? null : (
+              <View style={{ width: "100%", height: 200, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <UtensilsCrossed size={28} color={COLORS.textTertiary} />
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textTertiary }}>Sem imagem</Text>
+              </View>
+            )}
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <AnimatedPressable
+                onPress={() => { console.log("[EditarPrato] Câmera pressionada"); pickImage("camera"); }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
+              >
+                <Camera size={18} color={COLORS.primary} />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Tirar Foto</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => { console.log("[EditarPrato] Galeria pressionada"); pickImage("gallery"); }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.surface, borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border }}
+              >
+                <ImageIcon size={18} color={COLORS.primary} />
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.primary }}>Galeria</Text>
+              </AnimatedPressable>
             </View>
-          </FormField>
-
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Disponível</Text>
-            <Switch
-              value={disponivel}
-              onValueChange={(val) => { console.log("[EditarPrato] Disponível alternado:", val); setDisponivel(val); }}
-              trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
-              thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
-            />
+            {localImageUri ? (
+              <AnimatedPressable
+                onPress={() => { console.log("[EditarPrato] Upload de foto pressionado"); uploadFoto(); }}
+                disabled={uploading}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 12, opacity: uploading ? 0.7 : 1 }}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>Enviar foto</Text>
+                )}
+              </AnimatedPressable>
+            ) : null}
           </View>
+        </FormField>
 
-          {error ? (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
-          ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border }}>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}>Disponível</Text>
+          <Switch
+            value={disponivel}
+            onValueChange={(val) => { console.log("[EditarPrato] Disponível alternado:", val); setDisponivel(val); }}
+            trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
+            thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
+          />
+        </View>
+
+        {error ? (
+          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
+        ) : null}
+      </ScrollView>
+
+      {/* Fixed bottom save button */}
+      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: COLORS.background, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+        <AnimatedPressable
+          onPress={handleSavePress}
+          style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Salvar alterações</Text>
+        </AnimatedPressable>
+      </View>
 
       {/* Category Modal */}
       <Modal visible={showCatModal} transparent animationType="slide" onRequestClose={() => setShowCatModal(false)}>
@@ -493,6 +472,41 @@ export default function EditarPratoScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Save confirmation modal */}
+      <Modal visible={showSaveConfirm} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 24, width: "100%", gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text, textAlign: "center" }}>Salvar alterações?</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>As alterações feitas neste prato serão salvas.</Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => { console.log("[EditarPrato] Confirmação de salvar cancelada"); setShowSaveConfirm(false); }}
+                style={{ flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ color: COLORS.textSecondary, fontWeight: "600" }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmSave}
+                style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" }}
+              >
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700" }}>Salvar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success modal */}
+      <Modal visible={showSuccess} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 32, width: "100%", alignItems: "center", gap: 12 }}>
+            <Text style={{ fontSize: 40 }}>✅</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Prato salvo!</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>As alterações foram gravadas com sucesso.</Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
