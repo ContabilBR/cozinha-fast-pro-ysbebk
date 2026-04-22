@@ -62,6 +62,7 @@ export default function NovoPratoScreen() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     console.log("[NovoPrato] GET /api/categorias");
@@ -153,7 +154,12 @@ export default function NovoPratoScreen() {
       if (pratoId && localImageUri) {
         await uploadFoto(pratoId);
       }
-      router.back();
+      console.log("[NovoPrato] Prato salvo com sucesso, exibindo popup");
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        router.back();
+      }, 1500);
     } catch (e: any) {
       console.error("[NovoPrato] Erro ao salvar:", e);
       setError(e instanceof Error ? e.message : "Não foi possível salvar o prato.");
@@ -174,9 +180,10 @@ export default function NovoPratoScreen() {
   };
 
   const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
+  const isBusy = submitting || uploading;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -213,7 +220,10 @@ export default function NovoPratoScreen() {
           </Text>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 16 }} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <FormField label="Nome *">
             <TextInput
               value={nome}
@@ -347,10 +357,10 @@ export default function NovoPratoScreen() {
 
           <AnimatedPressable
             onPress={() => { console.log("[NovoPrato] Salvar prato pressionado"); handleSave(); }}
-            disabled={submitting || uploading}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: uploading ? 0.7 : 1 }}
+            disabled={isBusy}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginTop: 8, marginBottom: 16, opacity: isBusy ? 0.7 : 1 }}
           >
-            {submitting || uploading ? (
+            {isBusy ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar prato</Text>
@@ -421,6 +431,17 @@ export default function NovoPratoScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal visible={showSuccess} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 32, width: "100%", alignItems: "center", gap: 12 }}>
+            <Text style={{ fontSize: 40 }}>✅</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Prato salvo!</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>O prato foi cadastrado com sucesso.</Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
