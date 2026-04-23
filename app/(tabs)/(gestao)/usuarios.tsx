@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
   RefreshControl,
+  ActivityIndicator,
   Alert,
   TouchableOpacity,
   TextInput,
@@ -56,6 +57,10 @@ export default function GestaoUsuariosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const fetchUsuarios = useCallback(async () => {
     console.log("[GestaoUsuarios] GET /api/usuarios");
@@ -115,6 +120,57 @@ export default function GestaoUsuariosScreen() {
     );
   };
 
+  const toggleSelect = (id: string) => {
+    console.log("[GestaoUsuarios] Toggle seleção:", id);
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const enterSelectMode = (id: string) => {
+    console.log("[GestaoUsuarios] Entrar modo seleção, item:", id);
+    setSelectMode(true);
+    setSelected(new Set([id]));
+  };
+
+  const exitSelectMode = () => {
+    console.log("[GestaoUsuarios] Sair modo seleção");
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const doDelete = async (ids: string[]) => {
+    console.log("[GestaoUsuarios] Excluir em lote:", ids);
+    setDeleting(true);
+    for (const id of ids) {
+      try {
+        await apiDelete(`/api/usuarios/${id}`);
+        console.log("[GestaoUsuarios] Usuário excluído:", id);
+      } catch (e: unknown) {
+        console.error("[GestaoUsuarios] Erro ao excluir", id, ":", e);
+      }
+    }
+    setSelected(new Set());
+    setSelectMode(false);
+    setDeleting(false);
+    await fetchUsuarios();
+  };
+
+  const confirmBulkDelete = () => {
+    if (selected.size === 0) return;
+    console.log("[GestaoUsuarios] Confirmar exclusão em lote:", selected.size, "itens");
+    Alert.alert(
+      `Excluir ${selected.size} item(s)?`,
+      `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: `Excluir ${selected.size}`, style: "destructive", onPress: () => doDelete(Array.from(selected)) },
+      ]
+    );
+  };
+
   const searchLower = search.toLowerCase();
   const filteredUsuarios = search.trim()
     ? usuarios.filter((u) => {
@@ -137,13 +193,19 @@ export default function GestaoUsuariosScreen() {
         borderBottomColor: COLORS.border,
         backgroundColor: COLORS.surface,
       }}>
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoUsuarios] Botão voltar pressionado"); router.back(); }}
-          style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#007AFF" />
-          <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-        </AnimatedPressable>
+        {selectMode ? (
+          <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8, paddingRight: 12 }}>
+            <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
+          </TouchableOpacity>
+        ) : (
+          <AnimatedPressable
+            onPress={() => { console.log("[GestaoUsuarios] Botão voltar pressionado"); router.back(); }}
+            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#007AFF" />
+            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+          </AnimatedPressable>
+        )}
         <Text style={{
           position: "absolute",
           left: 0,
@@ -158,13 +220,40 @@ export default function GestaoUsuariosScreen() {
           Usuários
         </Text>
         <View style={{ flex: 1 }} />
-        <AnimatedPressable
-          onPress={() => { console.log("[GestaoUsuarios] Botão incluir pressionado"); router.push("/usuario/novo"); }}
-          style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
-        </AnimatedPressable>
+        {selectMode ? (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={exitSelectMode}
+              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={confirmBulkDelete}
+              disabled={selected.size === 0 || deleting}
+              style={{ backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              {deleting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={14} color="#fff" />}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Excluir ({selected.size})</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => { console.log("[GestaoUsuarios] Entrar modo seleção"); setSelectMode(true); }}
+              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Selecionar</Text>
+            </TouchableOpacity>
+            <AnimatedPressable
+              onPress={() => { console.log("[GestaoUsuarios] Botão incluir pressionado"); router.push("/usuario/novo"); }}
+              style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
+            </AnimatedPressable>
+          </View>
+        )}
       </View>
 
       {/* Search bar */}
@@ -194,9 +283,9 @@ export default function GestaoUsuariosScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar usuários</Text>
           <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
-          <AnimatedPressable onPress={fetchUsuarios} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+          <TouchableOpacity onPress={fetchUsuarios} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
             <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
-          </AnimatedPressable>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -210,7 +299,35 @@ export default function GestaoUsuariosScreen() {
             const roleLabel = getRoleLabel(item.role);
             const badgeColors = getRoleBadgeColor(item.role);
             return (
-              <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 4, elevation: 2, borderWidth: 1, borderColor: COLORS.border }}>
+              <TouchableOpacity
+                onPress={() => { if (selectMode) toggleSelect(item.id); }}
+                onLongPress={() => { if (!selectMode) enterSelectMode(item.id); }}
+                activeOpacity={selectMode ? 0.6 : 1}
+                style={{
+                  backgroundColor: selected.has(item.id) ? COLORS.primaryMuted : COLORS.surface,
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOpacity: 0.06,
+                  shadowRadius: 4,
+                  elevation: 2,
+                  borderWidth: 1,
+                  borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
+                }}
+              >
+                {selectMode && (
+                  <View style={{
+                    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+                    borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
+                    backgroundColor: selected.has(item.id) ? COLORS.primary : "transparent",
+                    alignItems: "center", justifyContent: "center", marginRight: 10,
+                  }}>
+                    {selected.has(item.id) && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </View>
+                )}
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
                   <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>{initials}</Text>
                 </View>
@@ -223,23 +340,25 @@ export default function GestaoUsuariosScreen() {
                     </View>
                   </View>
                 </View>
-                <View style={{ gap: 6 }}>
-                  <AnimatedPressable
-                    onPress={() => { console.log("[GestaoUsuarios] Editar pressionado:", item.id); router.push(`/usuario/${item.id}`); }}
-                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
-                  >
-                    <Ionicons name="pencil" size={14} color="#fff" />
-                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                  </AnimatedPressable>
-                  <AnimatedPressable
-                    onPress={() => { console.log("[GestaoUsuarios] Excluir pressionado:", item.id); handleDelete(item.id, displayName); }}
-                    style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
-                  >
-                    <Ionicons name="trash" size={14} color="#fff" />
-                    <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                  </AnimatedPressable>
-                </View>
-              </View>
+                {!selectMode && (
+                  <View style={{ gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => { console.log("[GestaoUsuarios] Editar pressionado:", item.id); router.push(`/usuario/${item.id}`); }}
+                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                    >
+                      <Ionicons name="pencil" size={14} color="#fff" />
+                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => { console.log("[GestaoUsuarios] Excluir pressionado:", item.id); handleDelete(item.id, displayName); }}
+                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                    >
+                      <Ionicons name="trash" size={14} color="#fff" />
+                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           }}
           ListEmptyComponent={
