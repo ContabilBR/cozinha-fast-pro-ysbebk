@@ -8,6 +8,7 @@ import {
   Alert,
   TouchableOpacity,
   TextInput,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -299,24 +300,24 @@ export default function GestaoUsuariosScreen() {
             const roleLabel = getRoleLabel(item.role);
             const badgeColors = getRoleBadgeColor(item.role);
             return (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => { if (selectMode) toggleSelect(item.id); }}
                 onLongPress={() => { if (!selectMode) enterSelectMode(item.id); }}
-                activeOpacity={selectMode ? 0.6 : 1}
-                style={{
+                style={({ pressed }) => ({
                   backgroundColor: selected.has(item.id) ? COLORS.primaryMuted : COLORS.surface,
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 10,
-                  flexDirection: "row",
-                  alignItems: "center",
+                  flexDirection: "row" as const,
+                  alignItems: "center" as const,
                   shadowColor: "#000",
                   shadowOpacity: 0.06,
                   shadowRadius: 4,
                   elevation: 2,
                   borderWidth: 1,
                   borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
-                }}
+                  opacity: selectMode && pressed ? 0.6 : 1,
+                })}
               >
                 {selectMode && (
                   <View style={{
@@ -341,7 +342,7 @@ export default function GestaoUsuariosScreen() {
                   </View>
                 </View>
                 {!selectMode && (
-                  <View style={{ gap: 6 }}>
+                  <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
                     <TouchableOpacity
                       onPress={() => { console.log("[GestaoUsuarios] Editar pressionado:", item.id); router.push(`/usuario/${item.id}`); }}
                       style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
@@ -358,7 +359,7 @@ export default function GestaoUsuariosScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             );
           }}
           ListEmptyComponent={
