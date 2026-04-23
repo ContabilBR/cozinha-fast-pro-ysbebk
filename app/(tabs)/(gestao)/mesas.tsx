@@ -257,52 +257,42 @@ export default function GestaoMesasScreen() {
           backgroundColor: COLORS.surface,
         }}
       >
-        {selectMode ? (
-          <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8, paddingRight: 12 }}>
-            <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
-          </TouchableOpacity>
-        ) : (
-          <AnimatedPressable
-            onPress={() => {
-              console.log("[GestaoMesas] Botão voltar pressionado");
-              handleBack();
-            }}
-            style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
-          >
-            <Ionicons name="chevron-back" size={26} color="#007AFF" />
-            <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
-          </AnimatedPressable>
-        )}
+        {/* LEFT */}
+        <View style={{ width: 80 }}>
+          {selectMode ? (
+            <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8 }}>
+              <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => {
+                console.log("[GestaoMesas] Botão voltar pressionado");
+                handleBack();
+              }}
+              style={{ flexDirection: "row", alignItems: "center" }}
+            >
+              <Ionicons name="chevron-back" size={26} color="#007AFF" />
+              <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* CENTER */}
         <Text
           style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
+            flex: 1,
             textAlign: "center",
             fontSize: 17,
             fontWeight: "700",
             color: COLORS.text,
-            height: 56,
-            lineHeight: 56,
           }}
         >
           Mesas
         </Text>
-        <View style={{ flex: 1 }} />
-        {selectMode ? (
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <TouchableOpacity
-              onPress={exitSelectMode}
-              style={{
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                borderRadius: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
-            >
-              <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
-            </TouchableOpacity>
+
+        {/* RIGHT */}
+        <View style={{ width: 80, alignItems: "flex-end" }}>
+          {selectMode ? (
             <TouchableOpacity
               onPress={() => {
                 console.log("[GestaoMesas] Botão excluir lote pressionado");
@@ -312,7 +302,7 @@ export default function GestaoMesasScreen() {
               style={{
                 backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border,
                 borderRadius: 8,
-                paddingHorizontal: 12,
+                paddingHorizontal: 10,
                 paddingVertical: 6,
                 flexDirection: "row",
                 alignItems: "center",
@@ -324,29 +314,10 @@ export default function GestaoMesasScreen() {
               ) : (
                 <Ionicons name="trash" size={14} color="#fff" />
               )}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
-                Excluir ({selected.size})
-              </Text>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>({selected.size})</Text>
             </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          ) : (
             <TouchableOpacity
-              onPress={() => {
-                console.log("[GestaoMesas] Entrar modo seleção");
-                setSelectMode(true);
-              }}
-              style={{
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                borderRadius: 8,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
-            >
-              <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Selecionar</Text>
-            </TouchableOpacity>
-            <AnimatedPressable
               onPress={() => {
                 console.log("[GestaoMesas] Botão incluir pressionado");
                 openCreate();
@@ -355,17 +326,17 @@ export default function GestaoMesasScreen() {
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: COLORS.success,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
                 borderRadius: 8,
-                gap: 6,
+                gap: 4,
               }}
             >
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
-            </AnimatedPressable>
-          </View>
-        )}
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Incluir</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* Search bar */}
