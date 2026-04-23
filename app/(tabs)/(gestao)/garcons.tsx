@@ -64,6 +64,14 @@ export default function GestaoGarconsScreen() {
 
   const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/(gestao)" as any);
+    }
+  };
+
   const fetchGarcons = useCallback(async () => {
     console.log("[GestaoGarcons] GET /api/garcons");
     try {
@@ -274,7 +282,7 @@ export default function GestaoGarconsScreen() {
           <AnimatedPressable
             onPress={() => {
               console.log("[GestaoGarcons] Botão voltar pressionado");
-              router.back();
+              handleBack();
             }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
           >

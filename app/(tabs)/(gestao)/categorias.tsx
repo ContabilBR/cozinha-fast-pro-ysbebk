@@ -56,6 +56,14 @@ export default function GestaoCategorias() {
 
   const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/(gestao)" as any);
+    }
+  };
+
   const fetchCategorias = useCallback(async () => {
     console.log("[GestaoCategorias] GET /api/categorias");
     try {
@@ -242,7 +250,7 @@ export default function GestaoCategorias() {
           <AnimatedPressable
             onPress={() => {
               console.log("[GestaoCategorias] Botão voltar pressionado");
-              router.back();
+              handleBack();
             }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
           >

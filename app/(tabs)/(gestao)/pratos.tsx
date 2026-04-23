@@ -94,6 +94,14 @@ export default function GestaoPratos() {
 
   const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/(gestao)" as any);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     console.log("[GestaoPratos] GET /api/pratos e /api/categorias");
     try {
@@ -366,7 +374,7 @@ export default function GestaoPratos() {
           <TouchableOpacity
             onPress={() => {
               console.log("[GestaoPratos] Botão voltar pressionado");
-              router.back();
+              handleBack();
             }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}

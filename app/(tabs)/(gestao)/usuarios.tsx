@@ -71,6 +71,14 @@ export default function GestaoUsuariosScreen() {
 
   const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/(gestao)" as any);
+    }
+  };
+
   const fetchUsuarios = useCallback(async () => {
     console.log("[GestaoUsuarios] GET /api/usuarios");
     try {
@@ -205,7 +213,7 @@ export default function GestaoUsuariosScreen() {
           <AnimatedPressable
             onPress={() => {
               console.log("[GestaoUsuarios] Botão voltar pressionado");
-              router.back();
+              handleBack();
             }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
           >
