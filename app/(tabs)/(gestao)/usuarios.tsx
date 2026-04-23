@@ -5,7 +5,6 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   TouchableOpacity,
   TextInput,
   Pressable,
@@ -17,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiGet, apiDelete } from "@/utils/api";
 import { getInitials, getRoleLabel } from "@/utils/helpers";
 import { Users, Search } from "lucide-react-native";
@@ -63,6 +63,16 @@ export default function GestaoUsuariosScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  }>({ visible: false, title: "", message: "", confirmLabel: "Excluir", onConfirm: () => {} });
+
+  const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
+
   const fetchUsuarios = useCallback(async () => {
     console.log("[GestaoUsuarios] GET /api/usuarios");
     try {
@@ -97,33 +107,28 @@ export default function GestaoUsuariosScreen() {
   const handleDelete = (id: string, nomeUsuario: string) => {
     const displayNome = nomeUsuario || "Usuário";
     console.log("[GestaoUsuarios] Confirmar exclusão:", id, displayNome);
-    Alert.alert(
-      "Excluir usuário?",
-      `Deseja excluir "${displayNome}"?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            console.log("[GestaoUsuarios] DELETE /api/usuarios/" + id);
-            try {
-              await apiDelete(`/api/usuarios/${id}`);
-              console.log("[GestaoUsuarios] Usuário excluído:", id);
-              setUsuarios((prev) => prev.filter((u) => u.id !== id));
-            } catch (e: unknown) {
-              console.error("[GestaoUsuarios] Erro ao excluir:", e);
-              Alert.alert("Erro", "Não foi possível excluir o usuário.");
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: "Excluir usuário?",
+      message: `Deseja excluir "${displayNome}"?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      onConfirm: async () => {
+        closeConfirm();
+        console.log("[GestaoUsuarios] DELETE /api/usuarios/" + id);
+        try {
+          await apiDelete(`/api/usuarios/${id}`);
+          console.log("[GestaoUsuarios] Usuário excluído:", id);
+          setUsuarios((prev) => prev.filter((u) => u.id !== id));
+        } catch (e: unknown) {
+          console.error("[GestaoUsuarios] Erro ao excluir:", e);
+        }
+      },
+    });
   };
 
   const toggleSelect = (id: string) => {
     console.log("[GestaoUsuarios] Toggle seleção:", id);
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -162,14 +167,16 @@ export default function GestaoUsuariosScreen() {
   const confirmBulkDelete = () => {
     if (selected.size === 0) return;
     console.log("[GestaoUsuarios] Confirmar exclusão em lote:", selected.size, "itens");
-    Alert.alert(
-      `Excluir ${selected.size} item(s)?`,
-      `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: `Excluir ${selected.size}`, style: "destructive", onPress: () => doDelete(Array.from(selected)) },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: `Excluir ${selected.size} item(s)?`,
+      message: `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: `Excluir ${selected.size}`,
+      onConfirm: () => {
+        closeConfirm();
+        doDelete(Array.from(selected));
+      },
+    });
   };
 
   const searchLower = search.toLowerCase();
@@ -182,42 +189,52 @@ export default function GestaoUsuariosScreen() {
       })
     : usuarios;
 
+  const emptyText = search.trim() ? "Nenhum resultado encontrado" : "Nenhum usuário cadastrado";
+  const emptySubText = search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar usuários";
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.surface,
-      }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}
+      >
         {selectMode ? (
           <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8, paddingRight: 12 }}>
             <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
           </TouchableOpacity>
         ) : (
           <AnimatedPressable
-            onPress={() => { console.log("[GestaoUsuarios] Botão voltar pressionado"); router.back(); }}
+            onPress={() => {
+              console.log("[GestaoUsuarios] Botão voltar pressionado");
+              router.back();
+            }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
           >
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
           </AnimatedPressable>
         )}
-        <Text style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontSize: 17,
-          fontWeight: "700",
-          color: COLORS.text,
-          height: 56,
-          lineHeight: 56,
-        }}>
+        <Text
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}
+        >
           Usuários
         </Text>
         <View style={{ flex: 1 }} />
@@ -225,30 +242,73 @@ export default function GestaoUsuariosScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
               onPress={exitSelectMode}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={confirmBulkDelete}
+              onPress={() => {
+                console.log("[GestaoUsuarios] Botão excluir lote pressionado");
+                confirmBulkDelete();
+              }}
               disabled={selected.size === 0 || deleting}
-              style={{ backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}
+              style={{
+                backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+              }}
             >
-              {deleting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={14} color="#fff" />}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Excluir ({selected.size})</Text>
+              {deleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="trash" size={14} color="#fff" />
+              )}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                Excluir ({selected.size})
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
-              onPress={() => { console.log("[GestaoUsuarios] Entrar modo seleção"); setSelectMode(true); }}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              onPress={() => {
+                console.log("[GestaoUsuarios] Entrar modo seleção");
+                setSelectMode(true);
+              }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Selecionar</Text>
             </TouchableOpacity>
             <AnimatedPressable
-              onPress={() => { console.log("[GestaoUsuarios] Botão incluir pressionado"); router.push("/usuario/novo"); }}
-              style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+              onPress={() => {
+                console.log("[GestaoUsuarios] Botão incluir pressionado");
+                router.push("/usuario/novo");
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: COLORS.success,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+                gap: 6,
+              }}
             >
               <Ionicons name="add" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
@@ -258,12 +318,33 @@ export default function GestaoUsuariosScreen() {
       </View>
 
       {/* Search bar */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.divider,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surfaceSecondary,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            gap: 8,
+          }}
+        >
           <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             value={search}
-            onChangeText={(t) => { console.log("[GestaoUsuarios] Busca:", t); setSearch(t); }}
+            onChangeText={(t) => {
+              console.log("[GestaoUsuarios] Busca:", t);
+              setSearch(t);
+            }}
             placeholder="Buscar por nome, e-mail ou função..."
             placeholderTextColor={COLORS.textTertiary}
             style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, padding: 0 }}
@@ -278,14 +359,37 @@ export default function GestaoUsuariosScreen() {
 
       {loading ? (
         <View style={{ paddingTop: 16 }}>
-          {[0, 1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+          {[0, 1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </View>
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar usuários</Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
-          <TouchableOpacity onPress={fetchUsuarios} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+            Erro ao carregar usuários
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              textAlign: "center",
+            }}
+          >
+            {error}
+          </Text>
+          <TouchableOpacity
+            onPress={fetchUsuarios}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+              Tentar novamente
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -293,18 +397,31 @@ export default function GestaoUsuariosScreen() {
           data={filteredUsuarios}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+          }
           renderItem={({ item }) => {
             const displayName = getDisplayName(item);
             const initials = getInitials(displayName || item.email);
             const roleLabel = getRoleLabel(item.role);
             const badgeColors = getRoleBadgeColor(item.role);
+            const isSelected = selected.has(item.id);
             return (
               <Pressable
-                onPress={() => { if (selectMode) toggleSelect(item.id); }}
-                onLongPress={() => { if (!selectMode) enterSelectMode(item.id); }}
+                onPress={() => {
+                  if (selectMode) {
+                    console.log("[GestaoUsuarios] Item pressionado (select mode):", item.id);
+                    toggleSelect(item.id);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!selectMode) {
+                    console.log("[GestaoUsuarios] Long press — entrar select mode:", item.id);
+                    enterSelectMode(item.id);
+                  }
+                }}
                 style={({ pressed }) => ({
-                  backgroundColor: selected.has(item.id) ? COLORS.primaryMuted : COLORS.surface,
+                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 10,
@@ -315,44 +432,105 @@ export default function GestaoUsuariosScreen() {
                   shadowRadius: 4,
                   elevation: 2,
                   borderWidth: 1,
-                  borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
+                  borderColor: isSelected ? COLORS.primary : COLORS.border,
                   opacity: selectMode && pressed ? 0.6 : 1,
                 })}
               >
                 {selectMode && (
-                  <View style={{
-                    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
-                    borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
-                    backgroundColor: selected.has(item.id) ? COLORS.primary : "transparent",
-                    alignItems: "center", justifyContent: "center", marginRight: 10,
-                  }}>
-                    {selected.has(item.id) && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                   </View>
                 )}
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>{initials}</Text>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: COLORS.primaryMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
+                    {initials}
+                  </Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }} numberOfLines={1}>{displayName || "Sem nome"}</Text>
-                  <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.email}</Text>
+                  <Text
+                    style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}
+                    numberOfLines={1}
+                  >
+                    {displayName || "Sem nome"}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}
+                  >
+                    {item.email}
+                  </Text>
                   <View style={{ marginTop: 4 }}>
-                    <View style={{ alignSelf: "flex-start", backgroundColor: badgeColors.bg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: badgeColors.text }}>{roleLabel}</Text>
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        backgroundColor: badgeColors.bg,
+                        borderRadius: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: badgeColors.text }}>
+                        {roleLabel}
+                      </Text>
                     </View>
                   </View>
                 </View>
                 {!selectMode && (
                   <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoUsuarios] Editar pressionado:", item.id); router.push(`/usuario/${item.id}`); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoUsuarios] Editar pressionado:", item.id);
+                        router.push(`/usuario/${item.id}`);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#007AFF",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="pencil" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoUsuarios] Excluir pressionado:", item.id); handleDelete(item.id, displayName); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoUsuarios] Excluir pressionado:", item.id);
+                        handleDelete(item.id, displayName);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#FF3B30",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="trash" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
@@ -364,19 +542,45 @@ export default function GestaoUsuariosScreen() {
           }}
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-              <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Users size={32} color={COLORS.primary} />
               </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-                {search.trim() ? "Nenhum resultado encontrado" : "Nenhum usuário cadastrado"}
+                {emptyText}
               </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar usuários"}
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                }}
+              >
+                {emptySubText}
               </Text>
             </View>
           }
         />
       )}
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        destructive
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
     </SafeAreaView>
   );
 }

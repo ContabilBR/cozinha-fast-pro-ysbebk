@@ -5,7 +5,6 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   Modal,
   TextInput,
   TouchableOpacity,
@@ -18,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import { getInitials, getRoleLabel } from "@/utils/helpers";
 import { X, Users, Search } from "lucide-react-native";
@@ -56,6 +56,16 @@ export default function GestaoGarconsScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  }>({ visible: false, title: "", message: "", confirmLabel: "Excluir", onConfirm: () => {} });
+
+  const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
+
   const fetchGarcons = useCallback(async () => {
     console.log("[GestaoGarcons] GET /api/garcons");
     try {
@@ -90,15 +100,50 @@ export default function GestaoGarconsScreen() {
   const openCreate = () => {
     console.log("[GestaoGarcons] Abrir modal de criação");
     setEditingGarcom(null);
-    setNome(""); setEmail(""); setSenha(""); setModalError("");
+    setNome("");
+    setEmail("");
+    setSenha("");
+    setModalError("");
     setShowModal(true);
   };
 
   const openEdit = (g: ApiGarcom) => {
     console.log("[GestaoGarcons] Abrir modal de edição:", g.id);
     setEditingGarcom(g);
-    setNome(getDisplayName(g)); setEmail(g.email ?? ""); setSenha(""); setModalError("");
+    setNome(getDisplayName(g));
+    setEmail(g.email ?? "");
+    setSenha("");
+    setModalError("");
     setShowModal(true);
+  };
+
+  const doSave = async () => {
+    setSaving(true);
+    setModalError("");
+    try {
+      if (editingGarcom) {
+        const payload: Record<string, unknown> = { name: nome.trim(), email: email.trim() };
+        if (senha.trim()) payload.password = senha.trim();
+        console.log("[GestaoGarcons] PUT /api/garcons/" + editingGarcom.id);
+        await apiPut(`/api/garcons/${editingGarcom.id}`, payload);
+        console.log("[GestaoGarcons] Garçom atualizado:", editingGarcom.id);
+      } else {
+        console.log("[GestaoGarcons] POST /api/garcons");
+        await apiPost("/api/garcons", {
+          name: nome.trim(),
+          email: email.trim(),
+          password: senha.trim(),
+        });
+        console.log("[GestaoGarcons] Garçom criado");
+      }
+      setShowModal(false);
+      await fetchGarcons();
+    } catch (e: unknown) {
+      console.error("[GestaoGarcons] Erro ao salvar:", e);
+      setModalError(e instanceof Error ? e.message : "Não foi possível salvar o garçom.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSave = () => {
@@ -106,75 +151,43 @@ export default function GestaoGarconsScreen() {
     if (!editingGarcom && !email.trim()) { setModalError("E-mail é obrigatório."); return; }
     if (!editingGarcom && !senha.trim()) { setModalError("Senha é obrigatória."); return; }
     console.log("[GestaoGarcons] Confirmar salvar pressionado, editando:", editingGarcom?.id ?? "novo");
-    Alert.alert(
-      "Confirmar",
-      "Deseja salvar as alterações?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Confirmar",
-          onPress: async () => {
-            setSaving(true); setModalError("");
-            try {
-              if (editingGarcom) {
-                const payload: Record<string, unknown> = { name: nome.trim(), email: email.trim() };
-                if (senha.trim()) payload.password = senha.trim();
-                console.log("[GestaoGarcons] PUT /api/garcons/" + editingGarcom.id);
-                await apiPut(`/api/garcons/${editingGarcom.id}`, payload);
-                console.log("[GestaoGarcons] Garçom atualizado:", editingGarcom.id);
-              } else {
-                console.log("[GestaoGarcons] POST /api/garcons");
-                await apiPost("/api/garcons", {
-                  name: nome.trim(),
-                  email: email.trim(),
-                  password: senha.trim(),
-                });
-                console.log("[GestaoGarcons] Garçom criado");
-              }
-              setShowModal(false);
-              await fetchGarcons();
-            } catch (e: unknown) {
-              console.error("[GestaoGarcons] Erro ao salvar:", e);
-              setModalError(e instanceof Error ? e.message : "Não foi possível salvar o garçom.");
-            } finally {
-              setSaving(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: "Confirmar",
+      message: "Deseja salvar as alterações?",
+      confirmLabel: "Confirmar",
+      onConfirm: () => {
+        closeConfirm();
+        doSave();
+      },
+    });
   };
 
   const handleDelete = (id: string, nomeGarcom: string) => {
     const displayNome = nomeGarcom || "Garçom";
     console.log("[GestaoGarcons] Confirmar exclusão:", id, displayNome);
-    Alert.alert(
-      "Excluir garçom?",
-      `Deseja excluir "${displayNome}"?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            console.log("[GestaoGarcons] DELETE /api/garcons/" + id);
-            try {
-              await apiDelete(`/api/garcons/${id}`);
-              console.log("[GestaoGarcons] Garçom excluído:", id);
-              setGarcons((prev) => prev.filter((g) => g.id !== id));
-            } catch (e: unknown) {
-              console.error("[GestaoGarcons] Erro ao excluir:", e);
-              Alert.alert("Erro", "Não foi possível excluir o garçom.");
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: "Excluir garçom?",
+      message: `Deseja excluir "${displayNome}"?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      onConfirm: async () => {
+        closeConfirm();
+        console.log("[GestaoGarcons] DELETE /api/garcons/" + id);
+        try {
+          await apiDelete(`/api/garcons/${id}`);
+          console.log("[GestaoGarcons] Garçom excluído:", id);
+          setGarcons((prev) => prev.filter((g) => g.id !== id));
+        } catch (e: unknown) {
+          console.error("[GestaoGarcons] Erro ao excluir:", e);
+        }
+      },
+    });
   };
 
   const toggleSelect = (id: string) => {
     console.log("[GestaoGarcons] Toggle seleção:", id);
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -213,14 +226,16 @@ export default function GestaoGarconsScreen() {
   const confirmBulkDelete = () => {
     if (selected.size === 0) return;
     console.log("[GestaoGarcons] Confirmar exclusão em lote:", selected.size, "itens");
-    Alert.alert(
-      `Excluir ${selected.size} item(s)?`,
-      `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: `Excluir ${selected.size}`, style: "destructive", onPress: () => doDelete(Array.from(selected)) },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: `Excluir ${selected.size} item(s)?`,
+      message: `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: `Excluir ${selected.size}`,
+      onConfirm: () => {
+        closeConfirm();
+        doDelete(Array.from(selected));
+      },
+    });
   };
 
   const inputStyle = {
@@ -243,42 +258,52 @@ export default function GestaoGarconsScreen() {
       })
     : garcons;
 
+  const emptyText = search.trim() ? "Nenhum resultado encontrado" : "Nenhum garçom cadastrado";
+  const emptySubText = search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar garçons";
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.surface,
-      }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}
+      >
         {selectMode ? (
           <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8, paddingRight: 12 }}>
             <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
           </TouchableOpacity>
         ) : (
           <AnimatedPressable
-            onPress={() => { console.log("[GestaoGarcons] Botão voltar pressionado"); router.back(); }}
+            onPress={() => {
+              console.log("[GestaoGarcons] Botão voltar pressionado");
+              router.back();
+            }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1, paddingVertical: 8, paddingRight: 8 }}
           >
             <Ionicons name="chevron-back" size={26} color="#007AFF" />
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
           </AnimatedPressable>
         )}
-        <Text style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontSize: 17,
-          fontWeight: "700",
-          color: COLORS.text,
-          height: 56,
-          lineHeight: 56,
-        }}>
+        <Text
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}
+        >
           Garçons
         </Text>
         <View style={{ flex: 1 }} />
@@ -286,30 +311,73 @@ export default function GestaoGarconsScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
               onPress={exitSelectMode}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={confirmBulkDelete}
+              onPress={() => {
+                console.log("[GestaoGarcons] Botão excluir lote pressionado");
+                confirmBulkDelete();
+              }}
               disabled={selected.size === 0 || deleting}
-              style={{ backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}
+              style={{
+                backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+              }}
             >
-              {deleting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={14} color="#fff" />}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Excluir ({selected.size})</Text>
+              {deleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="trash" size={14} color="#fff" />
+              )}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                Excluir ({selected.size})
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
-              onPress={() => { console.log("[GestaoGarcons] Entrar modo seleção"); setSelectMode(true); }}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              onPress={() => {
+                console.log("[GestaoGarcons] Entrar modo seleção");
+                setSelectMode(true);
+              }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Selecionar</Text>
             </TouchableOpacity>
             <AnimatedPressable
-              onPress={() => { console.log("[GestaoGarcons] Botão incluir pressionado"); openCreate(); }}
-              style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+              onPress={() => {
+                console.log("[GestaoGarcons] Botão incluir pressionado");
+                openCreate();
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: COLORS.success,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+                gap: 6,
+              }}
             >
               <Ionicons name="add" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
@@ -319,12 +387,33 @@ export default function GestaoGarconsScreen() {
       </View>
 
       {/* Search bar */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.divider,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surfaceSecondary,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            gap: 8,
+          }}
+        >
           <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             value={search}
-            onChangeText={(t) => { console.log("[GestaoGarcons] Busca:", t); setSearch(t); }}
+            onChangeText={(t) => {
+              console.log("[GestaoGarcons] Busca:", t);
+              setSearch(t);
+            }}
             placeholder="Buscar..."
             placeholderTextColor={COLORS.textTertiary}
             style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, padding: 0 }}
@@ -339,14 +428,37 @@ export default function GestaoGarconsScreen() {
 
       {loading ? (
         <View style={{ paddingTop: 16 }}>
-          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+          {[0, 1, 2].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </View>
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar garçons</Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>{error}</Text>
-          <TouchableOpacity onPress={fetchGarcons} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+            Erro ao carregar garçons
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Outfit_400Regular",
+              fontSize: 14,
+              color: COLORS.textSecondary,
+              textAlign: "center",
+            }}
+          >
+            {error}
+          </Text>
+          <TouchableOpacity
+            onPress={fetchGarcons}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+              Tentar novamente
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -354,17 +466,30 @@ export default function GestaoGarconsScreen() {
           data={filteredGarcons}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+          }
           renderItem={({ item }) => {
             const displayName = getDisplayName(item);
             const initials = getInitials(displayName || item.email);
             const roleLabel = getRoleLabel(item.role);
+            const isSelected = selected.has(item.id);
             return (
               <Pressable
-                onPress={() => { if (selectMode) toggleSelect(item.id); }}
-                onLongPress={() => { if (!selectMode) enterSelectMode(item.id); }}
+                onPress={() => {
+                  if (selectMode) {
+                    console.log("[GestaoGarcons] Item pressionado (select mode):", item.id);
+                    toggleSelect(item.id);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!selectMode) {
+                    console.log("[GestaoGarcons] Long press — entrar select mode:", item.id);
+                    enterSelectMode(item.id);
+                  }
+                }}
                 style={({ pressed }) => ({
-                  backgroundColor: selected.has(item.id) ? COLORS.primaryMuted : COLORS.surface,
+                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 10,
@@ -375,40 +500,93 @@ export default function GestaoGarconsScreen() {
                   shadowRadius: 4,
                   elevation: 2,
                   borderWidth: 1,
-                  borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
+                  borderColor: isSelected ? COLORS.primary : COLORS.border,
                   opacity: selectMode && pressed ? 0.6 : 1,
                 })}
               >
                 {selectMode && (
-                  <View style={{
-                    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
-                    borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
-                    backgroundColor: selected.has(item.id) ? COLORS.primary : "transparent",
-                    alignItems: "center", justifyContent: "center", marginRight: 10,
-                  }}>
-                    {selected.has(item.id) && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                   </View>
                 )}
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>{initials}</Text>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: COLORS.primaryMuted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
+                    {initials}
+                  </Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }} numberOfLines={1}>{displayName || "Sem nome"}</Text>
-                  <Text numberOfLines={1} style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.email}</Text>
-                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.primary, marginTop: 2 }}>{roleLabel}</Text>
+                  <Text
+                    style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}
+                    numberOfLines={1}
+                  >
+                    {displayName || "Sem nome"}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}
+                  >
+                    {item.email}
+                  </Text>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.primary, marginTop: 2 }}>
+                    {roleLabel}
+                  </Text>
                 </View>
                 {!selectMode && (
                   <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoGarcons] Editar pressionado:", item.id); openEdit(item); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoGarcons] Editar pressionado:", item.id);
+                        openEdit(item);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#007AFF",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="pencil" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoGarcons] Excluir pressionado:", item.id); handleDelete(item.id, displayName); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoGarcons] Excluir pressionado:", item.id);
+                        handleDelete(item.id, displayName);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#FF3B30",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="trash" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
@@ -420,14 +598,30 @@ export default function GestaoGarconsScreen() {
           }}
           ListEmptyComponent={
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
-              <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: COLORS.primaryMuted, alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  backgroundColor: COLORS.primaryMuted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Users size={32} color={COLORS.primary} />
               </View>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-                {search.trim() ? "Nenhum resultado encontrado" : "Nenhum garçom cadastrado"}
+                {emptyText}
               </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar garçons"}
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                }}
+              >
+                {emptySubText}
               </Text>
             </View>
           }
@@ -435,15 +629,42 @@ export default function GestaoGarconsScreen() {
       )}
 
       <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <View style={{ backgroundColor: COLORS.surface, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, gap: 16 }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: COLORS.surface,
+              borderRadius: 20,
+              padding: 24,
+              width: "100%",
+              maxWidth: 380,
+              gap: 16,
+            }}
+          >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
                 {editingGarcom ? "Editar Garçom" : "Novo Garçom"}
               </Text>
               <AnimatedPressable
-                onPress={() => { console.log("[GestaoGarcons] Modal fechado"); setShowModal(false); }}
-                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+                onPress={() => {
+                  console.log("[GestaoGarcons] Modal fechado");
+                  setShowModal(false);
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: COLORS.surfaceSecondary,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <X size={16} color={COLORS.textSecondary} />
               </AnimatedPressable>
@@ -451,29 +672,64 @@ export default function GestaoGarconsScreen() {
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
-              <TextInput value={nome} onChangeText={setNome} placeholder="Nome completo" placeholderTextColor={COLORS.textTertiary} style={inputStyle} autoFocus />
+              <TextInput
+                value={nome}
+                onChangeText={setNome}
+                placeholder="Nome completo"
+                placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle}
+                autoFocus
+              />
             </View>
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
                 {editingGarcom ? "E-mail" : "E-mail *"}
               </Text>
-              <TextInput value={email} onChangeText={setEmail} placeholder="email@exemplo.com" placeholderTextColor={COLORS.textTertiary} keyboardType="email-address" autoCapitalize="none" style={inputStyle} />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="email@exemplo.com"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={inputStyle}
+              />
             </View>
 
             <View style={{ gap: 6 }}>
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
                 {editingGarcom ? "Nova senha (opcional)" : "Senha *"}
               </Text>
-              <TextInput value={senha} onChangeText={setSenha} placeholder={editingGarcom ? "Deixe em branco para manter" : "Senha"} placeholderTextColor={COLORS.textTertiary} secureTextEntry style={inputStyle} />
+              <TextInput
+                value={senha}
+                onChangeText={setSenha}
+                placeholder={editingGarcom ? "Deixe em branco para manter" : "Senha"}
+                placeholderTextColor={COLORS.textTertiary}
+                secureTextEntry
+                style={inputStyle}
+              />
             </View>
 
-            {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
+            {modalError ? (
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
+                {modalError}
+              </Text>
+            ) : null}
 
             <AnimatedPressable
-              onPress={() => { console.log("[GestaoGarcons] Salvar garçom pressionado"); handleSave(); }}
+              onPress={() => {
+                console.log("[GestaoGarcons] Salvar garçom pressionado");
+                handleSave();
+              }}
               disabled={saving}
-              style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" }}
+              style={{
+                backgroundColor: COLORS.primary,
+                borderRadius: 14,
+                height: 52,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
               {saving ? (
                 <ActivityIndicator color="#fff" />
@@ -486,6 +742,16 @@ export default function GestaoGarconsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        destructive={confirmDialog.confirmLabel !== "Confirmar"}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
     </SafeAreaView>
   );
 }

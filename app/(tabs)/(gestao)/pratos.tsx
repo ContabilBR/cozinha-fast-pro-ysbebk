@@ -5,7 +5,6 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Alert,
   Modal,
   TextInput,
   Switch,
@@ -23,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { apiGet, apiPost, apiPut, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
 import { X, UtensilsCrossed, Camera, Image as ImageIcon, ChevronDown, Search } from "lucide-react-native";
@@ -87,6 +87,16 @@ export default function GestaoPratos() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  }>({ visible: false, title: "", message: "", confirmLabel: "Excluir", onConfirm: () => {} });
+
+  const closeConfirm = () => setConfirmDialog((prev) => ({ ...prev, visible: false }));
+
   const fetchData = useCallback(async () => {
     console.log("[GestaoPratos] GET /api/pratos e /api/categorias");
     try {
@@ -126,9 +136,16 @@ export default function GestaoPratos() {
   const openCreate = () => {
     console.log("[GestaoPratos] Abrir modal de criação");
     setEditingPrato(null);
-    setNome(""); setDescricao(""); setPreco(""); setCategoriaId("");
-    setDisponivel(true); setLocalImageUri(null); setImagemUrl(""); setImagemUrlInput("");
-    setModalError(""); setShowCatPicker(false);
+    setNome("");
+    setDescricao("");
+    setPreco("");
+    setCategoriaId("");
+    setDisponivel(true);
+    setLocalImageUri(null);
+    setImagemUrl("");
+    setImagemUrlInput("");
+    setModalError("");
+    setShowCatPicker(false);
     setShowModal(true);
   };
 
@@ -143,7 +160,8 @@ export default function GestaoPratos() {
     setLocalImageUri(null);
     setImagemUrl(p.imagem_url ?? "");
     setImagemUrlInput(p.imagem_url ?? "");
-    setModalError(""); setShowCatPicker(false);
+    setModalError("");
+    setShowCatPicker(false);
     setShowModal(true);
   };
 
@@ -153,11 +171,11 @@ export default function GestaoPratos() {
       let result: ImagePicker.ImagePickerResult;
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à câmera."); return; }
+        if (!perm.granted) return;
         result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.8 });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Permissão necessária", "Permita o acesso à galeria."); return; }
+        if (!perm.granted) return;
         result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.8 });
       }
       if (!result.canceled && result.assets[0]) {
@@ -203,7 +221,8 @@ export default function GestaoPratos() {
     const precoNum = parseFloat(preco.replace(",", "."));
     if (isNaN(precoNum) || precoNum < 0) { setModalError("Preço inválido."); return; }
     console.log("[GestaoPratos] Salvar pressionado, editando:", editingPrato?.id ?? "novo");
-    setSaving(true); setModalError("");
+    setSaving(true);
+    setModalError("");
     try {
       const payload: Record<string, unknown> = {
         nome: nome.trim(),
@@ -238,33 +257,28 @@ export default function GestaoPratos() {
 
   const handleDelete = (id: string, nomePrato: string) => {
     console.log("[GestaoPratos] Confirmar exclusão:", id, nomePrato);
-    Alert.alert(
-      "Excluir prato?",
-      `Deseja realmente excluir "${nomePrato}"?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            console.log("[GestaoPratos] DELETE /api/pratos/" + id);
-            try {
-              await apiDelete(`/api/pratos/${id}`);
-              console.log("[GestaoPratos] Prato excluído:", id);
-              setPratos((prev) => prev.filter((p) => p.id !== id));
-            } catch (e: unknown) {
-              console.error("[GestaoPratos] Erro ao excluir:", e);
-              Alert.alert("Erro", "Não foi possível excluir o prato.");
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: "Excluir prato?",
+      message: `Deseja realmente excluir "${nomePrato}"?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      onConfirm: async () => {
+        closeConfirm();
+        console.log("[GestaoPratos] DELETE /api/pratos/" + id);
+        try {
+          await apiDelete(`/api/pratos/${id}`);
+          console.log("[GestaoPratos] Prato excluído:", id);
+          setPratos((prev) => prev.filter((p) => p.id !== id));
+        } catch (e: unknown) {
+          console.error("[GestaoPratos] Erro ao excluir:", e);
+        }
+      },
+    });
   };
 
   const toggleSelect = (id: string) => {
     console.log("[GestaoPratos] Toggle seleção:", id);
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -303,14 +317,16 @@ export default function GestaoPratos() {
   const confirmBulkDelete = () => {
     if (selected.size === 0) return;
     console.log("[GestaoPratos] Confirmar exclusão em lote:", selected.size, "itens");
-    Alert.alert(
-      `Excluir ${selected.size} item(s)?`,
-      `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: `Excluir ${selected.size}`, style: "destructive", onPress: () => doDelete(Array.from(selected)) },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: `Excluir ${selected.size} item(s)?`,
+      message: `Deseja excluir ${selected.size} item(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
+      confirmLabel: `Excluir ${selected.size}`,
+      onConfirm: () => {
+        closeConfirm();
+        doDelete(Array.from(selected));
+      },
+    });
   };
 
   const inputStyle = {
@@ -328,28 +344,40 @@ export default function GestaoPratos() {
 
   const searchLower = search.toLowerCase();
   const filteredPratos = search.trim()
-    ? pratos.filter((p) => p.nome.toLowerCase().includes(searchLower) || (p.categoria?.nome ?? "").toLowerCase().includes(searchLower))
+    ? pratos.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(searchLower) ||
+          (p.categoria?.nome ?? "").toLowerCase().includes(searchLower)
+      )
     : pratos;
+
+  const emptyText = search.trim() ? "Nenhum resultado encontrado" : "Nenhum prato cadastrado";
+  const emptySubText = search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar pratos";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
       {/* Nav bar */}
-      <View style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 56,
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.surface,
-      }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 56,
+          paddingHorizontal: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.surface,
+        }}
+      >
         {selectMode ? (
           <TouchableOpacity onPress={exitSelectMode} style={{ paddingVertical: 8, paddingRight: 12 }}>
             <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "500" }}>Cancelar</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            onPress={() => { console.log("[GestaoPratos] Botão voltar pressionado"); router.back(); }}
+            onPress={() => {
+              console.log("[GestaoPratos] Botão voltar pressionado");
+              router.back();
+            }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{ flexDirection: "row", alignItems: "center", zIndex: 1 }}
           >
@@ -357,17 +385,19 @@ export default function GestaoPratos() {
             <Text style={{ color: "#007AFF", fontSize: 17, fontWeight: "500" }}>Voltar</Text>
           </TouchableOpacity>
         )}
-        <Text style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontSize: 17,
-          fontWeight: "700",
-          color: COLORS.text,
-          height: 56,
-          lineHeight: 56,
-        }}>
+        <Text
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontSize: 17,
+            fontWeight: "700",
+            color: COLORS.text,
+            height: 56,
+            lineHeight: 56,
+          }}
+        >
           Pratos
         </Text>
         <View style={{ flex: 1 }} />
@@ -375,30 +405,73 @@ export default function GestaoPratos() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
               onPress={exitSelectMode}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={confirmBulkDelete}
+              onPress={() => {
+                console.log("[GestaoPratos] Botão excluir lote pressionado");
+                confirmBulkDelete();
+              }}
               disabled={selected.size === 0 || deleting}
-              style={{ backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 4 }}
+              style={{
+                backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+              }}
             >
-              {deleting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={14} color="#fff" />}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Excluir ({selected.size})</Text>
+              {deleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="trash" size={14} color="#fff" />
+              )}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+                Excluir ({selected.size})
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity
-              onPress={() => { console.log("[GestaoPratos] Entrar modo seleção"); setSelectMode(true); }}
-              style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              onPress={() => {
+                console.log("[GestaoPratos] Entrar modo seleção");
+                setSelectMode(true);
+              }}
+              style={{
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+              }}
             >
               <Text style={{ color: COLORS.textSecondary, fontSize: 14, fontWeight: "500" }}>Selecionar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => { console.log("[GestaoPratos] Botão incluir pressionado"); openCreate(); }}
-              style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, gap: 6 }}
+              onPress={() => {
+                console.log("[GestaoPratos] Botão incluir pressionado");
+                openCreate();
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: COLORS.success,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+                gap: 6,
+              }}
             >
               <Ionicons name="add" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Incluir</Text>
@@ -408,12 +481,33 @@ export default function GestaoPratos() {
       </View>
 
       {/* Search bar */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
-        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 8 }}>
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          backgroundColor: COLORS.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.divider,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surfaceSecondary,
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            gap: 8,
+          }}
+        >
           <Search size={16} color={COLORS.textSecondary} />
           <TextInput
             value={search}
-            onChangeText={(t) => { console.log("[GestaoPratos] Busca:", t); setSearch(t); }}
+            onChangeText={(t) => {
+              console.log("[GestaoPratos] Busca:", t);
+              setSearch(t);
+            }}
             placeholder="Buscar..."
             placeholderTextColor={COLORS.textTertiary}
             style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 15, color: COLORS.text, padding: 0 }}
@@ -428,13 +522,27 @@ export default function GestaoPratos() {
 
       {loading ? (
         <View style={{ paddingTop: 16 }}>
-          {[0, 1, 2].map((i) => <CardSkeleton key={i} />)}
+          {[0, 1, 2].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </View>
       ) : error ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 }}>
-          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>Erro ao carregar pratos</Text>
-          <TouchableOpacity onPress={fetchData} style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>Tentar novamente</Text>
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
+            Erro ao carregar pratos
+          </Text>
+          <TouchableOpacity
+            onPress={fetchData}
+            style={{
+              backgroundColor: COLORS.primary,
+              borderRadius: 12,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+            }}
+          >
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#fff" }}>
+              Tentar novamente
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -442,17 +550,30 @@ export default function GestaoPratos() {
           data={filteredPratos}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
+          }
           renderItem={({ item }) => {
             const price = formatCurrency(item.preco);
             const imgSrc = resolveImageSource(item.imagem_url);
             const disponibilidade = item.disponivel !== false;
+            const isSelected = selected.has(item.id);
             return (
               <Pressable
-                onPress={() => { if (selectMode) toggleSelect(item.id); }}
-                onLongPress={() => { if (!selectMode) enterSelectMode(item.id); }}
+                onPress={() => {
+                  if (selectMode) {
+                    console.log("[GestaoPratos] Item pressionado (select mode):", item.id);
+                    toggleSelect(item.id);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!selectMode) {
+                    console.log("[GestaoPratos] Long press — entrar select mode:", item.id);
+                    enterSelectMode(item.id);
+                  }
+                }}
                 style={({ pressed }) => ({
-                  backgroundColor: selected.has(item.id) ? COLORS.primaryMuted : COLORS.surface,
+                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 10,
@@ -463,21 +584,37 @@ export default function GestaoPratos() {
                   shadowRadius: 4,
                   elevation: 2,
                   borderWidth: 1,
-                  borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
+                  borderColor: isSelected ? COLORS.primary : COLORS.border,
                   opacity: selectMode && pressed ? 0.6 : 1,
                 })}
               >
                 {selectMode && (
-                  <View style={{
-                    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
-                    borderColor: selected.has(item.id) ? COLORS.primary : COLORS.border,
-                    backgroundColor: selected.has(item.id) ? COLORS.primary : "transparent",
-                    alignItems: "center", justifyContent: "center", marginRight: 10,
-                  }}>
-                    {selected.has(item.id) && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                   </View>
                 )}
-                <View style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: COLORS.surfaceSecondary, marginRight: 12, overflow: "hidden" }}>
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 10,
+                    backgroundColor: COLORS.surfaceSecondary,
+                    marginRight: 12,
+                    overflow: "hidden",
+                  }}
+                >
                   {item.imagem_url ? (
                     <Image source={imgSrc} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                   ) : (
@@ -488,9 +625,13 @@ export default function GestaoPratos() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: "600", color: COLORS.text }}>{item.nome}</Text>
-                  <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>{price}</Text>
+                  <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>
+                    {price}
+                  </Text>
                   {item.categoria && (
-                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.categoria.nome}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                      {item.categoria.nome}
+                    </Text>
                   )}
                   {!disponibilidade && (
                     <Text style={{ fontSize: 11, color: COLORS.danger, marginTop: 2 }}>Indisponível</Text>
@@ -499,15 +640,37 @@ export default function GestaoPratos() {
                 {!selectMode && (
                   <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoPratos] Editar pressionado:", item.id); openEdit(item); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#007AFF", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoPratos] Editar pressionado:", item.id);
+                        openEdit(item);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#007AFF",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="pencil" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoPratos] Excluir pressionado:", item.id); handleDelete(item.id, item.nome); }}
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FF3B30", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7, gap: 4 }}
+                      onPress={() => {
+                        console.log("[GestaoPratos] Excluir pressionado:", item.id);
+                        handleDelete(item.id, item.nome);
+                      }}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        backgroundColor: "#FF3B30",
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 7,
+                        gap: 4,
+                      }}
                     >
                       <Ionicons name="trash" size={14} color="#fff" />
                       <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
@@ -521,10 +684,17 @@ export default function GestaoPratos() {
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <UtensilsCrossed size={32} color={COLORS.textTertiary} />
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
-                {search.trim() ? "Nenhum resultado encontrado" : "Nenhum prato cadastrado"}
+                {emptyText}
               </Text>
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                {search.trim() ? "Tente outro termo de busca" : "Toque em \"Incluir\" para adicionar pratos"}
+              <Text
+                style={{
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 14,
+                  color: COLORS.textSecondary,
+                  textAlign: "center",
+                }}
+              >
+                {emptySubText}
               </Text>
             </View>
           }
@@ -533,27 +703,62 @@ export default function GestaoPratos() {
 
       <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-          <View style={{ backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "92%" }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          <View
+            style={{
+              backgroundColor: COLORS.surface,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: "92%",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.border,
+              }}
+            >
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.text }}>
                 {editingPrato ? "Editar Prato" : "Novo Prato"}
               </Text>
               <TouchableOpacity
-                onPress={() => { console.log("[GestaoPratos] Modal fechado"); setShowModal(false); }}
-                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+                onPress={() => {
+                  console.log("[GestaoPratos] Modal fechado");
+                  setShowModal(false);
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: COLORS.surfaceSecondary,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <X size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-              <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                contentContainerStyle={{ padding: 20, gap: 16 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 {/* URL da imagem */}
                 <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>URL da imagem</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    URL da imagem
+                  </Text>
                   <TextInput
                     value={imagemUrlInput}
-                    onChangeText={(t) => { console.log("[GestaoPratos] imagem_url alterada"); setImagemUrlInput(t); setLocalImageUri(null); }}
+                    onChangeText={(t) => {
+                      console.log("[GestaoPratos] imagem_url alterada");
+                      setImagemUrlInput(t);
+                      setLocalImageUri(null);
+                    }}
                     placeholder="https://exemplo.com/imagem.jpg"
                     placeholderTextColor={COLORS.textTertiary}
                     autoCapitalize="none"
@@ -561,11 +766,35 @@ export default function GestaoPratos() {
                     style={inputStyle}
                   />
                   {imagemUrlInput.trim() && !localImageUri ? (
-                    <View style={{ height: 120, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                      <Image source={resolveImageSource(imagemUrlInput)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                    <View
+                      style={{
+                        height: 120,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        backgroundColor: COLORS.surfaceSecondary,
+                      }}
+                    >
+                      <Image
+                        source={resolveImageSource(imagemUrlInput)}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                      />
                       <TouchableOpacity
-                        onPress={() => { console.log("[GestaoPratos] Remover URL pressionado"); setImagemUrlInput(""); }}
-                        style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                        onPress={() => {
+                          console.log("[GestaoPratos] Remover URL pressionado");
+                          setImagemUrlInput("");
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          backgroundColor: "rgba(0,0,0,0.5)",
+                          borderRadius: 14,
+                          width: 28,
+                          height: 28,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
                       >
                         <Ionicons name="close" size={16} color="#fff" />
                       </TouchableOpacity>
@@ -575,91 +804,245 @@ export default function GestaoPratos() {
 
                 {/* Foto câmera/galeria */}
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Foto (câmera/galeria)</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Foto (câmera/galeria)
+                  </Text>
                   {localImageUri ? (
-                    <View style={{ height: 120, borderRadius: 12, overflow: "hidden", backgroundColor: COLORS.surfaceSecondary }}>
-                      <Image source={resolveImageSource(localImageUri)} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                    <View
+                      style={{
+                        height: 120,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        backgroundColor: COLORS.surfaceSecondary,
+                      }}
+                    >
+                      <Image
+                        source={resolveImageSource(localImageUri)}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                      />
                       {uploading && (
-                        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: "rgba(0,0,0,0.4)",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
                           <ActivityIndicator color="#fff" />
-                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#fff", marginTop: 6 }}>Enviando...</Text>
+                          <Text
+                            style={{
+                              fontFamily: "Outfit_400Regular",
+                              fontSize: 12,
+                              color: "#fff",
+                              marginTop: 6,
+                            }}
+                          >
+                            Enviando...
+                          </Text>
                         </View>
                       )}
                       <TouchableOpacity
-                        onPress={() => { console.log("[GestaoPratos] Remover foto pressionado"); setLocalImageUri(null); }}
-                        style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 14, width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+                        onPress={() => {
+                          console.log("[GestaoPratos] Remover foto pressionado");
+                          setLocalImageUri(null);
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          backgroundColor: "rgba(0,0,0,0.5)",
+                          borderRadius: 14,
+                          width: 28,
+                          height: 28,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
                       >
                         <Ionicons name="close" size={16} color="#fff" />
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <View style={{ height: 72, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border, alignItems: "center", justifyContent: "center", gap: 4 }}>
+                    <View
+                      style={{
+                        height: 72,
+                        borderRadius: 12,
+                        backgroundColor: COLORS.surfaceSecondary,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      }}
+                    >
                       <UtensilsCrossed size={20} color={COLORS.textTertiary} />
-                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textTertiary }}>Nenhuma foto</Text>
+                      <Text
+                        style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textTertiary }}
+                      >
+                        Nenhuma foto
+                      </Text>
                     </View>
                   )}
                   <View style={{ flexDirection: "row", gap: 10 }}>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoPratos] Câmera pressionada"); pickImage("camera"); }}
-                      style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border }}
+                      onPress={() => {
+                        console.log("[GestaoPratos] Câmera pressionada");
+                        pickImage("camera");
+                      }}
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        backgroundColor: COLORS.surfaceSecondary,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                      }}
                     >
                       <Camera size={16} color={COLORS.primary} />
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Câmera</Text>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
+                        Câmera
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { console.log("[GestaoPratos] Galeria pressionada"); pickImage("gallery"); }}
-                      style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border }}
+                      onPress={() => {
+                        console.log("[GestaoPratos] Galeria pressionada");
+                        pickImage("gallery");
+                      }}
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        backgroundColor: COLORS.surfaceSecondary,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                      }}
                     >
                       <ImageIcon size={16} color={COLORS.primary} />
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>Galeria</Text>
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.primary }}>
+                        Galeria
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {/* Nome */}
                 <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Nome *</Text>
-                  <TextInput value={nome} onChangeText={(t) => { setNome(t); setModalError(""); }} placeholder="Ex: Frango Grelhado" placeholderTextColor={COLORS.textTertiary} style={inputStyle} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Nome *
+                  </Text>
+                  <TextInput
+                    value={nome}
+                    onChangeText={(t) => { setNome(t); setModalError(""); }}
+                    placeholder="Ex: Frango Grelhado"
+                    placeholderTextColor={COLORS.textTertiary}
+                    style={inputStyle}
+                  />
                 </View>
 
                 {/* Descrição */}
                 <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Descrição</Text>
-                  <TextInput value={descricao} onChangeText={setDescricao} placeholder="Descrição do prato" placeholderTextColor={COLORS.textTertiary} multiline numberOfLines={3} style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Descrição
+                  </Text>
+                  <TextInput
+                    value={descricao}
+                    onChangeText={setDescricao}
+                    placeholder="Descrição do prato"
+                    placeholderTextColor={COLORS.textTertiary}
+                    multiline
+                    numberOfLines={3}
+                    style={[inputStyle, { minHeight: 80, textAlignVertical: "top" }]}
+                  />
                 </View>
 
                 {/* Preço */}
                 <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Preço (R$) *</Text>
-                  <TextInput value={preco} onChangeText={(t) => { setPreco(t); setModalError(""); }} placeholder="0,00" placeholderTextColor={COLORS.textTertiary} keyboardType="decimal-pad" style={inputStyle} />
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Preço (R$) *
+                  </Text>
+                  <TextInput
+                    value={preco}
+                    onChangeText={(t) => { setPreco(t); setModalError(""); }}
+                    placeholder="0,00"
+                    placeholderTextColor={COLORS.textTertiary}
+                    keyboardType="decimal-pad"
+                    style={inputStyle}
+                  />
                 </View>
 
                 {/* Categoria */}
                 <View style={{ gap: 6 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Categoria</Text>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Categoria
+                  </Text>
                   <TouchableOpacity
-                    onPress={() => { console.log("[GestaoPratos] Seletor de categoria alternado"); setShowCatPicker((v) => !v); }}
+                    onPress={() => {
+                      console.log("[GestaoPratos] Seletor de categoria alternado");
+                      setShowCatPicker((v) => !v);
+                    }}
                     style={[inputStyle, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}
                   >
-                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 15, color: selectedCat ? COLORS.text : COLORS.textTertiary }}>
+                    <Text
+                      style={{
+                        fontFamily: "Outfit_400Regular",
+                        fontSize: 15,
+                        color: selectedCat ? COLORS.text : COLORS.textTertiary,
+                      }}
+                    >
                       {selectedCat?.nome ?? "Selecionar categoria"}
                     </Text>
                     <ChevronDown size={16} color={COLORS.textSecondary} />
                   </TouchableOpacity>
                   {showCatPicker && (
-                    <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" }}>
+                    <View
+                      style={{
+                        backgroundColor: COLORS.surface,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                        overflow: "hidden",
+                      }}
+                    >
                       {categorias.length === 0 ? (
                         <View style={{ padding: 14 }}>
-                          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>Nenhuma categoria</Text>
+                          <Text
+                            style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}
+                          >
+                            Nenhuma categoria
+                          </Text>
                         </View>
                       ) : (
                         categorias.map((cat) => (
                           <TouchableOpacity
                             key={cat.id}
-                            onPress={() => { console.log("[GestaoPratos] Categoria selecionada:", cat.nome); setCategoriaId(cat.id); setShowCatPicker(false); }}
-                            style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent" }}
+                            onPress={() => {
+                              console.log("[GestaoPratos] Categoria selecionada:", cat.nome);
+                              setCategoriaId(cat.id);
+                              setShowCatPicker(false);
+                            }}
+                            style={{
+                              padding: 14,
+                              borderBottomWidth: 1,
+                              borderBottomColor: COLORS.border,
+                              backgroundColor: categoriaId === cat.id ? COLORS.primaryMuted : "transparent",
+                            }}
                           >
-                            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>{cat.nome}</Text>
+                            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}>
+                              {cat.nome}
+                            </Text>
                           </TouchableOpacity>
                         ))
                       )}
@@ -668,22 +1051,54 @@ export default function GestaoPratos() {
                 </View>
 
                 {/* Disponível */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.surfaceSecondary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: COLORS.border }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Disponível</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: COLORS.surfaceSecondary,
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Disponível
+                  </Text>
                   <Switch
                     value={disponivel}
-                    onValueChange={(v) => { console.log("[GestaoPratos] Disponível alternado:", v); setDisponivel(v); }}
+                    onValueChange={(v) => {
+                      console.log("[GestaoPratos] Disponível alternado:", v);
+                      setDisponivel(v);
+                    }}
                     trackColor={{ false: COLORS.border, true: COLORS.primary + "80" }}
                     thumbColor={disponivel ? COLORS.primary : COLORS.textTertiary}
                   />
                 </View>
 
-                {modalError ? <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>{modalError}</Text> : null}
+                {modalError ? (
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
+                    {modalError}
+                  </Text>
+                ) : null}
 
                 <TouchableOpacity
-                  onPress={() => { console.log("[GestaoPratos] Salvar prato pressionado"); handleSave(); }}
+                  onPress={() => {
+                    console.log("[GestaoPratos] Salvar prato pressionado");
+                    handleSave();
+                  }}
                   disabled={saving || uploading}
-                  style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: saving || uploading ? 0.7 : 1, marginBottom: 20 }}
+                  style={{
+                    backgroundColor: COLORS.primary,
+                    borderRadius: 14,
+                    height: 52,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: saving || uploading ? 0.7 : 1,
+                    marginBottom: 20,
+                  }}
                 >
                   {saving || uploading ? (
                     <ActivityIndicator color="#fff" />
@@ -698,6 +1113,16 @@ export default function GestaoPratos() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        destructive
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
     </SafeAreaView>
   );
 }
