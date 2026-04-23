@@ -2,8 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  RefreshControl,
+  ScrollView,
   ActivityIndicator,
   Modal,
   TextInput,
@@ -33,7 +32,6 @@ export default function GestaoCategorias() {
 
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -71,7 +69,6 @@ export default function GestaoCategorias() {
       setError("Não foi possível carregar as categorias.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -82,12 +79,6 @@ export default function GestaoCategorias() {
       fetchCategorias();
     }, [fetchCategorias])
   );
-
-  const handleRefresh = () => {
-    console.log("[GestaoCategorias] Refresh manual");
-    setRefreshing(true);
-    fetchCategorias();
-  };
 
   const openCreate = () => {
     console.log("[GestaoCategorias] Abrir modal de criação");
@@ -430,137 +421,12 @@ export default function GestaoCategorias() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={filteredCategorias}
-          keyExtractor={(item) => item.id}
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
-          }
-          renderItem={({ item }) => {
-            const isSelected = selected.has(item.id);
-            return (
-              <Pressable
-                onPress={() => {
-                  if (selectMode) {
-                    console.log("[GestaoCategorias] Item pressionado (select mode):", item.id);
-                    toggleSelect(item.id);
-                  }
-                }}
-                onLongPress={() => {
-                  if (!selectMode) {
-                    console.log("[GestaoCategorias] Long press — entrar select mode:", item.id);
-                    enterSelectMode(item.id);
-                  }
-                }}
-                style={({ pressed }) => ({
-                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 10,
-                  flexDirection: "row" as const,
-                  alignItems: "center" as const,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                  borderWidth: 1,
-                  borderColor: isSelected ? COLORS.primary : COLORS.border,
-                  opacity: selectMode && pressed ? 0.6 : 1,
-                })}
-              >
-                {selectMode && (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      borderWidth: 2,
-                      borderColor: isSelected ? COLORS.primary : COLORS.border,
-                      backgroundColor: isSelected ? COLORS.primary : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
-                    }}
-                  >
-                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                )}
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    backgroundColor: COLORS.primaryMuted,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <Tag size={18} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>
-                    {item.nome}
-                  </Text>
-                  {item.descricao ? (
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        fontFamily: "Outfit_400Regular",
-                        fontSize: 12,
-                        color: COLORS.textSecondary,
-                        marginTop: 2,
-                      }}
-                    >
-                      {item.descricao}
-                    </Text>
-                  ) : null}
-                </View>
-                {!selectMode && (
-                  <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoCategorias] Editar pressionado:", item.id);
-                        openEdit(item);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#007AFF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoCategorias] Excluir pressionado:", item.id);
-                        handleDelete(item.id, item.nome);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#FF3B30",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="trash" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredCategorias.length === 0 ? (
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <View
                 style={{
@@ -588,8 +454,127 @@ export default function GestaoCategorias() {
                 {emptySubText}
               </Text>
             </View>
-          }
-        />
+          ) : (
+            filteredCategorias.map((item) => {
+              const isSelected = selected.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  style={{
+                    backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.06,
+                    shadowRadius: 4,
+                    elevation: 2,
+                    borderWidth: 1,
+                    borderColor: isSelected ? COLORS.primary : COLORS.border,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectMode) {
+                        console.log("[GestaoCategorias] Checkbox toggle (select mode):", item.id);
+                        toggleSelect(item.id);
+                      } else {
+                        console.log("[GestaoCategorias] Checkbox — entrar select mode:", item.id);
+                        enterSelectMode(item.id);
+                      }
+                    }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: COLORS.primaryMuted,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Tag size={18} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>
+                      {item.nome}
+                    </Text>
+                    {item.descricao ? (
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          fontFamily: "Outfit_400Regular",
+                          fontSize: 12,
+                          color: COLORS.textSecondary,
+                          marginTop: 2,
+                        }}
+                      >
+                        {item.descricao}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {!selectMode && (
+                    <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoCategorias] Editar pressionado:", item.id);
+                          openEdit(item);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#007AFF",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="pencil" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoCategorias] Excluir pressionado:", item.id);
+                          handleDelete(item.id, item.nome);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#FF3B30",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="trash" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
       )}
 
       <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>

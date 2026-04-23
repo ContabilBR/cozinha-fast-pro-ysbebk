@@ -2,8 +2,6 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  RefreshControl,
   ActivityIndicator,
   Modal,
   TextInput,
@@ -64,7 +62,6 @@ export default function GestaoPratos() {
   const [pratos, setPratos] = useState<ApiPrato[]>([]);
   const [categorias, setCategorias] = useState<ApiCategoria[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -115,7 +112,6 @@ export default function GestaoPratos() {
       setError("Não foi possível carregar os pratos.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -126,12 +122,6 @@ export default function GestaoPratos() {
       fetchData();
     }, [fetchData])
   );
-
-  const handleRefresh = () => {
-    console.log("[GestaoPratos] Refresh manual");
-    setRefreshing(true);
-    fetchData();
-  };
 
   const openCreate = () => {
     console.log("[GestaoPratos] Abrir modal de criação");
@@ -546,141 +536,12 @@ export default function GestaoPratos() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={filteredPratos}
-          keyExtractor={(item) => item.id}
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
-          }
-          renderItem={({ item }) => {
-            const price = formatCurrency(item.preco);
-            const imgSrc = resolveImageSource(item.imagem_url);
-            const disponibilidade = item.disponivel !== false;
-            const isSelected = selected.has(item.id);
-            return (
-              <Pressable
-                onPress={() => {
-                  if (selectMode) {
-                    console.log("[GestaoPratos] Item pressionado (select mode):", item.id);
-                    toggleSelect(item.id);
-                  }
-                }}
-                onLongPress={() => {
-                  if (!selectMode) {
-                    console.log("[GestaoPratos] Long press — entrar select mode:", item.id);
-                    enterSelectMode(item.id);
-                  }
-                }}
-                style={({ pressed }) => ({
-                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 10,
-                  flexDirection: "row" as const,
-                  alignItems: "center" as const,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                  borderWidth: 1,
-                  borderColor: isSelected ? COLORS.primary : COLORS.border,
-                  opacity: selectMode && pressed ? 0.6 : 1,
-                })}
-              >
-                {selectMode && (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      borderWidth: 2,
-                      borderColor: isSelected ? COLORS.primary : COLORS.border,
-                      backgroundColor: isSelected ? COLORS.primary : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
-                    }}
-                  >
-                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                )}
-                <View
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 10,
-                    backgroundColor: COLORS.surfaceSecondary,
-                    marginRight: 12,
-                    overflow: "hidden",
-                  }}
-                >
-                  {item.imagem_url ? (
-                    <Image source={imgSrc} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                  ) : (
-                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <UtensilsCrossed size={20} color={COLORS.textTertiary} />
-                    </View>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "600", color: COLORS.text }}>{item.nome}</Text>
-                  <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>
-                    {price}
-                  </Text>
-                  {item.categoria && (
-                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-                      {item.categoria.nome}
-                    </Text>
-                  )}
-                  {!disponibilidade && (
-                    <Text style={{ fontSize: 11, color: COLORS.danger, marginTop: 2 }}>Indisponível</Text>
-                  )}
-                </View>
-                {!selectMode && (
-                  <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoPratos] Editar pressionado:", item.id);
-                        openEdit(item);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#007AFF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoPratos] Excluir pressionado:", item.id);
-                        handleDelete(item.id, item.nome);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#FF3B30",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="trash" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredPratos.length === 0 ? (
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <UtensilsCrossed size={32} color={COLORS.textTertiary} />
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 17, color: COLORS.text }}>
@@ -697,8 +558,131 @@ export default function GestaoPratos() {
                 {emptySubText}
               </Text>
             </View>
-          }
-        />
+          ) : (
+            filteredPratos.map((item) => {
+              const price = formatCurrency(item.preco);
+              const imgSrc = resolveImageSource(item.imagem_url);
+              const disponibilidade = item.disponivel !== false;
+              const isSelected = selected.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  style={{
+                    backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.06,
+                    shadowRadius: 4,
+                    elevation: 2,
+                    borderWidth: 1,
+                    borderColor: isSelected ? COLORS.primary : COLORS.border,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectMode) {
+                        console.log("[GestaoPratos] Checkbox toggle (select mode):", item.id);
+                        toggleSelect(item.id);
+                      } else {
+                        console.log("[GestaoPratos] Checkbox — entrar select mode:", item.id);
+                        enterSelectMode(item.id);
+                      }
+                    }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 10,
+                      backgroundColor: COLORS.surfaceSecondary,
+                      marginRight: 12,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {item.imagem_url ? (
+                      <Image source={imgSrc} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                    ) : (
+                      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                        <UtensilsCrossed size={20} color={COLORS.textTertiary} />
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "600", color: COLORS.text }}>{item.nome}</Text>
+                    <Text style={{ fontSize: 14, color: COLORS.primary, fontWeight: "700", marginTop: 2 }}>
+                      {price}
+                    </Text>
+                    {item.categoria && (
+                      <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {item.categoria.nome}
+                      </Text>
+                    )}
+                    {!disponibilidade && (
+                      <Text style={{ fontSize: 11, color: COLORS.danger, marginTop: 2 }}>Indisponível</Text>
+                    )}
+                  </View>
+                  {!selectMode && (
+                    <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoPratos] Editar pressionado:", item.id);
+                          openEdit(item);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#007AFF",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="pencil" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoPratos] Excluir pressionado:", item.id);
+                          handleDelete(item.id, item.nome);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#FF3B30",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="trash" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
       )}
 
       <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>

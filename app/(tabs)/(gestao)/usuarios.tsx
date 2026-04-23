@@ -2,8 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  RefreshControl,
+  ScrollView,
   ActivityIndicator,
   TouchableOpacity,
   TextInput,
@@ -55,7 +54,6 @@ export default function GestaoUsuariosScreen() {
 
   const [usuarios, setUsuarios] = useState<ApiUsuario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -86,7 +84,6 @@ export default function GestaoUsuariosScreen() {
       setError("Não foi possível carregar os usuários.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -97,12 +94,6 @@ export default function GestaoUsuariosScreen() {
       fetchUsuarios();
     }, [fetchUsuarios])
   );
-
-  const handleRefresh = () => {
-    console.log("[GestaoUsuarios] Refresh manual");
-    setRefreshing(true);
-    fetchUsuarios();
-  };
 
   const handleDelete = (id: string, nomeUsuario: string) => {
     const displayNome = nomeUsuario || "Usuário";
@@ -393,154 +384,12 @@ export default function GestaoUsuariosScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={filteredUsuarios}
-          keyExtractor={(item) => item.id}
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
-          }
-          renderItem={({ item }) => {
-            const displayName = getDisplayName(item);
-            const initials = getInitials(displayName || item.email);
-            const roleLabel = getRoleLabel(item.role);
-            const badgeColors = getRoleBadgeColor(item.role);
-            const isSelected = selected.has(item.id);
-            return (
-              <Pressable
-                onPress={() => {
-                  if (selectMode) {
-                    console.log("[GestaoUsuarios] Item pressionado (select mode):", item.id);
-                    toggleSelect(item.id);
-                  }
-                }}
-                onLongPress={() => {
-                  if (!selectMode) {
-                    console.log("[GestaoUsuarios] Long press — entrar select mode:", item.id);
-                    enterSelectMode(item.id);
-                  }
-                }}
-                style={({ pressed }) => ({
-                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 10,
-                  flexDirection: "row" as const,
-                  alignItems: "center" as const,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                  borderWidth: 1,
-                  borderColor: isSelected ? COLORS.primary : COLORS.border,
-                  opacity: selectMode && pressed ? 0.6 : 1,
-                })}
-              >
-                {selectMode && (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      borderWidth: 2,
-                      borderColor: isSelected ? COLORS.primary : COLORS.border,
-                      backgroundColor: isSelected ? COLORS.primary : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
-                    }}
-                  >
-                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                )}
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: COLORS.primaryMuted,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
-                    {initials}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}
-                    numberOfLines={1}
-                  >
-                    {displayName || "Sem nome"}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}
-                  >
-                    {item.email}
-                  </Text>
-                  <View style={{ marginTop: 4 }}>
-                    <View
-                      style={{
-                        alignSelf: "flex-start",
-                        backgroundColor: badgeColors.bg,
-                        borderRadius: 6,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: badgeColors.text }}>
-                        {roleLabel}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                {!selectMode && (
-                  <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoUsuarios] Editar pressionado:", item.id);
-                        router.push(`/usuario/${item.id}`);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#007AFF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoUsuarios] Excluir pressionado:", item.id);
-                        handleDelete(item.id, displayName);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#FF3B30",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="trash" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredUsuarios.length === 0 ? (
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <View
                 style={{
@@ -568,8 +417,144 @@ export default function GestaoUsuariosScreen() {
                 {emptySubText}
               </Text>
             </View>
-          }
-        />
+          ) : (
+            filteredUsuarios.map((item) => {
+              const displayName = getDisplayName(item);
+              const initials = getInitials(displayName || item.email);
+              const roleLabel = getRoleLabel(item.role);
+              const badgeColors = getRoleBadgeColor(item.role);
+              const isSelected = selected.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  style={{
+                    backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.06,
+                    shadowRadius: 4,
+                    elevation: 2,
+                    borderWidth: 1,
+                    borderColor: isSelected ? COLORS.primary : COLORS.border,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectMode) {
+                        console.log("[GestaoUsuarios] Checkbox toggle (select mode):", item.id);
+                        toggleSelect(item.id);
+                      } else {
+                        console.log("[GestaoUsuarios] Checkbox — entrar select mode:", item.id);
+                        enterSelectMode(item.id);
+                      }
+                    }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: COLORS.primaryMuted,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.primary }}>
+                      {initials}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text }}
+                      numberOfLines={1}
+                    >
+                      {displayName || "Sem nome"}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}
+                    >
+                      {item.email}
+                    </Text>
+                    <View style={{ marginTop: 4 }}>
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          backgroundColor: badgeColors.bg,
+                          borderRadius: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: badgeColors.text }}>
+                          {roleLabel}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {!selectMode && (
+                    <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoUsuarios] Editar pressionado:", item.id);
+                          router.push(`/usuario/${item.id}`);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#007AFF",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="pencil" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoUsuarios] Excluir pressionado:", item.id);
+                          handleDelete(item.id, displayName);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#FF3B30",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="trash" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
       )}
 
       <ConfirmDialog

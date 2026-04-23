@@ -2,8 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
-  RefreshControl,
+  ScrollView,
   ActivityIndicator,
   Modal,
   TextInput,
@@ -41,7 +40,6 @@ export default function GestaoMesasScreen() {
 
   const [mesas, setMesas] = useState<ApiMesa[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -80,7 +78,6 @@ export default function GestaoMesasScreen() {
       setError("Não foi possível carregar as mesas.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -91,12 +88,6 @@ export default function GestaoMesasScreen() {
       fetchMesas();
     }, [fetchMesas])
   );
-
-  const handleRefresh = () => {
-    console.log("[GestaoMesas] Refresh manual");
-    setRefreshing(true);
-    fetchMesas();
-  };
 
   const openCreate = () => {
     console.log("[GestaoMesas] Abrir modal de criação");
@@ -445,149 +436,12 @@ export default function GestaoMesasScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={filteredMesas}
-          keyExtractor={(item) => item.id}
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 12, paddingBottom: 120 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />
-          }
-          renderItem={({ item }) => {
-            const statusColor = getMesaStatusColor(item.status);
-            const statusLabel = getMesaStatusLabel(item.status);
-            const numeroStr = String(item.numero);
-            const isSelected = selected.has(item.id);
-            return (
-              <Pressable
-                onPress={() => {
-                  if (selectMode) {
-                    console.log("[GestaoMesas] Item pressionado (select mode):", item.id);
-                    toggleSelect(item.id);
-                  }
-                }}
-                onLongPress={() => {
-                  if (!selectMode) {
-                    console.log("[GestaoMesas] Long press — entrar select mode:", item.id);
-                    enterSelectMode(item.id);
-                  }
-                }}
-                style={({ pressed }) => ({
-                  backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 10,
-                  flexDirection: "row" as const,
-                  alignItems: "center" as const,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                  borderWidth: 1,
-                  borderColor: isSelected ? COLORS.primary : COLORS.border,
-                  opacity: selectMode && pressed ? 0.6 : 1,
-                })}
-              >
-                {selectMode && (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      borderWidth: 2,
-                      borderColor: isSelected ? COLORS.primary : COLORS.border,
-                      backgroundColor: isSelected ? COLORS.primary : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 10,
-                    }}
-                  >
-                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                )}
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 14,
-                    backgroundColor: statusColor + "18",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: statusColor }}>
-                    {numeroStr}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>
-                    Mesa {item.numero}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Users size={12} color={COLORS.textSecondary} />
-                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                        {item.capacidade} lugares
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        backgroundColor: statusColor + "20",
-                        borderRadius: 6,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
-                        {statusLabel}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                {!selectMode && (
-                  <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoMesas] Editar pressionado:", item.id);
-                        openEdit(item);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#007AFF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="pencil" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        console.log("[GestaoMesas] Excluir pressionado:", item.id);
-                        handleDelete(item.id, item.numero);
-                      }}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: "#FF3B30",
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 7,
-                        gap: 4,
-                      }}
-                    >
-                      <Ionicons name="trash" size={14} color="#fff" />
-                      <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredMesas.length === 0 ? (
             <View style={{ alignItems: "center", justifyContent: "center", padding: 48, gap: 12 }}>
               <View
                 style={{
@@ -615,8 +469,139 @@ export default function GestaoMesasScreen() {
                 {emptySubText}
               </Text>
             </View>
-          }
-        />
+          ) : (
+            filteredMesas.map((item) => {
+              const statusColor = getMesaStatusColor(item.status);
+              const statusLabel = getMesaStatusLabel(item.status);
+              const numeroStr = String(item.numero);
+              const isSelected = selected.has(item.id);
+              return (
+                <Pressable
+                  key={item.id}
+                  style={{
+                    backgroundColor: isSelected ? COLORS.primaryMuted : COLORS.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOpacity: 0.06,
+                    shadowRadius: 4,
+                    elevation: 2,
+                    borderWidth: 1,
+                    borderColor: isSelected ? COLORS.primary : COLORS.border,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (selectMode) {
+                        console.log("[GestaoMesas] Checkbox toggle (select mode):", item.id);
+                        toggleSelect(item.id);
+                      } else {
+                        console.log("[GestaoMesas] Checkbox — entrar select mode:", item.id);
+                        enterSelectMode(item.id);
+                      }
+                    }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.primary : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                  <View
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 14,
+                      backgroundColor: statusColor + "18",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 22, color: statusColor }}>
+                      {numeroStr}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 16, color: COLORS.text }}>
+                      Mesa {item.numero}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Users size={12} color={COLORS.textSecondary} />
+                        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                          {item.capacidade} lugares
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          backgroundColor: statusColor + "20",
+                          borderRadius: 6,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: statusColor }}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {!selectMode && (
+                    <View onStartShouldSetResponder={() => true} style={{ gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoMesas] Editar pressionado:", item.id);
+                          openEdit(item);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#007AFF",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="pencil" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log("[GestaoMesas] Excluir pressionado:", item.id);
+                          handleDelete(item.id, item.numero);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: "#FF3B30",
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="trash" size={14} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Excluir</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
       )}
 
       <Modal visible={showModal} transparent animationType="fade" onRequestClose={() => setShowModal(false)}>

@@ -33,6 +33,8 @@ export function ConfirmDialog({
           alignItems: "center",
           justifyContent: "center",
           padding: 32,
+          zIndex: 9999,
+          elevation: 9999,
         }}
       >
         <View
