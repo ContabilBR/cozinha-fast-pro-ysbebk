@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
-import { Settings, UtensilsCrossed, Tag, LayoutGrid, Lock, Users } from "lucide-react-native";
+import { Settings, UtensilsCrossed, Tag, LayoutGrid, Lock, Users, Store } from "lucide-react-native";
 import { isAdmin } from "@/utils/helpers";
 
 interface ManagementCard {
@@ -57,6 +57,7 @@ export default function GestaoScreen() {
     { icon: <Tag size={26} color="#8B5CF6" />, title: "Categorias", subtitle: "Gerenciar categorias", route: "/(tabs)/(gestao)/categorias", color: "#8B5CF6" },
     { icon: <LayoutGrid size={26} color="#0EA5E9" />, title: "Mesas", subtitle: "Gerenciar mesas", route: "/(tabs)/(gestao)/mesas", color: "#0EA5E9" },
     { icon: <Users size={26} color="#22C55E" />, title: "Garçons", subtitle: "Gerenciar garçons", route: "/(tabs)/(gestao)/garcons", color: "#22C55E" },
+    { icon: <Store size={26} color="#F59E0B" />, title: "Restaurante", subtitle: "Dados do estabelecimento", route: "/(tabs)/(gestao)/restaurante", color: "#F59E0B" },
   ];
 
   if (!canAccess) {
