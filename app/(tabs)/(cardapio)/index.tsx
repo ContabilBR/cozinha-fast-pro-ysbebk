@@ -356,6 +356,15 @@ export default function CardapioScreen() {
     return result;
   }, [pratos, categorias, selectedCategoryId]);
 
+  const categoriasComPratos = React.useMemo(() => {
+    const idsComPratos = new Set(
+      pratos
+        .map(p => p.categoria_id || p.categoria?.id)
+        .filter(Boolean)
+    );
+    return categorias.filter(c => idsComPratos.has(c.id));
+  }, [pratos, categorias]);
+
   // Search filter — applies on top of category filter
   const searchLower = searchQuery.toLowerCase().trim();
   const isSearching = searchLower.length > 0;
@@ -447,7 +456,7 @@ export default function CardapioScreen() {
           </Pressable>
 
           {/* One chip per category */}
-          {categorias.map((cat) => {
+          {categoriasComPratos.map((cat) => {
             const isSelected = selectedCategoryId === cat.id;
             const icon = getCategoryIcon(cat.nome);
             return (
