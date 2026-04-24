@@ -32,13 +32,20 @@ function normalizeDecimal(value: any): number {
 }
 
 export function registerDishRoutes(app: App) {
-  // GET /api/pratos - List all available pratos with categoria
-  app.fastify.get(
+  // GET /api/pratos - List pratos with optional filtering
+  app.fastify.get<{ Querystring: { categoria_id?: string; disponivel?: string } }>(
     "/api/pratos",
     {
       schema: {
-        description: "List all available pratos (disponivel = true) with categoria",
+        description: "List pratos with optional filtering by categoria_id and disponivel",
         tags: ["pratos"],
+        querystring: {
+          type: "object",
+          properties: {
+            categoria_id: { type: "string", format: "uuid", description: "Filter by category ID" },
+            disponivel: { type: "string", enum: ["true", "false"], description: "Filter by availability" },
+          },
+        },
         response: {
           200: {
             type: "object",
@@ -51,16 +58,18 @@ export function registerDishRoutes(app: App) {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
                     descricao: { type: ["string", "null"] },
-                    preco: { type: "string" },
+                    preco: { type: "number" },
                     imagem_url: { type: ["string", "null"] },
                     disponivel: { type: "boolean" },
-                    categoria_id: { type: ["string", "null"] },
+                    categoria_id: { type: ["string", "null"], format: "uuid" },
                     categoria: {
                       type: ["object", "null"],
                       properties: {
+                        id: { type: "string", format: "uuid" },
                         nome: { type: "string" },
                       },
                     },
+                    created_at: { type: "string", format: "date-time" },
                   },
                 },
               },
@@ -69,43 +78,63 @@ export function registerDishRoutes(app: App) {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Querystring: { categoria_id?: string; disponivel?: string } }>, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Listing available pratos");
+        const { categoria_id, disponivel } = request.query;
+        app.logger.info({ categoria_id, disponivel }, "Listing pratos");
 
-        // Query available pratos with categoria
-        const pratos = await app.db
+        let query = app.db
           .select({
             id: schema.pratos.id,
             nome: schema.pratos.nome,
             descricao: schema.pratos.descricao,
             preco: schema.pratos.preco,
             categoriaId: schema.pratos.categoriaId,
+            categoriaIdFk: schema.categorias.id,
+            categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
-            categoriaNome: schema.categorias.nome,
+            createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
           .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id))
-          .where(eq(schema.pratos.disponivel, true))
           .orderBy(schema.pratos.nome);
 
-        app.logger.info({ count: pratos.length }, "Listed available pratos");
+        // Apply filters
+        const filters: any[] = [];
+
+        if (categoria_id) {
+          filters.push(eq(schema.pratos.categoriaId, categoria_id));
+        }
+
+        if (disponivel !== undefined) {
+          const disponibleBoolean = disponivel === "true";
+          filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
+        }
+
+        if (filters.length > 0) {
+          query = query.where(and(...filters));
+        }
+
+        const pratos = await query;
+
+        app.logger.info({ count: pratos.length }, "Listed pratos");
 
         return reply.code(200).send({
           pratos: pratos.map((p) => ({
             id: p.id,
             nome: p.nome,
             descricao: p.descricao,
-            preco: p.preco,
+            preco: parseFloat(p.preco || "0"),
             imagem_url: p.imagemUrl,
             disponivel: p.disponivel,
             categoria_id: p.categoriaId,
-            categoria: p.categoriaNome ? { nome: p.categoriaNome } : null,
+            categoria: p.categoriaIdFk && p.categoriaNome ? { id: p.categoriaIdFk, nome: p.categoriaNome } : null,
+            created_at: p.createdAt.toISOString(),
           })),
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to list available pratos");
+        app.logger.error({ err: error }, "Failed to list pratos");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

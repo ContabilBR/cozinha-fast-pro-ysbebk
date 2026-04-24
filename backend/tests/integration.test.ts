@@ -140,6 +140,35 @@ describe("API Integration Tests", () => {
     await expectStatus(signInRes, 401);
   });
 
+  test("Sign up with duplicate email returns 409", async () => {
+    const dupEmail = `dup-signup-${Date.now()}@example.com`;
+    const testPassword = "testPassword123456";
+
+    // First sign up
+    const firstRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: dupEmail,
+        password: testPassword,
+        name: "First Test User",
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    // Try to sign up with same email
+    const dupRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: dupEmail,
+        password: "differentPassword",
+        name: "Second Test User",
+      }),
+    });
+    await expectStatus(dupRes, 409);
+  });
+
   test("Login with valid credentials via /api/login", async () => {
     // Use a seeded user from the database (custom /api/login works with usuarios table)
     const testEmail = "garcom@cozinhafast.com";
