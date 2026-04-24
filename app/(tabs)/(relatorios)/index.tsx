@@ -4,8 +4,11 @@ import {
   Text,
   ScrollView,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
@@ -23,7 +26,7 @@ interface ReportSummary {
 
 export default function RelatoriosScreen() {
   const COLORS = useColors();
-  const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [summary, setSummary] = useState<ReportSummary>({});
   const [loading, setLoading] = useState(true);
@@ -65,23 +68,35 @@ export default function RelatoriosScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View
-        style={{
-          paddingTop: insets.top + 12,
-          paddingHorizontal: 20,
-          paddingBottom: 16,
-          backgroundColor: COLORS.surface,
+      <SafeAreaView edges={['top', 'left', 'right']} style={{ backgroundColor: COLORS.surface }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          height: 56,
+          paddingHorizontal: 16,
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
-        }}
-      >
-        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 26, color: COLORS.text, letterSpacing: -0.3 }}>
-          Relatórios
-        </Text>
-        <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-          Resumo geral do restaurante
-        </Text>
-      </View>
+          backgroundColor: COLORS.surface,
+        }}>
+          <View style={{ width: 80 }}>
+            <TouchableOpacity
+              onPress={() => {
+                console.log("[Relatorios] Voltar pressed");
+                router.replace('/(tabs)/(home)' as any);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={22} color="#007AFF" />
+              <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '500' }}>Voltar</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 17, color: COLORS.text }}>Relatórios</Text>
+          </View>
+          <View style={{ width: 80 }} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 20 }}
