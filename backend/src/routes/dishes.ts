@@ -195,7 +195,7 @@ export function registerDishRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["admin", "administrador", "gerente"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.preco) {
@@ -390,7 +390,7 @@ export function registerDishRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["admin", "administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Updating prato");
@@ -465,7 +465,7 @@ export function registerDishRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["admin", "administrador", "gerente"], reply)) return;
 
       try {
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");

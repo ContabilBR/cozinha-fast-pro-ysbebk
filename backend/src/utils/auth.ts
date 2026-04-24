@@ -77,12 +77,25 @@ export async function requireAuth(
 
       if (userResults && userResults.length > 0) {
         const user = userResults[0];
-        app.logger.info({ userId: user.id }, "Usuarios session validation successful (Better Auth user)");
+        let userRole = user.role ?? "garcom";
+
+        // Check profiles table for role override
+        const profileResults = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(eq(schema.profiles.userId, user.id))
+          .limit(1);
+
+        if (profileResults && profileResults.length > 0) {
+          userRole = profileResults[0].role;
+        }
+
+        app.logger.info({ userId: user.id, role: userRole }, "Usuarios session validation successful (Better Auth user)");
 
         return {
           id: user.id,
           email: user.email,
-          role: user.role ?? "garcom",
+          role: userRole,
           name: user.name || "",
         };
       }
@@ -127,12 +140,25 @@ export async function requireAuth(
 
     if (users && users.length > 0) {
       const user = users[0];
-      app.logger.info({ userId: user.id, email: user.email }, "Better Auth session validation successful");
+      let userRole = user.role ?? "garcom";
+
+      // Check profiles table for role override
+      const profiles = await app.db
+        .select()
+        .from(schema.profiles)
+        .where(eq(schema.profiles.userId, user.id))
+        .limit(1);
+
+      if (profiles && profiles.length > 0) {
+        userRole = profiles[0].role;
+      }
+
+      app.logger.info({ userId: user.id, email: user.email, role: userRole }, "Better Auth session validation successful");
 
       return {
         id: user.id,
         email: user.email,
-        role: user.role ?? "garcom",
+        role: userRole,
         name: user.name || "",
       };
     }
@@ -181,7 +207,10 @@ export function requireRole(
     userRole = authUserOrUser.role;
     actualReply = allowedRolesOrReply as FastifyReply;
     const allowedRoles = allowedRolesOrProfile as string[];
-    if (!allowedRoles.includes(userRole)) {
+    // Case-insensitive role check
+    const normalizedUserRole = userRole?.toLowerCase() ?? "";
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
       actualReply.status(403).send({ error: "Forbidden" });
       return false;
     }
@@ -190,7 +219,10 @@ export function requireRole(
     userRole = allowedRolesOrProfile?.role || authUserOrUser?.role;
     actualReply = reply!;
     const allowedRoles = allowedRolesOrReply as string[];
-    if (!allowedRoles.includes(userRole)) {
+    // Case-insensitive role check
+    const normalizedUserRole = userRole?.toLowerCase() ?? "";
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
+    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
       actualReply.status(403).send({ error: "Forbidden" });
       return false;
     }
