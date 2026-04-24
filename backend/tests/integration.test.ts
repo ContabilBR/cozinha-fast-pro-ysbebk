@@ -2411,6 +2411,30 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Delete restaurante successfully", async () => {
+    const res = await authenticatedApi("/api/restaurante", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Delete restaurante without authentication returns 401", async () => {
+    const res = await api("/api/restaurante", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Delete restaurante when not found returns 404", async () => {
+    // Try to delete when none exists (after previous delete)
+    const res = await authenticatedApi("/api/restaurante", adminToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 404);
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing

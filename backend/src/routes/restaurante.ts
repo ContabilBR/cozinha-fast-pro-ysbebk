@@ -180,4 +180,60 @@ export function registerRestauranteRoutes(app: App) {
       }
     }
   );
+
+  // DELETE /api/restaurante - Delete restaurante
+  app.fastify.delete(
+    "/api/restaurante",
+    {
+      schema: {
+        description: "Delete restaurant information (requires authentication)",
+        tags: ["restaurante"],
+        response: {
+          200: {
+            description: "Restaurant deleted successfully",
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
+      try {
+        app.logger.info({}, "Deleting restaurante");
+
+        // Fetch the first record
+        const result = await app.db
+          .select()
+          .from(schema.restaurante)
+          .orderBy(schema.restaurante.createdAt)
+          .limit(1);
+
+        if (result.length === 0) {
+          app.logger.warn({}, "No restaurante record found for deletion");
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
+
+        const restaurante = result[0];
+
+        // Delete the record
+        await app.db
+          .delete(schema.restaurante)
+          .where(eq(schema.restaurante.id, restaurante.id));
+
+        app.logger.info({ restauranteId: restaurante.id }, "Restaurante deleted successfully");
+
+        return reply.code(200).send({ success: true });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to delete restaurante");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }
