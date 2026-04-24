@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql, like } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
@@ -83,7 +83,29 @@ export function registerDishRoutes(app: App) {
         const { categoria_id, disponivel } = request.query;
         app.logger.info({ categoria_id, disponivel }, "Listing pratos");
 
-        let query = app.db
+        // Cleanup: Remove corrupted base64 values from imagem_url
+        try {
+          await app.db.update(schema.pratos).set({ imagemUrl: null }).where(
+            like(schema.pratos.imagemUrl, "data:%")
+          );
+        } catch (cleanupError) {
+          app.logger.debug({ err: cleanupError }, "Cleanup of corrupted imagem_url values skipped");
+        }
+
+        // Build filters first
+        const filters: any[] = [];
+
+        if (categoria_id) {
+          filters.push(eq(schema.pratos.categoriaId, categoria_id));
+        }
+
+        if (disponivel !== undefined) {
+          const disponibleBoolean = disponivel === "true";
+          filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
+        }
+
+        // Build query with filters applied
+        const baseQuery = app.db
           .select({
             id: schema.pratos.id,
             nome: schema.pratos.nome,
@@ -97,26 +119,12 @@ export function registerDishRoutes(app: App) {
             createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
-          .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id))
-          .orderBy(schema.pratos.nome);
+          .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
 
-        // Apply filters
-        const filters: any[] = [];
-
-        if (categoria_id) {
-          filters.push(eq(schema.pratos.categoriaId, categoria_id));
-        }
-
-        if (disponivel !== undefined) {
-          const disponibleBoolean = disponivel === "true";
-          filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
-        }
-
-        if (filters.length > 0) {
-          query = query.where(and(...filters));
-        }
-
-        const pratos = await query;
+        // Apply filters if any exist
+        const pratos = await (filters.length > 0
+          ? baseQuery.where(and(...filters)).orderBy(schema.pratos.nome)
+          : baseQuery.orderBy(schema.pratos.nome));
 
         app.logger.info({ count: pratos.length }, "Listed pratos");
 
@@ -483,12 +491,12 @@ export function registerDishRoutes(app: App) {
     }
   );
 
-  // POST /api/pratos/:id/foto - Upload photo for a prato
+  // POST /api/pratos/:id/foto - Upload photo for a prato (supports multipart form-data or JSON base64)
   app.fastify.post<{ Params: { id: string } }>(
     "/api/pratos/:id/foto",
     {
       schema: {
-        description: "Upload a photo for a prato (requires authentication and admin/gerente/cozinheiro role)",
+        description: "Upload a photo for a prato via multipart/form-data (file) or application/json (imagem_base64). Requires authentication and admin/gerente/cozinheiro role.",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -500,7 +508,8 @@ export function registerDishRoutes(app: App) {
             type: "object",
             properties: {
               id: { type: "string", format: "uuid" },
-              imagem_url: { type: ["string", "null"] },
+              url: { type: "string" },
+              imagem_url: { type: "string" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
@@ -508,6 +517,7 @@ export function registerDishRoutes(app: App) {
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
           413: { type: "object", properties: { error: { type: "string" } } },
+          500: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -520,44 +530,92 @@ export function registerDishRoutes(app: App) {
       try {
         app.logger.info({ pratoId: request.params.id }, "Uploading prato photo");
 
-        // Get the file from multipart form data
-        const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
-
-        if (!data) {
-          app.logger.warn({ pratoId: request.params.id }, "No file provided in upload request");
-          return reply.code(400).send({ error: "No file provided" });
-        }
-
-        // Check if prato exists
+        // Check if prato exists first
         const existing = await app.db
           .select()
           .from(schema.pratos)
           .where(eq(schema.pratos.id, request.params.id));
 
         if (!existing.length) {
-          return reply.code(404).send({ error: "Prato not found" });
+          app.logger.warn({ pratoId: request.params.id }, "Prato not found");
+          return reply.code(404).send({ error: "Prato não encontrado" });
         }
 
         let buffer: Buffer;
-        try {
-          buffer = await data.toBuffer();
-        } catch (error) {
-          app.logger.warn({ err: error }, "File too large");
-          return reply.code(413).send({ error: "File too large" });
+        let mimeType: string;
+
+        // Detect format by Content-Type header
+        const contentType = request.headers["content-type"] || "";
+
+        if (contentType.includes("multipart/form-data")) {
+          // Format 1: Multipart file upload
+          app.logger.debug({ pratoId: request.params.id }, "Processing multipart file upload");
+
+          const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
+
+          if (!data) {
+            app.logger.warn({ pratoId: request.params.id }, "No file provided in multipart upload");
+            return reply.code(400).send({ error: "Nenhuma imagem enviada" });
+          }
+
+          try {
+            buffer = await data.toBuffer();
+          } catch (error) {
+            app.logger.warn({ err: error, pratoId: request.params.id }, "File too large");
+            return reply.code(413).send({ error: "Arquivo muito grande" });
+          }
+
+          mimeType = data.mimetype || "application/octet-stream";
+        } else if (contentType.includes("application/json")) {
+          // Format 2: JSON with base64 data URI
+          app.logger.debug({ pratoId: request.params.id }, "Processing JSON base64 upload");
+
+          const body = request.body as any;
+          const imagemBase64 = body.imagem_base64;
+
+          if (!imagemBase64) {
+            app.logger.warn({ pratoId: request.params.id }, "No imagem_base64 provided in JSON body");
+            return reply.code(400).send({ error: "Nenhuma imagem enviada" });
+          }
+
+          // Extract MIME type from data URI prefix (e.g., "data:image/jpeg;base64,...")
+          const dataUriMatch = imagemBase64.match(/^data:([^;]+);base64,/);
+          mimeType = dataUriMatch ? dataUriMatch[1] : "application/octet-stream";
+
+          // Strip the data URI prefix and decode base64
+          const base64String = imagemBase64.replace(/^data:[^;]+;base64,/, "");
+          try {
+            buffer = Buffer.from(base64String, "base64");
+          } catch (error) {
+            app.logger.warn({ err: error, pratoId: request.params.id }, "Invalid base64 string");
+            return reply.code(400).send({ error: "Formato base64 inválido" });
+          }
+
+          if (buffer.length === 0) {
+            app.logger.warn({ pratoId: request.params.id }, "Decoded base64 is empty");
+            return reply.code(400).send({ error: "Nenhuma imagem enviada" });
+          }
+        } else {
+          app.logger.warn({ pratoId: request.params.id, contentType }, "Unsupported content type");
+          return reply.code(400).send({ error: "Content-Type deve ser multipart/form-data ou application/json" });
         }
 
-        const mimeType = data.mimetype || "application/octet-stream";
-        const ext = mimeType.startsWith("image/") ? mimeType.replace("image/", ".") : ".bin";
+        // Determine file extension from MIME type
+        const ext = mimeType.startsWith("image/")
+          ? mimeType.replace("image/", ".")
+          : mimeType === "application/octet-stream"
+          ? ".bin"
+          : "." + mimeType.split("/")[1];
+
         const filename = `pratos/${request.params.id}-${Date.now()}${ext}`;
-        const key = filename;
 
         // Upload to storage
-        const uploadedKey = await app.storage.upload(key, buffer);
+        const uploadedKey = await app.storage.upload(filename, buffer);
 
         // Get signed URL for client access
         const { url } = await app.storage.getSignedUrl(uploadedKey);
 
-        // Update prato with image URL
+        // Update prato with image URL (never store base64 or data URIs)
         const [updated] = await app.db
           .update(schema.pratos)
           .set({ imagemUrl: url })
@@ -568,11 +626,12 @@ export function registerDishRoutes(app: App) {
 
         return reply.code(200).send({
           id: updated.id,
+          url,
           imagem_url: updated.imagemUrl,
         });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to upload prato photo");
-        return reply.code(500).send({ error: "Internal server error" });
+        app.logger.error({ err: error, pratoId: request.params.id }, "Failed to upload prato photo");
+        return reply.code(500).send({ error: "Erro ao salvar imagem" });
       }
     }
   );
