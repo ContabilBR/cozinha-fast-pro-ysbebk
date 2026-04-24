@@ -140,3 +140,14 @@ export const pedidosHistorico = pgTable("pedidos_historico", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Restaurante (Restaurant information)
+export const restaurante = pgTable("restaurante", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  filial: text("filial"),
+  endereco: text("endereco"),
+  cnpj: text("cnpj"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

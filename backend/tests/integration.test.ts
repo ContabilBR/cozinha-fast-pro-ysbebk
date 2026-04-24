@@ -2341,6 +2341,76 @@ describe("API Integration Tests", () => {
     }
   });
 
+  // ==================== Restaurante ====================
+  test("Get restaurante without authentication returns 401", async () => {
+    const res = await api("/api/restaurante");
+    await expectStatus(res, 401);
+  });
+
+  test("Get restaurante with authentication", async () => {
+    // First, ensure a restaurante record exists by creating one
+    const createRes = await authenticatedApi("/api/restaurante", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Restaurant",
+        filial: "Test Branch",
+        endereco: "123 Test St",
+        cnpj: "12345678000190",
+      }),
+    });
+    await expectStatus(createRes, 200);
+
+    // Now get the restaurante
+    const res = await authenticatedApi("/api/restaurante", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.nome).toBeDefined();
+    expect(data.created_at).toBeDefined();
+    expect(data.updated_at).toBeDefined();
+  });
+
+  test("Update restaurante", async () => {
+    const res = await authenticatedApi("/api/restaurante", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Updated Restaurant Name",
+        filial: "Branch 1",
+        endereco: "123 Main St",
+        cnpj: "12345678000190",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.nome).toBe("Updated Restaurant Name");
+  });
+
+  test("Update restaurante without authentication returns 401", async () => {
+    const res = await api("/api/restaurante", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Restaurant",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Update restaurante missing required field returns 400", async () => {
+    const res = await authenticatedApi("/api/restaurante", adminToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filial: "Branch 2",
+        // missing required nome
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing
