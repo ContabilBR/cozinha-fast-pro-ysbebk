@@ -22,7 +22,6 @@ import { Categoria } from "@/types";
 import { apiGet, apiPost, BACKEND_URL, getBearerToken } from "@/utils/api";
 import { ChevronDown, Camera, Image as ImageIcon, UtensilsCrossed } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
 import type { ImageSourcePropType } from "react-native";
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -102,31 +101,28 @@ export default function NovoPratoScreen() {
 
   const uploadFoto = async (pratoId: string): Promise<void> => {
     if (!localImageUri) return;
-    console.log("[NovoPrato] POST /api/pratos/" + pratoId + "/foto (base64)");
+    console.log("[NovoPrato] POST /api/pratos/" + pratoId + "/foto (FormData)");
     setUploading(true);
     try {
       const token = await getBearerToken();
       const ext = localImageUri.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-      const base64 = await FileSystem.readAsStringAsync(localImageUri, { encoding: "base64" as any });
-      const imagem_base64 = `data:${mimeType};base64,${base64}`;
+      const formData = new FormData();
+      formData.append("file", { uri: localImageUri, name: `foto.${ext}`, type: mimeType } as any);
       const res = await fetch(`${BACKEND_URL}/api/pratos/${pratoId}/foto`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ imagem_base64 }),
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        console.log("[NovoPrato] Upload de foto concluído para prato:", pratoId, "url:", data?.url);
+        console.log("[NovoPrato] Upload concluído, url:", data?.url);
       } else {
         const text = await res.text().catch(() => "");
-        console.warn("[NovoPrato] Upload de foto falhou:", res.status, text.slice(0, 100));
+        console.warn("[NovoPrato] Upload falhou:", res.status, text.slice(0, 100));
       }
     } catch (e) {
-      console.error("[NovoPrato] Erro no upload de foto:", e);
+      console.error("[NovoPrato] Erro no upload:", e);
     } finally {
       setUploading(false);
     }
