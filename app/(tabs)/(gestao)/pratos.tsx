@@ -84,6 +84,13 @@ export default function GestaoPratos() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
+  const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);
+
+  const showDeleteFeedback = () => {
+    setShowDeleteSuccess(true);
+    setTimeout(() => setShowDeleteSuccess(false), 1500);
+  };
+
   const [confirmDialog, setConfirmDialog] = useState<{
     visible: boolean;
     title: string;
@@ -267,6 +274,7 @@ export default function GestaoPratos() {
           await apiDelete(`/api/pratos/${id}`);
           console.log("[GestaoPratos] Prato excluído:", id);
           setPratos((prev) => prev.filter((p) => p.id !== id));
+          showDeleteFeedback();
         } catch (e: unknown) {
           console.error("[GestaoPratos] Erro ao excluir:", e);
         }
@@ -310,6 +318,7 @@ export default function GestaoPratos() {
     setSelectMode(false);
     setDeleting(false);
     await fetchData();
+    showDeleteFeedback();
   };
 
   const confirmBulkDelete = () => {
@@ -1085,6 +1094,39 @@ export default function GestaoPratos() {
         onConfirm={confirmDialog.onConfirm}
         onCancel={closeConfirm}
       />
+
+      <Modal transparent visible={showDeleteSuccess} animationType="fade">
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <View style={{
+            backgroundColor: COLORS.surface,
+            borderRadius: 20,
+            padding: 32,
+            alignItems: 'center',
+            gap: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.15,
+            shadowRadius: 24,
+            elevation: 10,
+            minWidth: 240,
+          }}>
+            <Text style={{ fontSize: 48 }}>✅</Text>
+            <Text style={{
+              fontFamily: 'Outfit_700Bold',
+              fontSize: 17,
+              color: COLORS.text,
+              textAlign: 'center',
+            }}>
+              {'Prato(s) excluído(s)\ncom sucesso!'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
