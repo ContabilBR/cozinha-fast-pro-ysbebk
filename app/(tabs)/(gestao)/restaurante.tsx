@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, CheckCircle, Pencil, Trash2 } from 'lucide-react-native';
+import { CheckCircle, Pencil, Trash2 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { apiGet, apiPut, apiDelete } from '@/utils/api';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -180,29 +181,29 @@ export default function RestauranteScreen() {
     navBar: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
+      height: 56,
       paddingHorizontal: 16,
-      paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: COLORS.border,
       backgroundColor: COLORS.surface,
     },
-    navLeft: { width: 80, alignItems: 'flex-start' as const },
+    navLeft: { width: 80 },
     navCenter: { flex: 1, alignItems: 'center' as const },
-    navRight: { width: 80, alignItems: 'flex-end' as const },
+    navRight: { width: 80 },
     navTitle: {
-      fontFamily: 'Outfit_700Bold',
       fontSize: 17,
+      fontWeight: '700' as const,
       color: COLORS.text,
     },
     backBtn: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
-      gap: 2,
+      gap: 4,
     },
     backLabel: {
-      fontFamily: 'Outfit_500Medium',
-      fontSize: 15,
-      color: COLORS.primary,
+      fontSize: 16,
+      color: '#007AFF',
+      fontWeight: '500' as const,
     },
     scroll: { flex: 1 },
     scrollContent: { padding: 20, gap: 16 },
@@ -315,8 +316,8 @@ export default function RestauranteScreen() {
       <SafeAreaView edges={['top', 'left', 'right']} style={s.container}>
         <View style={[s.navBar]}>
           <View style={s.navLeft}>
-            <TouchableOpacity style={s.backBtn} onPress={handleBack}>
-              <ChevronLeft size={20} color={COLORS.primary} />
+            <TouchableOpacity style={s.backBtn} onPress={handleBack} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={22} color="#007AFF" />
               <Text style={s.backLabel}>Voltar</Text>
             </TouchableOpacity>
           </View>
@@ -337,8 +338,8 @@ export default function RestauranteScreen() {
       {/* Nav Bar */}
       <View style={s.navBar}>
         <View style={s.navLeft}>
-          <TouchableOpacity style={s.backBtn} onPress={handleBack}>
-            <ChevronLeft size={20} color={COLORS.primary} />
+          <TouchableOpacity style={s.backBtn} onPress={handleBack} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={22} color="#007AFF" />
             <Text style={s.backLabel}>Voltar</Text>
           </TouchableOpacity>
         </View>
