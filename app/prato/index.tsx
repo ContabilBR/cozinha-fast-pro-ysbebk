@@ -42,6 +42,7 @@ export default function PratosScreen() {
   const [modalDisponivel, setModalDisponivel] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   const fetchData = useCallback(async () => {
     console.log('[Pratos] Buscando pratos e categorias...');
@@ -121,6 +122,8 @@ export default function PratosScreen() {
       }
       setShowModal(false);
       fetchData();
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
     } catch (e: any) {
       console.error('[Pratos] Erro ao salvar:', e);
       Alert.alert('Erro', e?.message ?? 'Não foi possível salvar o prato.');
@@ -388,16 +391,25 @@ export default function PratosScreen() {
               <View style={{
                 backgroundColor: COLORS.surface,
                 borderTopLeftRadius: 20, borderTopRightRadius: 20,
-                paddingBottom: 40, maxHeight: '90%',
+                maxHeight: '90%', flex: 1,
               }}>
-                <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+                {/* Drag handle + title */}
+                <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 }}>
                   <View style={{ alignItems: 'center', marginBottom: 16 }}>
                     <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border }} />
                   </View>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 20 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 4 }}>
                     {editingId ? 'Editar Prato' : 'Novo Prato'}
                   </Text>
+                </View>
 
+                {/* Scrollable form fields */}
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ padding: 24, paddingTop: 12, paddingBottom: 8 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
                   <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Nome *</Text>
                   <TextInput
                     value={modalNome} onChangeText={setModalNome}
@@ -465,7 +477,7 @@ export default function PratosScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 10,
                       backgroundColor: COLORS.surfaceSecondary, borderRadius: 10,
-                      padding: 14, marginBottom: 20, borderWidth: 1, borderColor: COLORS.border,
+                      padding: 14, borderWidth: 1, borderColor: COLORS.border,
                     }}
                   >
                     <View style={{
@@ -478,7 +490,14 @@ export default function PratosScreen() {
                     </View>
                     <Text style={{ fontSize: 15, color: COLORS.text, fontWeight: '500' }}>Disponível</Text>
                   </TouchableOpacity>
+                </ScrollView>
 
+                {/* Fixed Save/Cancel buttons outside ScrollView */}
+                <View style={{
+                  paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24,
+                  borderTopWidth: 1, borderTopColor: COLORS.border,
+                  backgroundColor: COLORS.surface,
+                }}>
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <TouchableOpacity
                       onPress={() => { console.log('[Pratos] Modal Cancelar pressionado'); setShowModal(false); }}
@@ -494,11 +513,29 @@ export default function PratosScreen() {
                       {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
                     </TouchableOpacity>
                   </View>
-                </ScrollView>
+                </View>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Success Toast Modal */}
+      <Modal visible={showSaveSuccess} transparent animationType="fade">
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' }}>
+          <View style={{
+            backgroundColor: COLORS.surface, borderRadius: 20,
+            paddingVertical: 32, paddingHorizontal: 40,
+            alignItems: 'center', gap: 8,
+            shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, elevation: 10,
+          }}>
+            <Text style={{ fontSize: 48 }}>✅</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginTop: 4 }}>Prato salvo!</Text>
+            <Text style={{ fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' }}>
+              O prato foi cadastrado com sucesso.
+            </Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
