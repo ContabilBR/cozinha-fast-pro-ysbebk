@@ -85,6 +85,7 @@ export default function GestaoPratos() {
   const [deleting, setDeleting] = useState(false);
 
   const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   const showDeleteFeedback = () => {
     setShowDeleteSuccess(true);
@@ -251,6 +252,8 @@ export default function GestaoPratos() {
         if (pratoId && localImageUri) await uploadFoto(pratoId);
       }
       setShowModal(false);
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2000);
       await fetchData();
     } catch (e: unknown) {
       console.error("[GestaoPratos] Erro ao salvar:", e);
@@ -680,8 +683,10 @@ export default function GestaoPratos() {
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               maxHeight: "92%",
+              flex: 1,
             }}
           >
+            {/* Header */}
             <View
               style={{
                 flexDirection: "row",
@@ -713,10 +718,13 @@ export default function GestaoPratos() {
               </TouchableOpacity>
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            {/* Scrollable form */}
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
               <ScrollView
+                style={{ flex: 1 }}
                 contentContainerStyle={{ padding: 20, gap: 16 }}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
               >
                 {/* URL da imagem */}
                 <View style={{ gap: 6 }}>
@@ -1054,33 +1062,44 @@ export default function GestaoPratos() {
                     {modalError}
                   </Text>
                 ) : null}
-
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log("[GestaoPratos] Salvar prato pressionado");
-                    handleSave();
-                  }}
-                  disabled={saving || uploading}
-                  style={{
-                    backgroundColor: COLORS.primary,
-                    borderRadius: 14,
-                    height: 52,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: saving || uploading ? 0.7 : 1,
-                    marginBottom: 20,
-                  }}
-                >
-                  {saving || uploading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
-                      {editingPrato ? "Salvar alterações" : "Adicionar prato"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
               </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Fixed Save button — always visible */}
+            <View
+              style={{
+                paddingHorizontal: 20,
+                paddingTop: 12,
+                paddingBottom: 32,
+                borderTopWidth: 1,
+                borderTopColor: COLORS.border,
+                backgroundColor: COLORS.surface,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => {
+                  console.log("[GestaoPratos] Salvar prato pressionado");
+                  handleSave();
+                }}
+                disabled={saving || uploading}
+                style={{
+                  backgroundColor: COLORS.primary,
+                  borderRadius: 14,
+                  height: 52,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: saving || uploading ? 0.7 : 1,
+                }}
+              >
+                {saving || uploading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
+                    {editingPrato ? "Salvar alterações" : "Adicionar prato"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1123,6 +1142,39 @@ export default function GestaoPratos() {
               textAlign: 'center',
             }}>
               {'Prato(s) excluído(s)\ncom sucesso!'}
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent visible={showSaveSuccess} animationType="fade">
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <View style={{
+            backgroundColor: COLORS.surface,
+            borderRadius: 20,
+            padding: 32,
+            alignItems: 'center',
+            gap: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.15,
+            shadowRadius: 24,
+            elevation: 10,
+            minWidth: 240,
+          }}>
+            <Text style={{ fontSize: 48 }}>✅</Text>
+            <Text style={{
+              fontFamily: 'Outfit_700Bold',
+              fontSize: 17,
+              color: COLORS.text,
+              textAlign: 'center',
+            }}>
+              Prato salvo com sucesso!
             </Text>
           </View>
         </View>
