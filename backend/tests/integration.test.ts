@@ -420,8 +420,7 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/categorias", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.categorias).toBeDefined();
-    expect(Array.isArray(data.categorias)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("List categorias without authentication returns 401", async () => {
@@ -569,8 +568,21 @@ describe("API Integration Tests", () => {
     const res = await api("/api/pratos");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.pratos).toBeDefined();
-    expect(Array.isArray(data.pratos)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List pratos filtered by disponivel", async () => {
+    const res = await api("/api/pratos?disponivel=true");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List pratos filtered by categoria_id", async () => {
+    const res = await api(`/api/pratos?categoria_id=${pratoCategoryId}`);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("Create prato", async () => {

@@ -24,19 +24,14 @@ export function registerCategoriasRoutes(app: App) {
         tags: ["categorias"],
         response: {
           200: {
-            type: "object",
-            properties: {
-              categorias: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string", format: "uuid" },
-                    nome: { type: "string" },
-                    descricao: { type: ["string", "null"] },
-                    createdAt: { type: "string", format: "date-time" },
-                  },
-                },
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nome: { type: "string" },
+                descricao: { type: ["string", "null"] },
+                created_at: { type: "string", format: "date-time" },
               },
             },
           },
@@ -56,14 +51,14 @@ export function registerCategoriasRoutes(app: App) {
           .from(schema.categorias)
           .orderBy(schema.categorias.nome);
 
-        return reply.code(200).send({
-          categorias: result.map((c) => ({
+        return reply.code(200).send(
+          result.map((c) => ({
             id: c.id,
             nome: c.nome,
             descricao: c.descricao,
-            createdAt: c.createdAt.toISOString(),
-          })),
-        });
+            created_at: c.createdAt.toISOString(),
+          }))
+        );
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list categorias");
         return reply.code(500).send({ error: "Internal server error" });

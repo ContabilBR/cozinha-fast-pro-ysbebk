@@ -48,30 +48,25 @@ export function registerDishRoutes(app: App) {
         },
         response: {
           200: {
-            type: "object",
-            properties: {
-              pratos: {
-                type: "array",
-                items: {
-                  type: "object",
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nome: { type: "string" },
+                descricao: { type: ["string", "null"] },
+                preco: { type: "number" },
+                imagem_url: { type: ["string", "null"] },
+                disponivel: { type: "boolean" },
+                categoria_id: { type: ["string", "null"], format: "uuid" },
+                categoria: {
+                  type: ["object", "null"],
                   properties: {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
-                    descricao: { type: ["string", "null"] },
-                    preco: { type: "number" },
-                    imagem_url: { type: ["string", "null"] },
-                    disponivel: { type: "boolean" },
-                    categoria_id: { type: ["string", "null"], format: "uuid" },
-                    categoria: {
-                      type: ["object", "null"],
-                      properties: {
-                        id: { type: "string", format: "uuid" },
-                        nome: { type: "string" },
-                      },
-                    },
-                    created_at: { type: "string", format: "date-time" },
                   },
                 },
+                created_at: { type: "string", format: "date-time" },
               },
             },
           },
@@ -128,8 +123,8 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ count: pratos.length }, "Listed pratos");
 
-        return reply.code(200).send({
-          pratos: pratos.map((p) => ({
+        return reply.code(200).send(
+          pratos.map((p) => ({
             id: p.id,
             nome: p.nome,
             descricao: p.descricao,
@@ -139,8 +134,8 @@ export function registerDishRoutes(app: App) {
             categoria_id: p.categoriaId,
             categoria: p.categoriaIdFk && p.categoriaNome ? { id: p.categoriaIdFk, nome: p.categoriaNome } : null,
             created_at: p.createdAt.toISOString(),
-          })),
-        });
+          }))
+        );
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list pratos");
         return reply.code(500).send({ error: "Internal server error" });

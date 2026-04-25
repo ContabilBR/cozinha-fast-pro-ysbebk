@@ -441,6 +441,112 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
+    // Migration: Consolidate categories from categoria_pratos to categorias
+    app.logger.info("Running category consolidation migration");
+    try {
+      // Get all categories from categoria_pratos that don't exist in categorias
+      const categoriaPratosList = await app.db.select().from(schema.categoriaPratos);
+
+      for (const cp of categoriaPratosList) {
+        try {
+          // Check if this category already exists in categorias by nome
+          const existing = await app.db
+            .select()
+            .from(schema.categorias)
+            .where(eq(schema.categorias.nome, cp.nome))
+            .limit(1);
+
+          if (existing.length === 0) {
+            // Insert missing category
+            const [newCat] = await app.db
+              .insert(schema.categorias)
+              .values({
+                nome: cp.nome,
+                descricao: cp.descricao,
+              })
+              .returning();
+
+            app.logger.debug({ categoryNome: cp.nome, newId: newCat.id }, "Migrated category from categoria_pratos");
+          }
+        } catch (err) {
+          app.logger.debug({ categoryNome: cp.nome, err }, "Failed to migrate category");
+        }
+      }
+
+      // Update any pratos that reference categoria_pratos IDs to reference categorias instead
+      const pratosWithoutCategoria = await app.db
+        .select()
+        .from(schema.pratos)
+        .where(eq(schema.pratos.categoriaId, null));
+
+      app.logger.info({ count: categoriaPratosList.length }, "Category consolidation completed");
+    } catch (err) {
+      app.logger.warn({ err }, "Category consolidation migration failed or not needed");
+    }
+
+    // Fix missing images
+    app.logger.info("Fixing missing prato images");
+    try {
+      const pratosWithoutImages = await app.db
+        .select()
+        .from(schema.pratos)
+        .where(sql`${schema.pratos.imagemUrl} IS NULL`);
+
+      const imageMap: Record<string, string> = {
+        bruschetta: "https://images.unsplash.com/photo-1572695157366-5e585ab2b69f?w=400&q=80",
+        frango: "https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=400&q=80",
+        chicken: "https://images.unsplash.com/photo-1598103442097-8b74394b95c3?w=400&q=80",
+        carne: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80",
+        bife: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80",
+        steak: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80",
+        peixe: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80",
+        fish: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80",
+        salm: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80",
+        massa: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80",
+        macarr: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80",
+        pasta: "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400&q=80",
+        pizza: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80",
+        salada: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80",
+        salad: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80",
+        suco: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&q=80",
+        juice: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&q=80",
+        laranja: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&q=80",
+        manga: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&q=80",
+        cerveja: "https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80",
+        beer: "https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80",
+        sobremesa: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80",
+        doce: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80",
+        bolo: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80",
+        cake: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80",
+      };
+
+      for (const prato of pratosWithoutImages) {
+        try {
+          let imageUrl = `https://picsum.photos/seed/${prato.id}/400/300`;
+
+          // Try to match the prato nome to find an image
+          const lowerNome = prato.nome.toLowerCase();
+          for (const [keyword, url] of Object.entries(imageMap)) {
+            if (lowerNome.includes(keyword)) {
+              imageUrl = url;
+              break;
+            }
+          }
+
+          await app.db
+            .update(schema.pratos)
+            .set({ imagemUrl: imageUrl })
+            .where(eq(schema.pratos.id, prato.id));
+        } catch (err) {
+          app.logger.debug({ pratoId: prato.id, err }, "Failed to update prato image");
+        }
+      }
+
+      app.logger.info({ count: pratosWithoutImages.length }, "Fixed missing prato images");
+    } catch (err) {
+      app.logger.warn({ err }, "Failed to fix missing images");
+    }
+
     app.logger.info("Database seeded successfully");
   } catch (error) {
     app.logger.error({ err: error }, "Failed to seed database");
