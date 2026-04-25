@@ -376,148 +376,142 @@ export default function GerenciarPratosScreen() {
       {/* Create/Edit Modal — bottom sheet */}
       <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          {/* Backdrop — tapping closes modal */}
+          {/* Backdrop */}
           <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
             activeOpacity={1}
             onPress={() => setShowModal(false)}
+          />
+          {/* Sheet — plain View, NOT TouchableOpacity */}
+          <View
+            style={{
+              maxHeight: '90%',
+              backgroundColor: COLORS.surface,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+            }}
           >
-            {/* Sheet container — maxHeight constrains the sheet, width fills screen */}
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={() => {}}
-              style={{ maxHeight: '90%', width: '100%' }}
+            {/* Drag handle + title */}
+            <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border }} />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text }}>
+                {editingId ? 'Editar Prato' : 'Novo Prato'}
+              </Text>
+            </View>
+
+            {/* Scrollable form */}
+            <ScrollView
+              style={{ flexGrow: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 8 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              {/* Inner flex container — fills the TouchableOpacity */}
-              <View style={{
-                flex: 1,
-                backgroundColor: COLORS.surface,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-              }}>
-                {/* Fixed header: drag handle + title */}
-                <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
-                  <View style={{ alignItems: 'center', marginBottom: 12 }}>
-                    <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border }} />
-                  </View>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text }}>
-                    {editingId ? 'Editar Prato' : 'Novo Prato'}
-                  </Text>
-                </View>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Nome *</Text>
+              <TextInput
+                value={modalNome} onChangeText={setModalNome}
+                placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle} autoFocus autoCapitalize="sentences"
+              />
 
-                {/* Scrollable form — flex: 1 fills remaining space between header and buttons */}
-                <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 8 }}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Nome *</Text>
-                  <TextInput
-                    value={modalNome} onChangeText={setModalNome}
-                    placeholder="Nome do prato" placeholderTextColor={COLORS.textTertiary}
-                    style={inputStyle} autoFocus autoCapitalize="sentences"
-                  />
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Descrição</Text>
+              <TextInput
+                value={modalDescricao} onChangeText={setModalDescricao}
+                placeholder="Descrição (opcional)" placeholderTextColor={COLORS.textTertiary}
+                style={[inputStyle, { minHeight: 72, textAlignVertical: 'top' }]}
+                multiline autoCapitalize="sentences"
+              />
 
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Descrição</Text>
-                  <TextInput
-                    value={modalDescricao} onChangeText={setModalDescricao}
-                    placeholder="Descrição (opcional)" placeholderTextColor={COLORS.textTertiary}
-                    style={[inputStyle, { minHeight: 72, textAlignVertical: 'top' }]}
-                    multiline autoCapitalize="sentences"
-                  />
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Preço (R$) *</Text>
+              <TextInput
+                value={modalPreco} onChangeText={setModalPreco}
+                placeholder="0,00" placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle} keyboardType="decimal-pad"
+              />
 
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Preço (R$) *</Text>
-                  <TextInput
-                    value={modalPreco} onChangeText={setModalPreco}
-                    placeholder="0,00" placeholderTextColor={COLORS.textTertiary}
-                    style={inputStyle} keyboardType="decimal-pad"
-                  />
-
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Categoria</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => { console.log('[Pratos] Categoria selecionada: Nenhuma'); setModalCategoriaId(null); }}
-                        style={{
-                          paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                          backgroundColor: modalCategoriaId === null ? COLORS.primary : COLORS.surfaceSecondary,
-                          borderWidth: 1, borderColor: modalCategoriaId === null ? COLORS.primary : COLORS.border,
-                        }}
-                      >
-                        <Text style={{ color: modalCategoriaId === null ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>Nenhuma</Text>
-                      </TouchableOpacity>
-                      {categorias.map(cat => (
-                        <TouchableOpacity
-                          key={cat.id}
-                          onPress={() => { console.log('[Pratos] Categoria selecionada:', cat.nome, 'id:', cat.id); setModalCategoriaId(cat.id); }}
-                          style={{
-                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-                            backgroundColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
-                            borderWidth: 1, borderColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.border,
-                          }}
-                        >
-                          <Text style={{ color: modalCategoriaId === cat.id ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>{cat.nome}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>URL da Imagem</Text>
-                  <TextInput
-                    value={modalImagemUrl} onChangeText={setModalImagemUrl}
-                    placeholder="https://..." placeholderTextColor={COLORS.textTertiary}
-                    style={inputStyle} keyboardType="url" autoCapitalize="none"
-                  />
-
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>Categoria</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    onPress={() => { console.log('[Pratos] Toggle disponível:', !modalDisponivel); setModalDisponivel(v => !v); }}
+                    onPress={() => { console.log('[Pratos] Categoria selecionada: Nenhuma'); setModalCategoriaId(null); }}
                     style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 10,
-                      backgroundColor: COLORS.surfaceSecondary, borderRadius: 10,
-                      padding: 14, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border,
+                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                      backgroundColor: modalCategoriaId === null ? COLORS.primary : COLORS.surfaceSecondary,
+                      borderWidth: 1, borderColor: modalCategoriaId === null ? COLORS.primary : COLORS.border,
                     }}
                   >
-                    <View style={{
-                      width: 22, height: 22, borderRadius: 6, borderWidth: 2,
-                      borderColor: modalDisponivel ? COLORS.primary : COLORS.border,
-                      backgroundColor: modalDisponivel ? COLORS.primary : 'transparent',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {modalDisponivel && <Ionicons name="checkmark" size={13} color="#fff" />}
-                    </View>
-                    <Text style={{ fontSize: 15, color: COLORS.text, fontWeight: '500' }}>Disponível</Text>
+                    <Text style={{ color: modalCategoriaId === null ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>Nenhuma</Text>
                   </TouchableOpacity>
-                </ScrollView>
-
-                {/* Fixed action buttons — always visible at bottom, outside ScrollView */}
-                <View style={{
-                  paddingHorizontal: 24,
-                  paddingTop: 12,
-                  paddingBottom: 24,
-                  borderTopWidth: 1,
-                  borderTopColor: COLORS.border,
-                  backgroundColor: COLORS.surface,
-                }}>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {categorias.map(cat => (
                     <TouchableOpacity
-                      onPress={() => { console.log('[Pratos] Botão Cancelar modal pressionado'); setShowModal(false); }}
-                      style={{ flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}
+                      key={cat.id}
+                      onPress={() => { console.log('[Pratos] Categoria selecionada:', cat.nome, 'id:', cat.id); setModalCategoriaId(cat.id); }}
+                      style={{
+                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                        backgroundColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
+                        borderWidth: 1, borderColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.border,
+                      }}
                     >
-                      <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Cancelar</Text>
+                      <Text style={{ color: modalCategoriaId === cat.id ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>{cat.nome}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleSave}
-                      disabled={saving}
-                      style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.7 : 1 }}
-                    >
-                      {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
-                    </TouchableOpacity>
-                  </View>
+                  ))}
                 </View>
+              </ScrollView>
+
+              <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 6 }}>URL da Imagem</Text>
+              <TextInput
+                value={modalImagemUrl} onChangeText={setModalImagemUrl}
+                placeholder="https://..." placeholderTextColor={COLORS.textTertiary}
+                style={inputStyle} keyboardType="url" autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                onPress={() => { console.log('[Pratos] Toggle disponível:', !modalDisponivel); setModalDisponivel(v => !v); }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  backgroundColor: COLORS.surfaceSecondary, borderRadius: 10,
+                  padding: 14, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border,
+                }}
+              >
+                <View style={{
+                  width: 22, height: 22, borderRadius: 6, borderWidth: 2,
+                  borderColor: modalDisponivel ? COLORS.primary : COLORS.border,
+                  backgroundColor: modalDisponivel ? COLORS.primary : 'transparent',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {modalDisponivel && <Ionicons name="checkmark" size={13} color="#fff" />}
+                </View>
+                <Text style={{ fontSize: 15, color: COLORS.text, fontWeight: '500' }}>Disponível</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Fixed action buttons — always visible, outside ScrollView */}
+            <View style={{
+              paddingHorizontal: 24,
+              paddingTop: 12,
+              paddingBottom: 32,
+              borderTopWidth: 1,
+              borderTopColor: COLORS.border,
+              backgroundColor: COLORS.surface,
+            }}>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => { console.log('[Pratos] Botão Cancelar modal pressionado'); setShowModal(false); }}
+                  style={{ flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={saving}
+                  style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.7 : 1 }}
+                >
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
