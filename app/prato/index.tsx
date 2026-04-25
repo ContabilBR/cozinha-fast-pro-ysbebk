@@ -23,7 +23,7 @@ interface Prato {
   disponivel?: boolean;
 }
 
-export default function PratosScreen() {
+export default function GerenciarPratosScreen() {
   const COLORS = useColors();
   const router = useRouter();
 
@@ -45,7 +45,6 @@ export default function PratosScreen() {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   const fetchData = useCallback(async () => {
-    console.log('[Pratos] Buscando pratos e categorias...');
     setLoading(true);
     try {
       const [pratosRes, categoriasRes] = await Promise.all([
@@ -54,7 +53,6 @@ export default function PratosScreen() {
       ]);
       const pratosList: Prato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes?.pratos ?? []);
       const categoriasList: Categoria[] = Array.isArray(categoriasRes) ? categoriasRes : (categoriasRes?.categorias ?? []);
-      console.log('[Pratos] Pratos carregados:', pratosList.length, '| Categorias:', categoriasList.length);
       setPratos(pratosList);
       setCategorias(categoriasList);
     } catch (e) {
@@ -97,10 +95,10 @@ export default function PratosScreen() {
   };
 
   const handleSave = async () => {
+    console.log('[Pratos] Botão Salvar pressionado, editingId:', editingId);
     if (!modalNome.trim()) { Alert.alert('Atenção', 'Nome é obrigatório.'); return; }
     const preco = parseFloat(modalPreco.replace(',', '.'));
     if (isNaN(preco) || preco < 0) { Alert.alert('Atenção', 'Preço inválido.'); return; }
-    console.log('[Pratos] Salvando prato, editingId:', editingId, 'nome:', modalNome.trim(), 'preco:', preco);
     setSaving(true);
     const body = {
       nome: modalNome.trim(),
@@ -112,13 +110,11 @@ export default function PratosScreen() {
     };
     try {
       if (editingId) {
-        console.log('[Pratos] PUT /api/pratos/' + editingId);
+        console.log('[Pratos] PUT /api/pratos/' + editingId, body);
         await apiPut(`/api/pratos/${editingId}`, body);
-        console.log('[Pratos] Prato atualizado com sucesso');
       } else {
-        console.log('[Pratos] POST /api/pratos');
+        console.log('[Pratos] POST /api/pratos', body);
         await apiPost('/api/pratos', body);
-        console.log('[Pratos] Prato criado com sucesso');
       }
       setShowModal(false);
       fetchData();
@@ -145,8 +141,8 @@ export default function PratosScreen() {
   };
 
   const confirmBulkDelete = () => {
+    console.log('[Pratos] Botão Excluir em lote pressionado, quantidade:', selected.size);
     if (selected.size === 0) return;
-    console.log('[Pratos] Excluir em lote pressionado, quantidade:', selected.size);
     Alert.alert(
       'Excluir pratos',
       `Deseja excluir ${selected.size} prato(s) selecionado(s)?\n\nEsta ação não pode ser desfeita.`,
@@ -158,14 +154,12 @@ export default function PratosScreen() {
   };
 
   const doDelete = async (ids: string[]) => {
-    console.log('[Pratos] Excluindo pratos, ids:', ids);
     setDeleting(true);
     const errors: string[] = [];
     for (const id of ids) {
       try {
         console.log('[Pratos] DELETE /api/pratos/' + id);
         await apiDelete(`/api/pratos/${id}`);
-        console.log('[Pratos] Prato excluído com sucesso, id:', id);
       } catch (e: any) {
         console.error('[Pratos] Erro ao excluir id:', id, e);
         errors.push(e?.message || 'Erro ao excluir.');
@@ -188,13 +182,13 @@ export default function PratosScreen() {
   };
 
   const enterSelectMode = (id: string) => {
-    console.log('[Pratos] Entrando em modo de seleção, id:', id);
+    console.log('[Pratos] Entrar em modo seleção, id:', id);
     setSelectMode(true);
     setSelected(new Set([id]));
   };
 
   const exitSelectMode = () => {
-    console.log('[Pratos] Saindo do modo de seleção');
+    console.log('[Pratos] Sair do modo seleção');
     setSelectMode(false);
     setSelected(new Set());
   };
@@ -379,34 +373,42 @@ export default function PratosScreen() {
         />
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal — bottom sheet */}
       <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          {/* Backdrop — tapping closes modal */}
           <TouchableOpacity
             style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }}
             activeOpacity={1}
             onPress={() => setShowModal(false)}
           >
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            {/* Sheet container — maxHeight constrains the sheet, width fills screen */}
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={{ maxHeight: '90%', width: '100%' }}
+            >
+              {/* Inner flex container — fills the TouchableOpacity */}
               <View style={{
+                flex: 1,
                 backgroundColor: COLORS.surface,
-                borderTopLeftRadius: 20, borderTopRightRadius: 20,
-                maxHeight: '90%', flex: 1,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
               }}>
-                {/* Drag handle + title */}
-                <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 }}>
-                  <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                {/* Fixed header: drag handle + title */}
+                <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+                  <View style={{ alignItems: 'center', marginBottom: 12 }}>
                     <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border }} />
                   </View>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text }}>
                     {editingId ? 'Editar Prato' : 'Novo Prato'}
                   </Text>
                 </View>
 
-                {/* Scrollable form fields */}
+                {/* Scrollable form — flex: 1 fills remaining space between header and buttons */}
                 <ScrollView
                   style={{ flex: 1 }}
-                  contentContainerStyle={{ padding: 24, paddingTop: 12, paddingBottom: 8 }}
+                  contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 8 }}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                 >
@@ -443,23 +445,19 @@ export default function PratosScreen() {
                           borderWidth: 1, borderColor: modalCategoriaId === null ? COLORS.primary : COLORS.border,
                         }}
                       >
-                        <Text style={{ color: modalCategoriaId === null ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>
-                          Nenhuma
-                        </Text>
+                        <Text style={{ color: modalCategoriaId === null ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>Nenhuma</Text>
                       </TouchableOpacity>
                       {categorias.map(cat => (
                         <TouchableOpacity
                           key={cat.id}
-                          onPress={() => { console.log('[Pratos] Categoria selecionada:', cat.nome); setModalCategoriaId(cat.id); }}
+                          onPress={() => { console.log('[Pratos] Categoria selecionada:', cat.nome, 'id:', cat.id); setModalCategoriaId(cat.id); }}
                           style={{
                             paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
                             backgroundColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.surfaceSecondary,
                             borderWidth: 1, borderColor: modalCategoriaId === cat.id ? COLORS.primary : COLORS.border,
                           }}
                         >
-                          <Text style={{ color: modalCategoriaId === cat.id ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>
-                            {cat.nome}
-                          </Text>
+                          <Text style={{ color: modalCategoriaId === cat.id ? '#fff' : COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>{cat.nome}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -477,7 +475,7 @@ export default function PratosScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 10,
                       backgroundColor: COLORS.surfaceSecondary, borderRadius: 10,
-                      padding: 14, borderWidth: 1, borderColor: COLORS.border,
+                      padding: 14, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border,
                     }}
                   >
                     <View style={{
@@ -492,15 +490,18 @@ export default function PratosScreen() {
                   </TouchableOpacity>
                 </ScrollView>
 
-                {/* Fixed Save/Cancel buttons outside ScrollView */}
+                {/* Fixed action buttons — always visible at bottom, outside ScrollView */}
                 <View style={{
-                  paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24,
-                  borderTopWidth: 1, borderTopColor: COLORS.border,
+                  paddingHorizontal: 24,
+                  paddingTop: 12,
+                  paddingBottom: 24,
+                  borderTopWidth: 1,
+                  borderTopColor: COLORS.border,
                   backgroundColor: COLORS.surface,
                 }}>
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <TouchableOpacity
-                      onPress={() => { console.log('[Pratos] Modal Cancelar pressionado'); setShowModal(false); }}
+                      onPress={() => { console.log('[Pratos] Botão Cancelar modal pressionado'); setShowModal(false); }}
                       style={{ flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}
                     >
                       <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Cancelar</Text>
@@ -508,7 +509,7 @@ export default function PratosScreen() {
                     <TouchableOpacity
                       onPress={handleSave}
                       disabled={saving}
-                      style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' }}
+                      style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', opacity: saving ? 0.7 : 1 }}
                     >
                       {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Salvar</Text>}
                     </TouchableOpacity>
@@ -520,7 +521,7 @@ export default function PratosScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Success Toast Modal */}
+      {/* Success Toast */}
       <Modal visible={showSaveSuccess} transparent animationType="fade">
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' }}>
           <View style={{
