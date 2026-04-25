@@ -218,7 +218,7 @@ export default function NovoPratoScreen() {
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }}
+          contentContainerStyle={{ padding: 20, gap: 16 }}
           keyboardShouldPersistTaps="handled"
         >
           <FormField label="Nome *">
@@ -348,14 +348,23 @@ export default function NovoPratoScreen() {
             />
           </View>
 
-          {error ? (
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center" }}>{error}</Text>
-          ) : null}
+        </ScrollView>
 
+        {/* Fixed save button */}
+        <View style={{
+          paddingHorizontal: 20,
+          paddingVertical: 12,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.border,
+          backgroundColor: COLORS.background,
+        }}>
+          {error ? (
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger, textAlign: "center", marginBottom: 8 }}>{error}</Text>
+          ) : null}
           <AnimatedPressable
             onPress={() => { console.log("[NovoPrato] Salvar prato pressionado"); handleSave(); }}
             disabled={isBusy}
-            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", marginTop: 8, marginBottom: 16, opacity: isBusy ? 0.7 : 1 }}
+            style={{ backgroundColor: COLORS.primary, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center", opacity: isBusy ? 0.7 : 1 }}
           >
             {isBusy ? (
               <ActivityIndicator color="#fff" />
@@ -363,7 +372,8 @@ export default function NovoPratoScreen() {
               <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>Salvar prato</Text>
             )}
           </AnimatedPressable>
-        </ScrollView>
+        </View>
+
       </KeyboardAvoidingView>
 
       {/* Category Modal */}
