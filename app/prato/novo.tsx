@@ -12,7 +12,7 @@ import {
   Modal,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -175,15 +175,17 @@ export default function NovoPratoScreen() {
     borderColor: COLORS.border,
   };
 
+  const insets = useSafeAreaInsets();
   const selectedCatNome = selectedCat?.nome ?? "Selecionar categoria";
   const isBusy = submitting || uploading;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right", "bottom"]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+    <>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
         {/* Nav bar */}
         <View style={{
           flexDirection: "row",
@@ -353,7 +355,8 @@ export default function NovoPratoScreen() {
         {/* Fixed save button */}
         <View style={{
           paddingHorizontal: 20,
-          paddingVertical: 12,
+          paddingTop: 12,
+          paddingBottom: Math.max(insets.bottom, 16),
           borderTopWidth: 1,
           borderTopColor: COLORS.border,
           backgroundColor: COLORS.background,
@@ -374,7 +377,8 @@ export default function NovoPratoScreen() {
           </AnimatedPressable>
         </View>
 
-      </KeyboardAvoidingView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
 
       {/* Category Modal */}
       <Modal visible={showCatModal} transparent animationType="slide" onRequestClose={() => setShowCatModal(false)}>
@@ -450,6 +454,6 @@ export default function NovoPratoScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
