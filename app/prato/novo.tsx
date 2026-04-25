@@ -217,7 +217,8 @@ export default function NovoPratoScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 16 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }}
           keyboardShouldPersistTaps="handled"
         >
           <FormField label="Nome *">
