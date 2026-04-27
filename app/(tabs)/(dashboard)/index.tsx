@@ -356,21 +356,19 @@ export default function DashboardScreen() {
                     <AnimatedPressable
                       key={table.id}
                       onPress={() => {
-                        console.log("[Dashboard] Table mini pressed:", table.numero);
-                        router.push("/(tabs)/(mesas)");
+                        console.log("[Dashboard] Table mini pressed:", table.numero, "id:", table.id);
+                        router.push(`/mesa/${table.id}`);
                       }}
                       style={{
                         width: 56,
                         height: 56,
                         borderRadius: 12,
-                        backgroundColor: color + "18",
-                        borderWidth: 1.5,
-                        borderColor: color + "40",
+                        backgroundColor: isOccupied ? "#EF4444" : "#22C55E",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color }}>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: "#fff" }}>
                         {table.numero}
                       </Text>
                     </AnimatedPressable>
