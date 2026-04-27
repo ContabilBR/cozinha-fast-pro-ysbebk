@@ -85,6 +85,13 @@ export function registerTableRoutes(app: App) {
 
         app.logger.info({ count: mesas.length }, "Listed mesas");
 
+        // Log sample of status values for diagnostics
+        if (mesas.length > 0) {
+          const sampleMesas = mesas.slice(0, 5);
+          const sampleStatuses = sampleMesas.map(m => ({ numero: m.numero, status: m.status }));
+          app.logger.info({ sampleStatuses }, "Sample mesa status values");
+        }
+
         return reply.code(200).send({
           mesas: mesas.map((m) => ({
             id: m.id,

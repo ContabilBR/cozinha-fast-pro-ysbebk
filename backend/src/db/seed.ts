@@ -487,22 +487,50 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
-    // Startup migration: Sync mesa statuses based on open comandas
-    app.logger.info("Running mesa status synchronization migration");
+    // Startup diagnostics: Check mesa status enum values and actual data
+    app.logger.info("Running mesa status diagnostics...");
     try {
-      // Set all mesas without an open comanda to 'livre'
-      await (app.db as any).execute(
-        sql`UPDATE mesas SET status = 'livre' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
-      );
+      // Query the database enum catalog to find mesa_status enum values
+      const enumQuery = sql`
+        SELECT enumlabel
+        FROM pg_enum
+        WHERE enumtypid = (
+          SELECT oid FROM pg_type WHERE typname = 'mesa_status'
+        )
+        ORDER BY enumsortorder;
+      `;
 
-      // Set all mesas with at least one open comanda to 'ocupada'
-      await (app.db as any).execute(
-        sql`UPDATE mesas SET status = 'ocupada' WHERE id IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
-      );
+      const enumResults = await (app.db as any).execute(enumQuery) as any[];
+      const validEnumValues = enumResults.map((r: any) => r.enumlabel);
+      app.logger.info({ enumValues: validEnumValues }, "Mesa status enum values:");
 
-      app.logger.info("Mesa status synchronization completed successfully");
+      // Query distinct status values currently in the mesas table
+      const distinctStatusQuery = sql`SELECT DISTINCT status FROM mesas ORDER BY status;`;
+      const distinctResults = await (app.db as any).execute(distinctStatusQuery) as any[];
+      const currentStatuses = distinctResults.map((r: any) => r.status);
+      app.logger.info({ currentStatuses }, "Distinct status values in mesas table:");
+
+      // Sync mesa statuses based on open comandas - use 'disponivel' for no open comandas, 'ocupada' for open
+      app.logger.info("Running mesa status synchronization migration");
+      try {
+        // Set all mesas without an open comanda to 'disponivel'
+        const updateAvailableResult = await (app.db as any).execute(
+          sql`UPDATE mesas SET status = 'disponivel' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
+        );
+        const availableCount = updateAvailableResult?.rowCount || 0;
+
+        // Set all mesas with at least one open comanda to 'ocupada'
+        const updateOccupiedResult = await (app.db as any).execute(
+          sql`UPDATE mesas SET status = 'ocupada' WHERE id IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
+        );
+        const occupiedCount = updateOccupiedResult?.rowCount || 0;
+
+        app.logger.info({ availableUpdated: availableCount, occupiedUpdated: occupiedCount }, "Mesa status synchronization completed successfully");
+      } catch (err) {
+        app.logger.warn({ err }, "Mesa status synchronization failed");
+      }
     } catch (err) {
-      app.logger.warn({ err }, "Mesa status synchronization migration failed or not needed");
+      app.logger.warn({ err }, "Mesa status diagnostics failed");
     }
 
     // Migration: Consolidate categories from categoria_pratos to categorias

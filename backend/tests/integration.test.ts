@@ -140,6 +140,28 @@ describe("API Integration Tests", () => {
     await expectStatus(signInRes, 401);
   });
 
+  test("Sign in missing email returns 400", async () => {
+    const res = await api("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "testPassword123456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign in missing password returns 400", async () => {
+    const res = await api("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "test@example.com",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Sign up with duplicate email returns 409", async () => {
     const dupEmail = `dup-signup-${Date.now()}@example.com`;
     const testPassword = "testPassword123456";
@@ -167,6 +189,42 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(dupRes, 409);
+  });
+
+  test("Sign up missing email returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "testPassword123456",
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up missing password returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `signup-${Date.now()}@example.com`,
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up missing name returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `signup-${Date.now()}@example.com`,
+        password: "testPassword123456",
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
   test("Login with valid credentials via /api/login", async () => {
@@ -203,6 +261,28 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(loginRes, 401);
+  });
+
+  test("Login missing email returns 400", async () => {
+    const res = await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        senha: "123456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Login missing password returns 400", async () => {
+    const res = await api("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "garcom@cozinhafast.com",
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
   test("Get current user via /api/me with authentication", async () => {
