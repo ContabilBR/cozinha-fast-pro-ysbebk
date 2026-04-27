@@ -487,6 +487,24 @@ export async function seedDatabase(app: App) {
     }
     app.logger.info("Pratos seeded successfully");
 
+    // Startup migration: Sync mesa statuses based on open comandas
+    app.logger.info("Running mesa status synchronization migration");
+    try {
+      // Set all mesas without an open comanda to 'livre'
+      await (app.db as any).execute(
+        sql`UPDATE mesas SET status = 'livre' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
+      );
+
+      // Set all mesas with at least one open comanda to 'ocupada'
+      await (app.db as any).execute(
+        sql`UPDATE mesas SET status = 'ocupada' WHERE id IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta')`
+      );
+
+      app.logger.info("Mesa status synchronization completed successfully");
+    } catch (err) {
+      app.logger.warn({ err }, "Mesa status synchronization migration failed or not needed");
+    }
+
     // Migration: Consolidate categories from categoria_pratos to categorias
     app.logger.info("Running category consolidation migration");
     try {

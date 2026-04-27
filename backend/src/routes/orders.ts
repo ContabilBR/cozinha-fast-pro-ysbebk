@@ -785,11 +785,20 @@ export function registerOrderRoutes(app: App) {
             .delete(schema.comandas)
             .where(eq(schema.comandas.id, request.params.id));
 
-          // Update mesa status
-          await tx
-            .update(schema.mesas)
-            .set({ status: "disponivel" })
-            .where(eq(schema.mesas.id, comanda.mesaId));
+          // Check if mesa still has open comandas
+          const remainingComandasResult = await (tx as any).execute(
+            sql`SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ${comanda.mesaId} AND status = 'aberta'`
+          ) as any[];
+
+          const remainingCount = remainingComandasResult[0]?.count || 0;
+
+          // Update mesa status to 'livre' only if no more open comandas
+          if (remainingCount === 0) {
+            await tx
+              .update(schema.mesas)
+              .set({ status: "disponivel" })
+              .where(eq(schema.mesas.id, comanda.mesaId));
+          }
         });
 
         app.logger.info(
@@ -859,11 +868,20 @@ export function registerOrderRoutes(app: App) {
           .where(eq(schema.comandas.id, request.params.id))
           .returning();
 
-        // Update mesa status back to disponivel
-        await app.db
-          .update(schema.mesas)
-          .set({ status: "disponivel" })
-          .where(eq(schema.mesas.id, updated.mesaId));
+        // Check if mesa still has open comandas
+        const remainingComandasResult = await (app.db as any).execute(
+          sql`SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ${updated.mesaId} AND status = 'aberta'`
+        ) as any[];
+
+        const remainingCount = remainingComandasResult[0]?.count || 0;
+
+        // Update mesa status to 'disponivel' only if no more open comandas
+        if (remainingCount === 0) {
+          await app.db
+            .update(schema.mesas)
+            .set({ status: "disponivel" })
+            .where(eq(schema.mesas.id, updated.mesaId));
+        }
 
         app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
 
