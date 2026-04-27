@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiGet, apiPost } from '@/utils/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useColors } from '@/hooks/useColors';
 
 type Prato = {
   id: string;
@@ -27,6 +28,8 @@ type Prato = {
   preco: number | string;
   imagem_url?: string;
   disponivel?: boolean;
+  categoria?: { id?: string; nome: string };
+  categoria_id?: string;
 };
 
 type StagedItem = {
@@ -299,6 +302,7 @@ export default function ComandaDetailScreen() {
   const { user } = useAuth();
   const isManager = user?.role === 'gerente' || user?.role === 'admin' || user?.role === 'administrador';
 
+  const COLORS = useColors();
   const [comanda, setComanda] = useState<Comanda | null>(null);
   const [pratos, setPratos] = useState<Prato[]>([]);
   const [pedidosEnviados, setPedidosEnviados] = useState<Pedido[]>([]);
@@ -308,6 +312,8 @@ export default function ComandaDetailScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [fechamentoVisible, setFechamentoVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
 
   // Resolved mesa number — seeded immediately from route param so the title
   // shows the correct number even before the API call completes.
@@ -531,6 +537,25 @@ export default function ComandaDetailScreen() {
   const headerTitle = `Comanda — Mesa ${mesaNum}`;
 
   const canFechar = comanda?.status === 'aberta' && pedidosEnviados.length > 0;
+
+  const pratoCategories = useMemo(() => {
+    const names = new Set<string>();
+    pratos.forEach((p) => {
+      if (p.categoria?.nome) names.add(p.categoria.nome);
+    });
+    return ['Todos', ...Array.from(names).sort()];
+  }, [pratos]);
+
+  const filteredPratos = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return pratos.filter((p) => {
+      const matchesSearch = !q || p.nome.toLowerCase().includes(q);
+      const matchesCategory =
+        selectedCategory === 'Todos' ||
+        (p.categoria?.nome ?? '') === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [pratos, searchQuery, selectedCategory]);
 
   // Subtotal for the modal: prefer comanda.total, fall back to computed total
   const subtotalForModal = comanda?.total != null && Number(comanda.total) > 0
@@ -762,9 +787,86 @@ export default function ComandaDetailScreen() {
       <View style={{ flex: 1 }}>
         {activeTab === 'cardapio' ? (
           <FlatList
-            data={pratos}
+            data={filteredPratos}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 0 }}
+            ListHeaderComponent={
+              <View style={{ paddingTop: 12 }}>
+                {/* Search field */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 10,
+                    backgroundColor: COLORS.surfaceSecondary,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="search-outline" size={16} color={COLORS.textTertiary} />
+                  <TextInput
+                    value={searchQuery}
+                    onChangeText={(text) => {
+                      console.log('[ComandaDetail] Busca alterada:', text);
+                      setSearchQuery(text);
+                    }}
+                    placeholder="Buscar prato..."
+                    placeholderTextColor={COLORS.textTertiary}
+                    style={{
+                      flex: 1,
+                      fontFamily: 'Outfit_400Regular',
+                      fontSize: 14,
+                      color: COLORS.text,
+                      padding: 0,
+                    }}
+                    returnKeyType="search"
+                    clearButtonMode="while-editing"
+                  />
+                </View>
+
+                {/* Category filter chips */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 10, gap: 8 }}
+                >
+                  {pratoCategories.map((cat) => {
+                    const isSelected = selectedCategory === cat;
+                    return (
+                      <Pressable
+                        key={cat}
+                        onPress={() => {
+                          console.log('[ComandaDetail] Categoria selecionada:', cat);
+                          setSelectedCategory(cat);
+                        }}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                          backgroundColor: isSelected ? COLORS.primary : COLORS.surfaceSecondary,
+                          borderWidth: 1,
+                          borderColor: isSelected ? COLORS.primary : COLORS.border,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: isSelected ? 'Outfit_600SemiBold' : 'Outfit_400Regular',
+                            fontSize: 13,
+                            color: isSelected ? '#fff' : COLORS.textSecondary,
+                          }}
+                        >
+                          {cat}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            }
             renderItem={({ item }) => {
               const staged = stagedItems.find((s) => s.pratoId === item.id);
               return (
@@ -798,7 +900,14 @@ export default function ComandaDetailScreen() {
               );
             }}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>Nenhum prato disponível no momento</Text>
+              <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+                <Ionicons name="search-outline" size={32} color="#d1d5db" />
+                <Text style={styles.emptyText}>
+                  {searchQuery || selectedCategory !== 'Todos'
+                    ? 'Nenhum prato encontrado'
+                    : 'Nenhum prato disponível no momento'}
+                </Text>
+              </View>
             }
           />
         ) : (

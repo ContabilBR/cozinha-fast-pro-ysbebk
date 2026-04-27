@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import {
   ShoppingCart,
   UtensilsCrossed,
   Send,
+  Search,
 } from "lucide-react-native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -442,6 +443,8 @@ export default function NovaComandaScreen() {
   const [activeTab, setActiveTab] = useState<"cardapio" | "pedido">("cardapio");
   const [showSuccess, setShowSuccess] = useState(false);
   const successOpacity = useRef(new Animated.Value(0)).current;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("Todos");
 
   const mesaNumeroDisplay = mesa_numero ? String(mesa_numero) : "?";
   const titleText = `Comanda — Mesa ${mesaNumeroDisplay}`;
@@ -525,6 +528,25 @@ export default function NovaComandaScreen() {
   const subtotal = cart.reduce((sum, c) => sum + c.preco * c.quantidade, 0);
   const subtotalDisplay = formatPreco(subtotal);
   const cartIsEmpty = cart.length === 0;
+
+  const categories = useMemo(() => {
+    const names = new Set<string>();
+    pratos.forEach((p) => {
+      if (p.categoria?.nome) names.add(p.categoria.nome);
+    });
+    return ["Todos", ...Array.from(names).sort()];
+  }, [pratos]);
+
+  const filteredPratos = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return pratos.filter((p) => {
+      const matchesSearch = !q || p.nome.toLowerCase().includes(q);
+      const matchesCategory =
+        selectedCategory === "Todos" ||
+        (p.categoria?.nome ?? "") === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [pratos, searchQuery, selectedCategory]);
 
   // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -935,9 +957,97 @@ export default function NovaComandaScreen() {
             </View>
           ) : (
             <FlatList
-              data={pratos}
+              data={filteredPratos}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{ paddingTop: 12, paddingBottom: 160 }}
+              ListHeaderComponent={
+                <View>
+                  {/* Search field */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginHorizontal: 16,
+                      marginBottom: 10,
+                      backgroundColor: COLORS.surfaceSecondary,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      paddingHorizontal: 12,
+                      paddingVertical: 9,
+                      gap: 8,
+                    }}
+                  >
+                    <Search size={16} color={COLORS.textTertiary} />
+                    <TextInput
+                      value={searchQuery}
+                      onChangeText={(text) => {
+                        console.log("[Comanda] Busca alterada:", text);
+                        setSearchQuery(text);
+                      }}
+                      placeholder="Buscar prato..."
+                      placeholderTextColor={COLORS.textTertiary}
+                      style={{
+                        flex: 1,
+                        fontFamily: "Outfit_400Regular",
+                        fontSize: 14,
+                        color: COLORS.text,
+                        padding: 0,
+                      }}
+                      returnKeyType="search"
+                      clearButtonMode="while-editing"
+                    />
+                  </View>
+
+                  {/* Category filter chips */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{
+                      paddingHorizontal: 16,
+                      paddingBottom: 10,
+                      gap: 8,
+                    }}
+                  >
+                    {categories.map((cat) => {
+                      const isSelected = selectedCategory === cat;
+                      return (
+                        <AnimatedPressable
+                          key={cat}
+                          onPress={() => {
+                            console.log("[Comanda] Categoria selecionada:", cat);
+                            setSelectedCategory(cat);
+                          }}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 7,
+                            borderRadius: 20,
+                            backgroundColor: isSelected
+                              ? COLORS.primary
+                              : COLORS.surfaceSecondary,
+                            borderWidth: 1,
+                            borderColor: isSelected
+                              ? COLORS.primary
+                              : COLORS.border,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: isSelected
+                                ? "Outfit_600SemiBold"
+                                : "Outfit_400Regular",
+                              fontSize: 13,
+                              color: isSelected ? "#fff" : COLORS.textSecondary,
+                            }}
+                          >
+                            {cat}
+                          </Text>
+                        </AnimatedPressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              }
               renderItem={({ item, index }) => {
                 const cartItem = cart.find((c) => c.id === item.id);
                 return (
@@ -952,6 +1062,38 @@ export default function NovaComandaScreen() {
                   />
                 );
               }}
+              ListEmptyComponent={
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 40,
+                    gap: 10,
+                  }}
+                >
+                  <Search size={32} color={COLORS.textTertiary} />
+                  <Text
+                    style={{
+                      fontFamily: "Outfit_600SemiBold",
+                      fontSize: 16,
+                      color: COLORS.text,
+                      textAlign: "center",
+                    }}
+                  >
+                    Nenhum prato encontrado
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: "Outfit_400Regular",
+                      fontSize: 13,
+                      color: COLORS.textSecondary,
+                      textAlign: "center",
+                    }}
+                  >
+                    Tente outro termo ou categoria
+                  </Text>
+                </View>
+              }
             />
           )
         ) : (
