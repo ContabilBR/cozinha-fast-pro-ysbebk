@@ -328,6 +328,10 @@ export default function DashboardScreen() {
               color={COLORS.success}
               icon={<DollarSign size={20} color={COLORS.success} />}
               loading={loading}
+              onPress={() => {
+                console.log("[Dashboard] Receita Hoje card pressed");
+                router.push("/(tabs)/(relatorios)");
+              }}
             />
             <StatCard
               title="Receita da Semana"
@@ -335,6 +339,10 @@ export default function DashboardScreen() {
               color="#8B5CF6"
               icon={<TrendingUp size={20} color="#8B5CF6" />}
               loading={loading}
+              onPress={() => {
+                console.log("[Dashboard] Receita da Semana card pressed");
+                router.push("/(tabs)/(relatorios)");
+              }}
             />
           </View>
         </Animated.View>
