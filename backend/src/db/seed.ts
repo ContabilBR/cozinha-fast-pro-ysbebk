@@ -530,16 +530,16 @@ export async function seedDatabase(app: App) {
         app.logger.warn({ err }, "Mesa status synchronization failed");
       }
 
-      // Startup migration: Fix stuck mesas that don't have open comandas but aren't 'disponivel'
-      app.logger.info("Running startup migration: releasing stuck mesas to disponivel");
+      // Startup migration: Release any mesas that don't have comanda references
+      app.logger.info("Running startup migration: releasing mesas with no comanda references");
       try {
         const fixStuckMesasResult = await (app.db as any).execute(
-          sql`UPDATE mesas SET status = 'disponivel' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta') AND status != 'disponivel'`
+          sql`UPDATE mesas SET status = 'disponivel' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE mesa_id IS NOT NULL)`
         );
         const rowsUpdated = fixStuckMesasResult?.rowCount || 0;
-        app.logger.info({ rowsUpdated }, "Startup migration: fixed stuck mesas");
+        app.logger.info({ rowsUpdated }, "Startup migration: released mesas with no comanda references");
       } catch (err) {
-        app.logger.warn({ err }, "Startup migration: failed to release stuck mesas");
+        app.logger.warn({ err }, "Startup migration: failed to release mesas");
       }
     } catch (err) {
       app.logger.warn({ err }, "Mesa status diagnostics failed");

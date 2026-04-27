@@ -794,23 +794,18 @@ export function registerOrderRoutes(app: App) {
             .delete(schema.comandas)
             .where(eq(schema.comandas.id, request.params.id));
 
-          // STEP 3: After archive, release mesa if no other open comandas remain
+          // STEP 3: After archive, ALWAYS release mesa to disponivel
           if (mesaId) {
-            // Check if mesa still has open comandas
-            const remainingComandasResult = await (tx as any).execute(
-              sql`SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ${mesaId} AND status = 'aberta'`
-            ) as any[];
-
-            const remainingCount = remainingComandasResult[0]?.count || 0;
-
-            // Update mesa status to 'disponivel' only if no more open comandas
-            if (remainingCount === 0) {
+            try {
               await tx
                 .update(schema.mesas)
                 .set({ status: "disponivel" })
                 .where(eq(schema.mesas.id, mesaId));
 
               app.logger.info({ mesaId }, "Mesa released to disponivel");
+            } catch (err) {
+              app.logger.error({ mesaId, error: (err as any).message }, "Failed to release mesa");
+              throw err;
             }
           }
         });
