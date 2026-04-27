@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiGet, apiPost } from '@/utils/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Prato = {
   id: string;
@@ -295,6 +296,8 @@ function FechamentoModal({
 export default function ComandaDetailScreen() {
   const { id, mesa_numero: mesaNumeroParam, mesa_id: mesaIdParam } = useLocalSearchParams<{ id: string; mesa_numero?: string; mesa_id?: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const isManager = user?.role === 'gerente' || user?.role === 'admin' || user?.role === 'administrador';
 
   const [comanda, setComanda] = useState<Comanda | null>(null);
   const [pratos, setPratos] = useState<Prato[]>([]);
@@ -572,6 +575,164 @@ export default function ComandaDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  // ─── Manager status helpers ────────────────────────────────────────────────
+
+  const comandaStatusColor = (status: string) => {
+    switch (status) {
+      case 'aberta': return '#22c55e';
+      case 'fechada': return '#9ca3af';
+      case 'cancelada': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const comandaStatusLabel = (status: string) => {
+    switch (status) {
+      case 'aberta': return 'Aberta';
+      case 'fechada': return 'Fechada';
+      case 'cancelada': return 'Cancelada';
+      default: return status;
+    }
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const rawComanda = comanda as any;
+  const garcomNome: string = rawComanda?.garcom_nome ?? rawComanda?.garcom?.nome ?? '';
+  const abertoEm: string = formatDate(rawComanda?.created_at ?? rawComanda?.aberto_em ?? rawComanda?.data_abertura);
+  const comandaStatus: string = comanda?.status ?? '';
+  const comandaStatusColorValue = comandaStatusColor(comandaStatus);
+  const comandaStatusLabelValue = comandaStatusLabel(comandaStatus);
+
+  // ─── Manager view ──────────────────────────────────────────────────────────
+
+  if (isManager) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <NavBar title={headerTitle} />
+
+        <ScrollView contentContainerStyle={mgStyles.scrollContent}>
+          {/* Header card */}
+          <View style={mgStyles.headerCard}>
+            <View style={mgStyles.headerRow}>
+              <View style={[mgStyles.statusBadge, { backgroundColor: comandaStatusColorValue }]}>
+                <Text style={mgStyles.statusBadgeText}>{comandaStatusLabelValue}</Text>
+              </View>
+              <Text style={mgStyles.mesaLabel}>
+                Mesa
+              </Text>
+              <Text style={mgStyles.mesaNumber}>
+                {mesaNum}
+              </Text>
+            </View>
+
+            <View style={mgStyles.metaRow}>
+              <Ionicons name="time-outline" size={15} color="#6b7280" />
+              <Text style={mgStyles.metaText}>
+                Aberta em:
+              </Text>
+              <Text style={mgStyles.metaValue}>
+                {abertoEm}
+              </Text>
+            </View>
+
+            {garcomNome ? (
+              <View style={mgStyles.metaRow}>
+                <Ionicons name="person-outline" size={15} color="#6b7280" />
+                <Text style={mgStyles.metaText}>
+                  Garçom:
+                </Text>
+                <Text style={mgStyles.metaValue}>
+                  {garcomNome}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Pedidos section */}
+          <Text style={mgStyles.sectionTitle}>Pedidos</Text>
+
+          {pedidosEnviados.length === 0 ? (
+            <View style={mgStyles.emptyBox}>
+              <Ionicons name="receipt-outline" size={40} color="#d1d5db" />
+              <Text style={mgStyles.emptyText}>Nenhum pedido nesta comanda</Text>
+            </View>
+          ) : (
+            pedidosEnviados.map((p) => {
+              const pratoNome = pratos.find((pr) => pr.id === p.prato_id)?.nome ?? p.prato_id;
+              const precoUnit = Number(p.preco_unitario);
+              const precoUnitDisplay = formatBRL(precoUnit);
+              const linhaPreco = `${p.quantidade} × ${precoUnitDisplay}`;
+              const pedidoStatusColor = statusColor(p.status);
+              const pedidoStatusLabel = p.status;
+              return (
+                <View key={p.id} style={mgStyles.pedidoCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={mgStyles.pedidoNome}>{pratoNome}</Text>
+                    <Text style={mgStyles.pedidoQty}>{linhaPreco}</Text>
+                    {p.observacao ? (
+                      <Text style={mgStyles.pedidoObs}>{p.observacao}</Text>
+                    ) : null}
+                  </View>
+                  <View style={[mgStyles.pedidoStatusBadge, { backgroundColor: pedidoStatusColor }]}>
+                    <Text style={mgStyles.pedidoStatusText}>{pedidoStatusLabel}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          {/* Spacer for fixed footer */}
+          <View style={{ height: 120 }} />
+        </ScrollView>
+
+        {/* Fixed footer */}
+        <View style={mgStyles.footer}>
+          <View style={mgStyles.footerTotalRow}>
+            <Text style={mgStyles.footerTotalLabel}>Total da comanda</Text>
+            <Text style={mgStyles.footerTotalValue}>{totalDisplay}</Text>
+          </View>
+
+          {canFechar ? (
+            <Pressable
+              onPress={() => {
+                console.log('[ComandaDetail][Manager] Fechar Comanda pressed', { comandaId: id });
+                handleFecharComanda();
+              }}
+              style={mgStyles.fecharBtn}
+            >
+              <Ionicons name="checkmark-circle-outline" size={20} color="white" style={{ marginRight: 8 }} />
+              <Text style={mgStyles.fecharBtnText}>Fechar Comanda</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Fechamento Modal */}
+        <FechamentoModal
+          visible={fechamentoVisible}
+          onClose={() => { console.log('[ComandaDetail] fechamento modal closed'); setFechamentoVisible(false); }}
+          onSuccess={handleFechamentoSuccess}
+          comandaId={id ?? ''}
+          subtotal={subtotalForModal}
+          mesaCapacidade={comanda?.mesa_capacidade}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Waiter view (unchanged) ───────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -921,6 +1082,177 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+});
+
+// ─── Manager View Styles ─────────────────────────────────────────────────────
+
+const mgStyles = StyleSheet.create({
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  headerCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  statusBadgeText: {
+    color: 'white',
+    fontSize: 13,
+    fontFamily: 'Outfit_700Bold',
+  },
+  mesaLabel: {
+    fontSize: 15,
+    color: '#6b7280',
+    fontFamily: 'Outfit_400Regular',
+    marginLeft: 4,
+  },
+  mesaNumber: {
+    fontSize: 22,
+    color: '#111827',
+    fontFamily: 'Outfit_700Bold',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: 'Outfit_400Regular',
+  },
+  metaValue: {
+    fontSize: 13,
+    color: '#374151',
+    fontFamily: 'Outfit_600SemiBold',
+    flexShrink: 1,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Outfit_700Bold',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    backgroundColor: 'white',
+    borderRadius: 16,
+  },
+  emptyText: {
+    color: '#9ca3af',
+    fontSize: 14,
+    fontFamily: 'Outfit_400Regular',
+    marginTop: 10,
+  },
+  pedidoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  pedidoNome: {
+    fontSize: 15,
+    fontFamily: 'Outfit_600SemiBold',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  pedidoQty: {
+    fontSize: 13,
+    fontFamily: 'Outfit_400Regular',
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  pedidoObs: {
+    fontSize: 12,
+    fontFamily: 'Outfit_400Regular',
+    color: '#9ca3af',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  pedidoStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginLeft: 10,
+  },
+  pedidoStatusText: {
+    color: 'white',
+    fontSize: 12,
+    fontFamily: 'Outfit_600SemiBold',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 8,
+  },
+  footerTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  footerTotalLabel: {
+    fontSize: 15,
+    fontFamily: 'Outfit_600SemiBold',
+    color: '#374151',
+  },
+  footerTotalValue: {
+    fontSize: 22,
+    fontFamily: 'Outfit_700Bold',
+    color: '#22c55e',
+  },
+  fecharBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    borderRadius: 14,
+    paddingVertical: 15,
+  },
+  fecharBtnText: {
+    color: 'white',
+    fontSize: 16,
+    fontFamily: 'Outfit_700Bold',
   },
 });
 
