@@ -80,9 +80,11 @@ export function registerOrderRoutes(app: App) {
 
       try {
         const authUserId = authUser.id;
+        const userRole = authUser.role?.toLowerCase() ?? "";
+        const isManager = ["gerente", "admin", "administrador"].includes(userRole);
 
         app.logger.info(
-          { authUserId, status: request.query.status },
+          { authUserId, status: request.query.status, userRole, isManager },
           "Listing comandas for user"
         );
 
@@ -101,11 +103,18 @@ export function registerOrderRoutes(app: App) {
           FROM comandas c
           LEFT JOIN mesas m ON m.id = c.mesa_id
           LEFT JOIN pedidos p ON p.comanda_id = c.id
-          WHERE c.garcom_id = ${authUserId}
         `;
 
-        if (request.query.status) {
-          sqlQuery = sql`${sqlQuery} AND c.status = ${request.query.status}`;
+        // Add WHERE clause conditionally based on role
+        if (!isManager) {
+          sqlQuery = sql`${sqlQuery} WHERE c.garcom_id = ${authUserId}`;
+          if (request.query.status) {
+            sqlQuery = sql`${sqlQuery} AND c.status = ${request.query.status}`;
+          }
+        } else {
+          if (request.query.status) {
+            sqlQuery = sql`${sqlQuery} WHERE c.status = ${request.query.status}`;
+          }
         }
 
         sqlQuery = sql`${sqlQuery}
