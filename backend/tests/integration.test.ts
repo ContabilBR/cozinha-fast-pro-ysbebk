@@ -1267,6 +1267,27 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ==================== Mesas Get Historico ====================
+  test("Get mesa historico", async () => {
+    const res = await api(`/api/mesas/${comandaMesaId}/historico`);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.mesa).toBeDefined();
+    expect(data.resumo).toBeDefined();
+    expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
+  });
+
+  test("Get mesa historico with invalid UUID format returns 400", async () => {
+    const res = await api("/api/mesas/invalid-uuid/historico");
+    await expectStatus(res, 400);
+  });
+
+  test("Get non-existent mesa historico returns 404", async () => {
+    const res = await api("/api/mesas/00000000-0000-0000-0000-000000000000/historico");
+    await expectStatus(res, 404);
+  });
+
   test("List all comandas", async () => {
     const res = await authenticatedApi("/api/comandas", authToken);
     await expectStatus(res, 200);

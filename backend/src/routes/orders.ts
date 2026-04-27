@@ -1210,4 +1210,271 @@ export function registerOrderRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/mesas/:id/historico - Get full historical data for a mesa
+  app.fastify.get<{ Params: { id: string } }>(
+    "/api/mesas/:id/historico",
+    {
+      schema: {
+        description: "Get full historical data for a mesa (archived and active comandas with pedidos)",
+        tags: ["mesas"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              mesa: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  numero: { type: "number" },
+                  status: { type: "string" },
+                  capacidade: { type: "number" },
+                },
+              },
+              resumo: {
+                type: "object",
+                properties: {
+                  total_arrecadado: { type: "number" },
+                  total_comandas: { type: "number" },
+                  total_pedidos: { type: "number" },
+                },
+              },
+              comandas: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    status: { type: "string" },
+                    total: { type: "number" },
+                    garcom_id: { type: ["string", "null"] },
+                    garcom_nome: { type: "string" },
+                    created_at: { type: ["string", "null"], format: "date-time" },
+                    closed_at: { type: ["string", "null"], format: "date-time" },
+                    source: { type: "string", enum: ["historico", "ativa"] },
+                    pedidos: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string", format: "uuid" },
+                          prato_nome: { type: "string" },
+                          quantidade: { type: "number" },
+                          preco_unitario: { type: "number" },
+                          observacao: { type: ["string", "null"] },
+                          status: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      try {
+        const mesaId = request.params.id;
+        app.logger.info({ mesaId }, "Fetching historical data for mesa");
+
+        // Step 1: Fetch mesa
+        const mesaResult = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, mesaId))
+          .limit(1);
+
+        if (!mesaResult.length) {
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
+
+        const mesa = mesaResult[0];
+
+        // Step 2: Fetch archived comandas
+        const archivedComandasResult = await app.db
+          .select()
+          .from(schema.comandasHistorico)
+          .where(eq(schema.comandasHistorico.mesaId, mesaId));
+
+        // Step 3: Fetch active comandas
+        const activeComandasResult = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.mesaId, mesaId));
+
+        // Collect all comanda IDs for the query below
+        const archivedComandasIds = archivedComandasResult.map((c) => c.id);
+        const activeComandasIds = activeComandasResult.map((c) => c.id);
+
+        // Step 4: Fetch archived pedidos
+        let archivedPedidosMap: Record<string, any[]> = {};
+        if (archivedComandasIds.length > 0) {
+          const archivedPedidosResult = await app.db
+            .select()
+            .from(schema.pedidosHistorico)
+            .where(inArray(schema.pedidosHistorico.comandaId, archivedComandasIds));
+
+          for (const pedido of archivedPedidosResult) {
+            if (!archivedPedidosMap[pedido.comandaId]) {
+              archivedPedidosMap[pedido.comandaId] = [];
+            }
+            archivedPedidosMap[pedido.comandaId].push({
+              id: pedido.id,
+              prato_nome: pedido.pratoNome,
+              quantidade: pedido.quantidade,
+              preco_unitario: parseFloat(pedido.precoUnitario || "0"),
+              observacao: pedido.observacao,
+              status: pedido.status,
+            });
+          }
+        }
+
+        // Step 5: Fetch active pedidos with prato info
+        let activePedidosMap: Record<string, any[]> = {};
+        if (activeComandasIds.length > 0) {
+          const activePedidosResult = await app.db
+            .select({
+              id: schema.pedidos.id,
+              comandaId: schema.pedidos.comandaId,
+              quantidade: schema.pedidos.quantidade,
+              precoUnitario: schema.pedidos.precoUnitario,
+              observacao: schema.pedidos.observacao,
+              status: schema.pedidos.status,
+              pratoNome: schema.pratos.nome,
+            })
+            .from(schema.pedidos)
+            .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+            .where(inArray(schema.pedidos.comandaId, activeComandasIds));
+
+          for (const pedido of activePedidosResult) {
+            if (!activePedidosMap[pedido.comandaId]) {
+              activePedidosMap[pedido.comandaId] = [];
+            }
+            activePedidosMap[pedido.comandaId].push({
+              id: pedido.id,
+              prato_nome: pedido.pratoNome || "N/A",
+              quantidade: pedido.quantidade,
+              preco_unitario: parseFloat(pedido.precoUnitario || "0"),
+              observacao: pedido.observacao,
+              status: pedido.status,
+            });
+          }
+        }
+
+        // Step 6: Fetch garcom names for all comandas
+        const allGarcomIds = [
+          ...archivedComandasResult.map((c) => c.garcomId).filter(Boolean),
+          ...activeComandasResult.map((c) => c.garcomId).filter(Boolean),
+        ];
+        const uniqueGarcomIds = Array.from(new Set(allGarcomIds));
+
+        let garcomNameMap: Record<string, string> = {};
+        if (uniqueGarcomIds.length > 0) {
+          const garcomResults = await app.db
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, uniqueGarcomIds));
+
+          for (const garcom of garcomResults) {
+            garcomNameMap[garcom.id] = garcom.name;
+          }
+        }
+
+        // Step 7 & 8: Merge and tag comandas, sort by created_at DESC
+        const allComandasWithSource = [
+          ...archivedComandasResult.map((c) => ({
+            ...c,
+            source: "historico" as const,
+          })),
+          ...activeComandasResult.map((c) => ({
+            ...c,
+            source: "ativa" as const,
+          })),
+        ];
+
+        allComandasWithSource.sort((a, b) => {
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
+          return dateB - dateA; // DESC order
+        });
+
+        // Build comandas response with pedidos
+        const comandasResponse = allComandasWithSource.map((comanda) => {
+          const pedidos =
+            comanda.source === "historico"
+              ? archivedPedidosMap[comanda.id] || []
+              : activePedidosMap[comanda.id] || [];
+
+          const garcomNome =
+            garcomNameMap[comanda.garcomId || ""] || comanda.garcomId || "Desconhecido";
+
+          return {
+            id: comanda.id,
+            status: comanda.status,
+            total: parseFloat(comanda.total || "0"),
+            garcom_id: comanda.garcomId || null,
+            garcom_nome: garcomNome,
+            created_at: comanda.createdAt ? new Date(comanda.createdAt).toISOString() : null,
+            closed_at:
+              comanda.source === "historico"
+                ? comanda.closedAt
+                  ? new Date(comanda.closedAt).toISOString()
+                  : null
+                : (comanda as any).closedAt
+                ? new Date((comanda as any).closedAt).toISOString()
+                : null,
+            source: comanda.source,
+            pedidos,
+          };
+        });
+
+        // Step 9: Compute resumo
+        const totalArrecadado =
+          archivedComandasResult.reduce((sum, c) => sum + parseFloat(c.total || "0"), 0) +
+          activeComandasResult.reduce((sum, c) => sum + parseFloat(c.total || "0"), 0);
+
+        const totalComandasCount = archivedComandasResult.length + activeComandasResult.length;
+
+        const totalPedidosCount =
+          Object.values(archivedPedidosMap).reduce((sum, pedidos) => sum + pedidos.length, 0) +
+          Object.values(activePedidosMap).reduce((sum, pedidos) => sum + pedidos.length, 0);
+
+        app.logger.info(
+          {
+            mesaId,
+            archivedComandasCount: archivedComandasResult.length,
+            activeComandasCount: activeComandasResult.length,
+            totalArrecadado,
+          },
+          "Historical data retrieved successfully"
+        );
+
+        return reply.code(200).send({
+          mesa: {
+            id: mesa.id,
+            numero: mesa.numero,
+            status: mesa.status,
+            capacidade: mesa.capacidade,
+          },
+          resumo: {
+            total_arrecadado: totalArrecadado,
+            total_comandas: totalComandasCount,
+            total_pedidos: totalPedidosCount,
+          },
+          comandas: comandasResponse,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, mesaId: request.params.id }, "Failed to fetch mesa historico");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
 }
