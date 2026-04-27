@@ -359,6 +359,7 @@ export default function MesaHistoricoScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={22} color="#22c55e" />
+          <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: "#22c55e", marginLeft: 4 }}>Voltar</Text>
         </Pressable>
         <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center", pointerEvents: "none" }}>
           <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text }}>
