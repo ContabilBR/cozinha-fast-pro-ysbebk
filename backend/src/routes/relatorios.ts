@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, sum, count, gte, and } from "drizzle-orm";
+import { eq, sum, count, gte, lt, ne, and, or, sql } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 
@@ -36,11 +36,11 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.mesas);
         const totalMesas = totalMesasResult[0]?.count || 0;
 
-        // Mesas ocupadas
+        // Mesas ocupadas (status != 'livre')
         const mesasOcupadasResult = await app.db
           .select({ count: count() })
           .from(schema.mesas)
-          .where(eq(schema.mesas.status, "ocupada"));
+          .where(ne(schema.mesas.status, "disponivel"));
         const mesasOcupadas = mesasOcupadasResult[0]?.count || 0;
 
         // Comandas abertas
@@ -50,41 +50,77 @@ export function registerRelatoriosRoutes(app: App) {
           .where(eq(schema.comandas.status, "aberta"));
         const comandasAbertas = comandasAbertasResult[0]?.count || 0;
 
-        // Pedidos pendentes
+        // Pedidos pendentes (only in open comandas)
         const pedidosPendentesResult = await app.db
           .select({ count: count() })
           .from(schema.pedidos)
-          .where(eq(schema.pedidos.status, "pendente"));
+          .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+          .where(
+            and(
+              eq(schema.pedidos.status, "pendente"),
+              eq(schema.comandas.status, "aberta")
+            )
+          );
         const pedidosPendentes = pedidosPendentesResult[0]?.count || 0;
 
-        // Receita hoje
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
-        const receitaHojeResult = await app.db
-          .select({ total: sum(schema.comandas.total) })
-          .from(schema.comandas)
-          .where(
-            and(
-              eq(schema.comandas.status, "fechada"),
-              gte(schema.comandas.closedAt, today)
-            )
-          );
-        const receitaHoje = parseFloat(receitaHojeResult[0]?.total || "0");
+        // Receita hoje - sum from both comandas and comandas_historico
+        // closed_at >= today's start AND closed_at < tomorrow's start (UTC)
+        const todayStart = sql`DATE_TRUNC('day', NOW())`;
+        const tomorrowStart = sql`DATE_TRUNC('day', NOW()) + INTERVAL '1 day'`;
 
-        // Receita semana (last 7 days)
-        const weekAgo = new Date();
-        weekAgo.setUTCDate(weekAgo.getUTCDate() - 7);
-        weekAgo.setUTCHours(0, 0, 0, 0);
-        const receitaSemanaResult = await app.db
+        const receitaHojeComandasResult = await app.db
           .select({ total: sum(schema.comandas.total) })
           .from(schema.comandas)
           .where(
             and(
               eq(schema.comandas.status, "fechada"),
-              gte(schema.comandas.closedAt, weekAgo)
+              gte(schema.comandas.closedAt, todayStart),
+              lt(schema.comandas.closedAt, tomorrowStart)
             )
           );
-        const receitaSemana = parseFloat(receitaSemanaResult[0]?.total || "0");
+
+        const receitaHojeHistoricoResult = await app.db
+          .select({ total: sum(schema.comandasHistorico.total) })
+          .from(schema.comandasHistorico)
+          .where(
+            and(
+              eq(schema.comandasHistorico.status, "fechada"),
+              gte(schema.comandasHistorico.closedAt, todayStart),
+              lt(schema.comandasHistorico.closedAt, tomorrowStart)
+            )
+          );
+
+        const receitaHojeCom = parseFloat(receitaHojeComandasResult[0]?.total || "0");
+        const receitaHojeHist = parseFloat(receitaHojeHistoricoResult[0]?.total || "0");
+        const receitaHoje = receitaHojeCom + receitaHojeHist;
+
+        // Receita semana - sum from both comandas and comandas_historico
+        // closed_at >= NOW() - 7 days
+        const sevenDaysAgo = sql`NOW() - INTERVAL '7 days'`;
+
+        const receitaSemanaComandasResult = await app.db
+          .select({ total: sum(schema.comandas.total) })
+          .from(schema.comandas)
+          .where(
+            and(
+              eq(schema.comandas.status, "fechada"),
+              gte(schema.comandas.closedAt, sevenDaysAgo)
+            )
+          );
+
+        const receitaSemanaHistoricoResult = await app.db
+          .select({ total: sum(schema.comandasHistorico.total) })
+          .from(schema.comandasHistorico)
+          .where(
+            and(
+              eq(schema.comandasHistorico.status, "fechada"),
+              gte(schema.comandasHistorico.closedAt, sevenDaysAgo)
+            )
+          );
+
+        const receitaSemanaCom = parseFloat(receitaSemanaComandasResult[0]?.total || "0");
+        const receitaSemanaHist = parseFloat(receitaSemanaHistoricoResult[0]?.total || "0");
+        const receitaSemana = receitaSemanaCom + receitaSemanaHist;
 
         app.logger.info(
           { totalMesas, mesasOcupadas, comandasAbertas, pedidosPendentes, receitaHoje, receitaSemana },
