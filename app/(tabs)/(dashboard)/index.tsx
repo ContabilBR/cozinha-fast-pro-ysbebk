@@ -350,7 +350,7 @@ export default function DashboardScreen() {
                   <View key={i} style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: COLORS.surfaceSecondary }} />
                 ))
               : tables.map((table) => {
-                  const isOccupied = table.status !== "livre";
+                  const isOccupied = table.status !== "disponivel";
                   const color = isOccupied ? "#E8521A" : "#22C55E";
                   return (
                     <AnimatedPressable
