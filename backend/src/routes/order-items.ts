@@ -67,7 +67,10 @@ export function registerOrderItemRoutes(app: App) {
 
       try {
         const authUserId = authUser.id;
-        app.logger.info({ authUserId }, "Listing pedidos for user");
+        const userRole = authUser.role?.toLowerCase() ?? "";
+        const isManager = ["gerente", "admin", "administrador"].includes(userRole);
+
+        app.logger.info({ authUserId, userRole, isManager }, "Listing pedidos for user");
 
         const pedidos = await app.db
           .select({
@@ -90,7 +93,11 @@ export function registerOrderItemRoutes(app: App) {
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
           .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
           .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
-          .where(eq(schema.comandas.garcomId, authUserId))
+          .where(
+            isManager
+              ? sql`true`
+              : eq(schema.comandas.garcomId, authUserId)
+          )
           .orderBy(desc(schema.pedidos.createdAt));
 
         app.logger.info({ count: pedidos.length }, "Pedidos retrieved");
