@@ -168,6 +168,7 @@ export function registerGarconRoutes(app: App) {
           id: randomUUID(),
           nome: request.body.name,
           email: request.body.email,
+          senhaHash: hashedPassword,
           role: "garcom",
           createdAt: now,
         });
@@ -262,13 +263,23 @@ export function registerGarconRoutes(app: App) {
           .where(eq(userTable.id, request.params.id))
           .returning();
 
-        // If password is provided, update it in account table
-        if (request.body.password) {
+        // If password is provided, update it in account table and usuarios table
+        if (request.body.password && request.body.password.trim() !== "") {
           const hashedPassword = await bcrypt.hash(request.body.password, 10);
+
+          // Update account table (Better Auth)
           await app.db
             .update(accountTable)
             .set({ password: hashedPassword })
             .where(eq(accountTable.userId, request.params.id));
+
+          // Update usuarios table (for compatibility)
+          await app.db
+            .update(schema.usuarios)
+            .set({ senhaHash: hashedPassword })
+            .where(eq(schema.usuarios.email, updated.email));
+
+          app.logger.debug({ userId: updated.id }, "Password updated in both account and usuarios tables");
         }
 
         app.logger.info({ userId: updated.id }, "Garcon updated successfully");
