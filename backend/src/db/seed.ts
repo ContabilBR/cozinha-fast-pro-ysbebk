@@ -261,11 +261,12 @@ export async function seedDatabase(app: App) {
         { nome: 'Cozinheiro', email: 'cozinheiro@cozinhafast.com', role: 'cozinheiro' },
       ];
 
-      // Upsert each usuario: check if exists by email, only insert if not found
+      // Upsert each usuario with raw SQL to preserve existing senha_hash
       app.logger.info({ count: seedUsuariosData.length }, "Upserting seed usuarios with INSERT ... ON CONFLICT");
 
       for (const u of seedUsuariosData) {
         try {
+          // Check if usuario exists
           const existing = await app.db
             .select()
             .from(schema.usuarios)
@@ -273,15 +274,29 @@ export async function seedDatabase(app: App) {
             .limit(1);
 
           if (existing.length === 0) {
+            // Insert new usuario with hashed password
             await app.db.insert(schema.usuarios).values({
+              id: randomUUID(),
               nome: u.nome,
               email: u.email,
               senhaHash: senhaHash,
               role: u.role,
+              createdAt: new Date(),
             });
             app.logger.debug({ email: u.email }, 'Inserted new seed usuario');
           } else {
-            app.logger.debug({ email: u.email }, 'Seed usuario already exists, skipping');
+            // User already exists - preserve existing senha_hash if present
+            const existingUser = existing[0];
+            if (!existingUser.senhaHash) {
+              // Only update senha_hash if it's NULL
+              await app.db
+                .update(schema.usuarios)
+                .set({ senhaHash: senhaHash })
+                .where(eq(schema.usuarios.email, u.email));
+              app.logger.debug({ email: u.email }, 'Updated NULL senha_hash for existing usuario');
+            } else {
+              app.logger.debug({ email: u.email }, 'Seed usuario already exists with senha_hash, preserving it');
+            }
           }
         } catch (err) {
           app.logger.warn({ email: u.email, err }, 'Failed to upsert usuario');
@@ -289,6 +304,37 @@ export async function seedDatabase(app: App) {
       }
 
       app.logger.info("Seed usuarios upserted successfully");
+
+      // Startup migration: Fix es@gmail.com with default password if senha_hash is NULL
+      app.logger.info("Running startup migration: fixing NULL senha_hash for es@gmail.com");
+      try {
+        const esUser = await app.db
+          .select()
+          .from(schema.usuarios)
+          .where(eq(schema.usuarios.email, 'es@gmail.com'))
+          .limit(1);
+
+        if (esUser.length > 0 && esUser[0].senhaHash === null) {
+          // Hash the default password "garcom123" with bcrypt cost factor 10
+          const defaultHash = bcryptjs.hashSync('garcom123', 10);
+
+          await app.db
+            .update(schema.usuarios)
+            .set({ senhaHash: defaultHash })
+            .where(eq(schema.usuarios.email, 'es@gmail.com'));
+
+          app.logger.info(
+            { email: 'es@gmail.com' },
+            'Set default password (garcom123) for es@gmail.com'
+          );
+        } else if (esUser.length > 0 && esUser[0].senhaHash) {
+          app.logger.debug({ email: 'es@gmail.com' }, 'es@gmail.com already has senha_hash, skipping migration');
+        } else {
+          app.logger.debug({ email: 'es@gmail.com' }, 'es@gmail.com user not found');
+        }
+      } catch (err) {
+        app.logger.warn({ err }, 'Failed to run startup migration for es@gmail.com');
+      }
 
       // Verify
       const allUsuarios = await app.db.select().from(schema.usuarios);
