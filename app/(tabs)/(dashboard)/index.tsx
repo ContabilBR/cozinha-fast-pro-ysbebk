@@ -9,10 +9,11 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
-import { formatCurrency } from "@/utils/helpers";
+import { formatCurrency, isAdmin } from "@/utils/helpers";
 import { TrendingUp, ShoppingBag, Grid3x3, Clock, RefreshCw, ChevronRight, DollarSign } from "lucide-react-native";
 import type { RelatorioResumo } from "@/types";
 
@@ -148,6 +149,8 @@ export default function DashboardScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user?.role);
 
   const [resumo, setResumo] = useState<RelatorioResumo>(EMPTY_RESUMO);
   const [tables, setTables] = useState<ApiMesa[]>([]);
@@ -364,8 +367,12 @@ export default function DashboardScreen() {
                     <AnimatedPressable
                       key={table.id}
                       onPress={() => {
-                        console.log("[Dashboard] Table mini pressed:", table.numero, "id:", table.id);
-                        router.push(`/mesa/${table.id}`);
+                        console.log("[Dashboard] Table mini pressed:", table.numero, "id:", table.id, "isAdmin:", userIsAdmin);
+                        if (userIsAdmin) {
+                          router.push(`/mesa/historico/${table.id}`);
+                        } else {
+                          router.push(`/mesa/${table.id}`);
+                        }
                       }}
                       style={{
                         width: 56,
