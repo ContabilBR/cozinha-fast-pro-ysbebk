@@ -52,26 +52,18 @@ function StatCard({
   color,
   icon,
   loading,
+  onPress,
 }: {
   title: string;
   value: string;
   color: string;
   icon: React.ReactNode;
   loading: boolean;
+  onPress?: () => void;
 }) {
   const COLORS = useColors();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: COLORS.surface,
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        gap: 8,
-      }}
-    >
+  const cardContent = (
+    <>
       <View
         style={{
           width: 40,
@@ -99,6 +91,46 @@ function StatCard({
           </Text>
         </>
       )}
+      {onPress && (
+        <View style={{ position: "absolute", bottom: 10, right: 10 }}>
+          <ChevronRight size={14} color={COLORS.textSecondary} />
+        </View>
+      )}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <AnimatedPressable
+        onPress={onPress}
+        style={{
+          flex: 1,
+          backgroundColor: COLORS.surface,
+          borderRadius: 16,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          gap: 8,
+        }}
+      >
+        {cardContent}
+      </AnimatedPressable>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        gap: 8,
+      }}
+    >
+      {cardContent}
     </View>
   );
 }
@@ -270,6 +302,10 @@ export default function DashboardScreen() {
               color={COLORS.primary}
               icon={<ShoppingBag size={20} color={COLORS.primary} />}
               loading={loading}
+              onPress={() => {
+                console.log("[Dashboard] Comandas Abertas card pressed");
+                router.push("/(tabs)/(comandas)");
+              }}
             />
             <StatCard
               title="Pedidos Pendentes"
@@ -277,6 +313,10 @@ export default function DashboardScreen() {
               color={COLORS.warning}
               icon={<Clock size={20} color={COLORS.warning} />}
               loading={loading}
+              onPress={() => {
+                console.log("[Dashboard] Pedidos Pendentes card pressed");
+                router.push("/(tabs)/(pedidos)");
+              }}
             />
           </View>
 
