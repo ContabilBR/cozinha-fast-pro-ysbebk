@@ -89,7 +89,13 @@ export default function MesaDetailScreen() {
       }
       const data = await res.json();
       const c: ComandaInfo | null = data.comanda ?? data ?? null;
-      console.log("[Mesa] Comanda carregada:", c?.id ?? "nenhuma");
+      if (c) {
+        c.total = parseFloat(String(c.total)) || 0;
+        if (!c.aberta_em) {
+          c.aberta_em = (c as any).created_at ?? "";
+        }
+      }
+      console.log("[Mesa] Comanda carregada:", c?.id ?? "nenhuma", "total:", c?.total);
       setComanda(c);
     } catch (e: any) {
       console.error("[Mesa] Erro ao buscar comanda:", e);
@@ -149,7 +155,7 @@ export default function MesaDetailScreen() {
 
   const isOcupada = (mesaStatus as string) === "ocupada";
   const pedidosCount = comanda?.pedidos?.length ?? 0;
-  const abertoEm = comanda ? formatDateTime(comanda.aberta_em) : "";
+  const abertoEm = comanda ? formatDateTime(comanda.aberta_em || (comanda as any).created_at || "") : "";
   const totalFormatted = comanda ? formatPrice(comanda.total) : "0,00";
 
   return (
