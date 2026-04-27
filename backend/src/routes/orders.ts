@@ -1129,7 +1129,7 @@ export function registerOrderRoutes(app: App) {
             c.created_at AS comanda_created_at,
             COALESCE(u.name, us.nome, 'Garçom') AS garcom_nome,
             COALESCE(u.email, us.email) AS garcom_email,
-            COALESCE(SUM(p.quantidade * p.preco_unitario), 0) as total
+            COALESCE(SUM(p.quantidade * p.preco_unitario), 0)::float as total
           FROM comandas c
           LEFT JOIN "user" u ON u.id = c.garcom_id
           LEFT JOIN usuarios us ON us.id::text = c.garcom_id
@@ -1155,7 +1155,7 @@ export function registerOrderRoutes(app: App) {
             p.id,
             p.prato_id,
             p.quantidade,
-            p.preco_unitario,
+            p.preco_unitario::float as preco_unitario,
             p.observacao,
             p.status,
             p.created_at,

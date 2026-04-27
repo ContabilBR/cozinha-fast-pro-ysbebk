@@ -145,17 +145,20 @@ export function registerRelatoriosRoutes(app: App) {
         const receitaSemanaHist = parseFloat(receitaSemanaHistoricoResult[0]?.total || "0");
         const receitaSemana = receitaSemanaCom + receitaSemanaHist;
 
-        // Total revenue - sum of all closed comandas
-        const totalRevenueResult = await (app.db as any).execute(
-          sql`
-            SELECT COALESCE(SUM(total), 0) as total FROM (
-              SELECT total FROM comandas WHERE status = 'fechada'
-              UNION ALL
-              SELECT total FROM comandas_historico WHERE status = 'fechada'
-            ) combined
-          `
-        ) as any[];
-        const totalRevenue = parseFloat(totalRevenueResult[0]?.total || "0");
+        // Total revenue - sum of all closed comandas from both tables
+        const totalRevenueComandasResult = await app.db
+          .select({ total: sum(schema.comandas.total) })
+          .from(schema.comandas)
+          .where(eq(schema.comandas.status, "fechada"));
+
+        const totalRevenueHistoricoResult = await app.db
+          .select({ total: sum(schema.comandasHistorico.total) })
+          .from(schema.comandasHistorico)
+          .where(eq(schema.comandasHistorico.status, "fechada"));
+
+        const totalRevenueCom = parseFloat(totalRevenueComandasResult[0]?.total || "0");
+        const totalRevenueHist = parseFloat(totalRevenueHistoricoResult[0]?.total || "0");
+        const totalRevenue = totalRevenueCom + totalRevenueHist;
 
         // Comandas historico count
         const comandasHistoricoCountResult = await app.db
@@ -175,17 +178,20 @@ export function registerRelatoriosRoutes(app: App) {
         // Open orders (same as comandasAbertas)
         const openOrders = comandasAbertas;
 
-        // Average ticket - average of all closed comandas
-        const avgTicketResult = await (app.db as any).execute(
-          sql`
-            SELECT AVG(total) as avg_total FROM (
-              SELECT total FROM comandas WHERE status = 'fechada'
-              UNION ALL
-              SELECT total FROM comandas_historico WHERE status = 'fechada'
-            ) combined
-          `
-        ) as any[];
-        const avgTicket = parseFloat(avgTicketResult[0]?.avg_total || "0");
+        // Average ticket - calculate from total revenue and count
+        const totalClosedComandasCom = await app.db
+          .select({ count: count() })
+          .from(schema.comandas)
+          .where(eq(schema.comandas.status, "fechada"));
+        const totalClosedComandasHist = await app.db
+          .select({ count: count() })
+          .from(schema.comandasHistorico)
+          .where(eq(schema.comandasHistorico.status, "fechada"));
+
+        const countClosedCom = totalClosedComandasCom[0]?.count || 0;
+        const countClosedHist = totalClosedComandasHist[0]?.count || 0;
+        const totalClosedCount = countClosedCom + countClosedHist;
+        const avgTicket = totalClosedCount > 0 ? totalRevenue / totalClosedCount : 0;
 
         // Top 5 dishes - aggregate from both pedidos and pedidos_historico
         let topDishes: Array<{ dish_name: string; quantity_sold: number }> = [];
@@ -243,27 +249,33 @@ export function registerRelatoriosRoutes(app: App) {
         }
 
         // Orders by status - from both tables combined
-        const ordersByStatusResult = await (app.db as any).execute(
-          sql`
-            SELECT status, COUNT(*) as count FROM (
-              SELECT status FROM comandas
-              UNION ALL
-              SELECT status FROM comandas_historico
-            ) combined
-            GROUP BY status
-          `
-        ) as any[];
+        const comandasStatusResult = await app.db
+          .select({ status: schema.comandas.status, count: count() })
+          .from(schema.comandas)
+          .groupBy(schema.comandas.status);
+
+        const comandasHistoricoStatusResult = await app.db
+          .select({ status: schema.comandasHistorico.status, count: count() })
+          .from(schema.comandasHistorico)
+          .groupBy(schema.comandasHistorico.status);
+
+        const statusMap = new Map<string, number>();
+
+        for (const row of comandasStatusResult) {
+          const status = row.status || "aberta";
+          statusMap.set(status, (statusMap.get(status) || 0) + (row.count || 0));
+        }
+
+        for (const row of comandasHistoricoStatusResult) {
+          const status = row.status || "aberta";
+          statusMap.set(status, (statusMap.get(status) || 0) + (row.count || 0));
+        }
 
         const ordersByStatus = {
-          aberta: 0,
-          fechada: 0,
-          cancelada: 0,
+          aberta: statusMap.get("aberta") || 0,
+          fechada: statusMap.get("fechada") || 0,
+          cancelada: statusMap.get("cancelada") || 0,
         };
-        for (const row of ordersByStatusResult) {
-          if (row.status in ordersByStatus) {
-            ordersByStatus[row.status as keyof typeof ordersByStatus] = parseInt(row.count || "0");
-          }
-        }
 
         app.logger.info(
           {
