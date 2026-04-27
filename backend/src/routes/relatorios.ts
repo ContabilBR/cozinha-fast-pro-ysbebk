@@ -21,6 +21,29 @@ export function registerRelatoriosRoutes(app: App) {
               pedidos_pendentes: { type: "number" },
               receita_hoje: { type: "number" },
               receita_semana: { type: "number" },
+              total_revenue: { type: "number" },
+              comandas_historico: { type: "number" },
+              total_orders: { type: "number" },
+              open_orders: { type: "number" },
+              avg_ticket: { type: "number" },
+              top_dishes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    dish_name: { type: "string" },
+                    quantity_sold: { type: "number" },
+                  },
+                },
+              },
+              orders_by_status: {
+                type: "object",
+                properties: {
+                  aberta: { type: "number" },
+                  fechada: { type: "number" },
+                  cancelada: { type: "number" },
+                },
+              },
             },
           },
         },
@@ -122,8 +145,131 @@ export function registerRelatoriosRoutes(app: App) {
         const receitaSemanaHist = parseFloat(receitaSemanaHistoricoResult[0]?.total || "0");
         const receitaSemana = receitaSemanaCom + receitaSemanaHist;
 
+        // Total revenue - sum of all closed comandas
+        const totalRevenueResult = await (app.db as any).execute(
+          sql`
+            SELECT COALESCE(SUM(total), 0) as total FROM (
+              SELECT total FROM comandas WHERE status = 'fechada'
+              UNION ALL
+              SELECT total FROM comandas_historico WHERE status = 'fechada'
+            ) combined
+          `
+        ) as any[];
+        const totalRevenue = parseFloat(totalRevenueResult[0]?.total || "0");
+
+        // Comandas historico count
+        const comandasHistoricoCountResult = await app.db
+          .select({ count: count() })
+          .from(schema.comandasHistorico);
+        const comandasHistoricoCount = comandasHistoricoCountResult[0]?.count || 0;
+
+        // Total orders - count from both pedidos and pedidos_historico
+        const totalPedidosResult = await app.db
+          .select({ count: count() })
+          .from(schema.pedidos);
+        const totalPedidosHist = await app.db
+          .select({ count: count() })
+          .from(schema.pedidosHistorico);
+        const totalOrders = (totalPedidosResult[0]?.count || 0) + (totalPedidosHist[0]?.count || 0);
+
+        // Open orders (same as comandasAbertas)
+        const openOrders = comandasAbertas;
+
+        // Average ticket - average of all closed comandas
+        const avgTicketResult = await (app.db as any).execute(
+          sql`
+            SELECT AVG(total) as avg_total FROM (
+              SELECT total FROM comandas WHERE status = 'fechada'
+              UNION ALL
+              SELECT total FROM comandas_historico WHERE status = 'fechada'
+            ) combined
+          `
+        ) as any[];
+        const avgTicket = parseFloat(avgTicketResult[0]?.avg_total || "0");
+
+        // Top 5 dishes - aggregate from both pedidos and pedidos_historico
+        let topDishes: Array<{ dish_name: string; quantity_sold: number }> = [];
+        try {
+          const topDishesFromPedidosResult = await (app.db as any).execute(
+            sql`
+              SELECT
+                pr.nome as dish_name,
+                SUM(p.quantidade)::integer as quantity_sold
+              FROM pedidos p
+              INNER JOIN pratos pr ON p.prato_id = pr.id
+              GROUP BY pr.nome
+              ORDER BY quantity_sold DESC
+            `
+          ) as any[];
+
+          const topDishesFromHistoricoResult = await (app.db as any).execute(
+            sql`
+              SELECT
+                prato_nome as dish_name,
+                SUM(quantidade)::integer as quantity_sold
+              FROM pedidos_historico
+              WHERE prato_nome IS NOT NULL
+              GROUP BY prato_nome
+              ORDER BY quantity_sold DESC
+            `
+          ) as any[];
+
+          // Combine and aggregate results in JavaScript
+          const dishMap = new Map<string, number>();
+
+          if (Array.isArray(topDishesFromPedidosResult)) {
+            for (const d of topDishesFromPedidosResult) {
+              const key = d.dish_name || "Unknown";
+              const count = parseInt(String(d.quantity_sold || 0));
+              dishMap.set(key, (dishMap.get(key) || 0) + count);
+            }
+          }
+
+          if (Array.isArray(topDishesFromHistoricoResult)) {
+            for (const d of topDishesFromHistoricoResult) {
+              const key = d.dish_name || "Unknown";
+              const count = parseInt(String(d.quantity_sold || 0));
+              dishMap.set(key, (dishMap.get(key) || 0) + count);
+            }
+          }
+
+          topDishes = Array.from(dishMap.entries())
+            .map(([dish_name, quantity_sold]) => ({ dish_name, quantity_sold }))
+            .sort((a, b) => b.quantity_sold - a.quantity_sold)
+            .slice(0, 5);
+        } catch (dishError) {
+          app.logger.warn({ err: dishError }, "Failed to get top dishes, using empty array");
+          topDishes = [];
+        }
+
+        // Orders by status - from both tables combined
+        const ordersByStatusResult = await (app.db as any).execute(
+          sql`
+            SELECT status, COUNT(*) as count FROM (
+              SELECT status FROM comandas
+              UNION ALL
+              SELECT status FROM comandas_historico
+            ) combined
+            GROUP BY status
+          `
+        ) as any[];
+
+        const ordersByStatus = {
+          aberta: 0,
+          fechada: 0,
+          cancelada: 0,
+        };
+        for (const row of ordersByStatusResult) {
+          if (row.status in ordersByStatus) {
+            ordersByStatus[row.status as keyof typeof ordersByStatus] = parseInt(row.count || "0");
+          }
+        }
+
         app.logger.info(
-          { totalMesas, mesasOcupadas, comandasAbertas, pedidosPendentes, receitaHoje, receitaSemana },
+          {
+            totalMesas, mesasOcupadas, comandasAbertas, pedidosPendentes, receitaHoje, receitaSemana,
+            totalRevenue, comandasHistoricoCount, totalOrders, openOrders, avgTicket, topDishesCount: topDishes.length
+          },
           "Resumo retrieved successfully"
         );
 
@@ -134,6 +280,13 @@ export function registerRelatoriosRoutes(app: App) {
           pedidos_pendentes: pedidosPendentes,
           receita_hoje: receitaHoje,
           receita_semana: receitaSemana,
+          total_revenue: totalRevenue,
+          comandas_historico: comandasHistoricoCount,
+          total_orders: totalOrders,
+          open_orders: openOrders,
+          avg_ticket: avgTicket,
+          top_dishes: topDishes,
+          orders_by_status: ordersByStatus,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get resumo");
