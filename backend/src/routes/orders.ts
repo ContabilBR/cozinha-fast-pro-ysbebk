@@ -798,6 +798,8 @@ export function registerOrderRoutes(app: App) {
               .update(schema.mesas)
               .set({ status: "disponivel" })
               .where(eq(schema.mesas.id, comanda.mesaId));
+
+            app.logger.info({ mesaId: comanda.mesaId }, "Mesa status updated to disponivel after comanda closed");
           }
         });
 
