@@ -792,7 +792,7 @@ export function registerOrderRoutes(app: App) {
 
           const remainingCount = remainingComandasResult[0]?.count || 0;
 
-          // Update mesa status to 'livre' only if no more open comandas
+          // Update mesa status to 'disponivel' only if no more open comandas
           if (remainingCount === 0) {
             await tx
               .update(schema.mesas)
@@ -951,7 +951,7 @@ export function registerOrderRoutes(app: App) {
           .delete(schema.comandas)
           .where(eq(schema.comandas.id, request.params.id));
 
-        // Update mesa status back to livre
+        // Update mesa status back to disponivel
         await app.db
           .update(schema.mesas)
           .set({ status: "disponivel" })

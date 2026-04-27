@@ -36,7 +36,7 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.mesas);
         const totalMesas = totalMesasResult[0]?.count || 0;
 
-        // Mesas ocupadas (status != 'livre')
+        // Mesas ocupadas (status != 'disponivel')
         const mesasOcupadasResult = await app.db
           .select({ count: count() })
           .from(schema.mesas)
