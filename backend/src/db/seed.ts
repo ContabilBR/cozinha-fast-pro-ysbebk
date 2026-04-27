@@ -529,6 +529,18 @@ export async function seedDatabase(app: App) {
       } catch (err) {
         app.logger.warn({ err }, "Mesa status synchronization failed");
       }
+
+      // Startup migration: Fix stuck mesas that don't have open comandas but aren't 'disponivel'
+      app.logger.info("Running startup migration: releasing stuck mesas to disponivel");
+      try {
+        const fixStuckMesasResult = await (app.db as any).execute(
+          sql`UPDATE mesas SET status = 'disponivel' WHERE id NOT IN (SELECT DISTINCT mesa_id FROM comandas WHERE status = 'aberta') AND status != 'disponivel'`
+        );
+        const rowsUpdated = fixStuckMesasResult?.rowCount || 0;
+        app.logger.info({ rowsUpdated }, "Startup migration: fixed stuck mesas");
+      } catch (err) {
+        app.logger.warn({ err }, "Startup migration: failed to release stuck mesas");
+      }
     } catch (err) {
       app.logger.warn({ err }, "Mesa status diagnostics failed");
     }

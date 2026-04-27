@@ -678,7 +678,20 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({ comandaId: request.params.id }, "Closing and archiving comanda");
 
-        // Fetch comanda with mesa info
+        // STEP 1: First query mesa_id before any archive logic
+        const mesaIdResult = await app.db
+          .select({ mesaId: schema.comandas.mesaId })
+          .from(schema.comandas)
+          .where(eq(schema.comandas.id, request.params.id));
+
+        if (!mesaIdResult.length) {
+          return reply.code(404).send({ error: "Comanda not found" });
+        }
+
+        const mesaId = mesaIdResult[0].mesaId;
+        app.logger.info({ comandaId: request.params.id, mesaId }, "Comanda found, mesa_id extracted");
+
+        // Fetch full comanda details with mesa info for response
         const comandas = await app.db
           .select({
             id: schema.comandas.id,
@@ -692,10 +705,6 @@ export function registerOrderRoutes(app: App) {
           .from(schema.comandas)
           .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
           .where(eq(schema.comandas.id, request.params.id));
-
-        if (!comandas.length) {
-          return reply.code(404).send({ error: "Comanda not found" });
-        }
 
         const comanda = comandas[0];
 
@@ -742,9 +751,9 @@ export function registerOrderRoutes(app: App) {
           subtotal_item: p.quantidade * parseFloat(p.precoUnitario || "0"),
         }));
 
-        // Use transaction for atomic operations
+        // STEP 2: Run the archive logic
         await (app.db as any).transaction(async (tx: any) => {
-          // Archive comanda to historico
+          // Copy comanda to historico with status 'fechada'
           await tx.insert(schema.comandasHistorico).values({
             id: comanda.id,
             mesaId: comanda.mesaId,
@@ -757,7 +766,7 @@ export function registerOrderRoutes(app: App) {
             archivedAt: closedAt,
           });
 
-          // Archive pedidos to historico
+          // Copy pedidos to historico
           if (pedidos.length > 0) {
             await tx.insert(schema.pedidosHistorico).values(
               pedidos.map((p) => ({
@@ -785,21 +794,24 @@ export function registerOrderRoutes(app: App) {
             .delete(schema.comandas)
             .where(eq(schema.comandas.id, request.params.id));
 
-          // Check if mesa still has open comandas
-          const remainingComandasResult = await (tx as any).execute(
-            sql`SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ${comanda.mesaId} AND status = 'aberta'`
-          ) as any[];
+          // STEP 3: After archive, release mesa if no other open comandas remain
+          if (mesaId) {
+            // Check if mesa still has open comandas
+            const remainingComandasResult = await (tx as any).execute(
+              sql`SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ${mesaId} AND status = 'aberta'`
+            ) as any[];
 
-          const remainingCount = remainingComandasResult[0]?.count || 0;
+            const remainingCount = remainingComandasResult[0]?.count || 0;
 
-          // Update mesa status to 'disponivel' only if no more open comandas
-          if (remainingCount === 0) {
-            await tx
-              .update(schema.mesas)
-              .set({ status: "disponivel" })
-              .where(eq(schema.mesas.id, comanda.mesaId));
+            // Update mesa status to 'disponivel' only if no more open comandas
+            if (remainingCount === 0) {
+              await tx
+                .update(schema.mesas)
+                .set({ status: "disponivel" })
+                .where(eq(schema.mesas.id, mesaId));
 
-            app.logger.info({ mesaId: comanda.mesaId }, "Mesa status updated to disponivel after comanda closed");
+              app.logger.info({ mesaId }, "Mesa released to disponivel");
+            }
           }
         });
 
