@@ -119,6 +119,7 @@ export default function GestaoPratos() {
       ]);
       const pratoList: ApiPrato[] = Array.isArray(pratosRes) ? pratosRes : (pratosRes.pratos || []);
       const catList: ApiCategoria[] = Array.isArray(catRes) ? catRes : (catRes.categorias || []);
+      catList.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
       console.log("[GestaoPratos] Carregados", pratoList.length, "pratos,", catList.length, "categorias");
       setPratos(pratoList);
       setCategorias(catList);

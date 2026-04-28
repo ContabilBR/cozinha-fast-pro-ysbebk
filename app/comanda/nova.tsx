@@ -534,7 +534,7 @@ export default function NovaComandaScreen() {
     pratos.forEach((p) => {
       if (p.categoria?.nome) names.add(p.categoria.nome);
     });
-    return ["Todos", ...Array.from(names).sort()];
+    return ["Todos", ...Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))];
   }, [pratos]);
 
   const filteredPratos = useMemo(() => {
