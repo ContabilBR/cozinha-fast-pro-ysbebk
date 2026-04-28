@@ -62,7 +62,7 @@ function RootLayoutNav() {
       <Stack.Screen name="categoria/index" options={{ headerShown: false }} />
       <Stack.Screen name="mesa/index" options={{ headerShown: false }} />
       <Stack.Screen name="mesa/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="mesa-historico/index" options={{ headerShown: false }} />
+      <Stack.Screen name="mesa-historico" options={{ headerShown: false }} />
       <Stack.Screen name="usuario/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="usuario/novo" options={{ headerShown: false }} />
       <Stack.Screen name="comanda/[id]" options={{ headerShown: false }} />
