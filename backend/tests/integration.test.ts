@@ -1349,6 +1349,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create comanda with non-existent mesa returns 404", async () => {
+    const res = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: "00000000-0000-0000-0000-000000000000",
+        garcomId: testUserId,
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
   test("Get comanda by ID", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}`, authToken);
     await expectStatus(res, 200);
@@ -1727,6 +1739,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create pedido with non-existent comanda returns 404", async () => {
+    const res = await authenticatedApi("/api/pedidos", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: "00000000-0000-0000-0000-000000000000",
+        prato_id: pedidoPratoId,
+        quantidade: 1,
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
   test("Get pedido by ID", async () => {
     const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken);
     await expectStatus(res, 200);
@@ -1942,6 +1967,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testUsuarioId = data.id;
+  });
+
+  test("Create usuario without authentication returns 401", async () => {
+    const res = await api("/api/usuarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Test Usuario Unauth",
+        email: `usuario-unauth-${Date.now()}@example.com`,
+        senha: "senha123456",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Create usuario missing required field returns 400", async () => {

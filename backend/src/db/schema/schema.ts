@@ -66,6 +66,8 @@ export const comandas = pgTable("comandas", {
   garcomId: text("garcom_id"),
   status: comandaStatusEnum("status").default("aberta").notNull(),
   total: numeric("total", { precision: 10, scale: 2 }).default("0").notNull(),
+  subtotal: numeric("subtotal", { precision: 10, scale: 2 }).default("0").notNull(),
+  gorjeta: numeric("gorjeta", { precision: 10, scale: 2 }).default("0").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   closedAt: timestamp("closed_at", { withTimezone: true }),
 });
@@ -122,6 +124,8 @@ export const comandasHistorico = pgTable("comandas_historico", {
   garcomId: text("garcom_id"),
   status: text("status").notNull(),
   total: numeric("total", { precision: 10, scale: 2 }).default("0").notNull(),
+  subtotal: numeric("subtotal", { precision: 10, scale: 2 }).default("0").notNull(),
+  gorjeta: numeric("gorjeta", { precision: 10, scale: 2 }).default("0").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   closedAt: timestamp("closed_at", { withTimezone: true }),
   archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),

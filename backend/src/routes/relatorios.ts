@@ -92,7 +92,7 @@ export function registerRelatoriosRoutes(app: App) {
         const tomorrowStart = sql`DATE_TRUNC('day', NOW()) + INTERVAL '1 day'`;
 
         const receitaHojeComandasResult = await app.db
-          .select({ total: sum(schema.comandas.total) })
+          .select({ total: sum(schema.comandas.subtotal) })
           .from(schema.comandas)
           .where(
             and(
@@ -103,7 +103,7 @@ export function registerRelatoriosRoutes(app: App) {
           );
 
         const receitaHojeHistoricoResult = await app.db
-          .select({ total: sum(schema.comandasHistorico.total) })
+          .select({ total: sum(schema.comandasHistorico.subtotal) })
           .from(schema.comandasHistorico)
           .where(
             and(
@@ -122,7 +122,7 @@ export function registerRelatoriosRoutes(app: App) {
         const sevenDaysAgo = sql`NOW() - INTERVAL '7 days'`;
 
         const receitaSemanaComandasResult = await app.db
-          .select({ total: sum(schema.comandas.total) })
+          .select({ total: sum(schema.comandas.subtotal) })
           .from(schema.comandas)
           .where(
             and(
@@ -132,7 +132,7 @@ export function registerRelatoriosRoutes(app: App) {
           );
 
         const receitaSemanaHistoricoResult = await app.db
-          .select({ total: sum(schema.comandasHistorico.total) })
+          .select({ total: sum(schema.comandasHistorico.subtotal) })
           .from(schema.comandasHistorico)
           .where(
             and(
@@ -145,14 +145,14 @@ export function registerRelatoriosRoutes(app: App) {
         const receitaSemanaHist = parseFloat(receitaSemanaHistoricoResult[0]?.total || "0");
         const receitaSemana = receitaSemanaCom + receitaSemanaHist;
 
-        // Total revenue - sum of all closed comandas from both tables
+        // Total revenue - sum of all closed comandas from both tables (using subtotal)
         const totalRevenueComandasResult = await app.db
-          .select({ total: sum(schema.comandas.total) })
+          .select({ total: sum(schema.comandas.subtotal) })
           .from(schema.comandas)
           .where(eq(schema.comandas.status, "fechada"));
 
         const totalRevenueHistoricoResult = await app.db
-          .select({ total: sum(schema.comandasHistorico.total) })
+          .select({ total: sum(schema.comandasHistorico.subtotal) })
           .from(schema.comandasHistorico)
           .where(eq(schema.comandasHistorico.status, "fechada"));
 

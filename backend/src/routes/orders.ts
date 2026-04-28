@@ -713,13 +713,13 @@ export function registerOrderRoutes(app: App) {
           return reply.code(400).send({ error: "comanda não está aberta" });
         }
 
-        // Extract parameters with defaults
-        const gorjeta = request.body.gorjeta ?? 0;
+        // Extract parameters with defaults, parse gorjeta as float
+        const gorjetaValue = parseFloat((request.body.gorjeta?.toString()) ?? "0");
         const numPessoas = request.body.num_pessoas ?? 0;
 
         // Calculate totals
         const subtotal = parseFloat(comanda.total || "0");
-        const totalFinal = subtotal + gorjeta;
+        const totalFinal = subtotal + gorjetaValue;
         const valorPorPessoa = numPessoas > 0 ? totalFinal / numPessoas : null;
 
         // Capture timestamps
@@ -761,6 +761,8 @@ export function registerOrderRoutes(app: App) {
             garcomId: comanda.garcomId,
             status: "fechada",
             total: totalFinal.toString(),
+            subtotal: subtotal.toString(),
+            gorjeta: gorjetaValue.toString(),
             createdAt: createdAt,
             closedAt: closedAt,
             archivedAt: closedAt,
@@ -783,6 +785,15 @@ export function registerOrderRoutes(app: App) {
               }))
             );
           }
+
+          // Update comanda with subtotal and gorjeta before deleting
+          await tx
+            .update(schema.comandas)
+            .set({
+              subtotal: subtotal.toString(),
+              gorjeta: gorjetaValue.toString(),
+            })
+            .where(eq(schema.comandas.id, request.params.id));
 
           // Delete pedidos
           await tx
@@ -811,15 +822,15 @@ export function registerOrderRoutes(app: App) {
         });
 
         app.logger.info(
-          { comandaId: request.params.id, subtotal, gorjeta, totalFinal, itemCount: itens.length },
-          "Comanda archived successfully"
+          { comandaId: request.params.id, subtotal, gorjeta: gorjetaValue, totalFinal, itemCount: itens.length },
+          `[fechar] comanda ${request.params.id}: subtotal=${subtotal}, gorjeta=${gorjetaValue}, total=${totalFinal}`
         );
 
         return reply.code(200).send({
           success: true,
           mesa_numero: comanda.mesaNumero,
           subtotal,
-          gorjeta,
+          gorjeta: gorjetaValue,
           total_final: totalFinal,
           num_pessoas: numPessoas > 0 ? numPessoas : null,
           valor_por_pessoa: valorPorPessoa,
@@ -1263,6 +1274,8 @@ export function registerOrderRoutes(app: App) {
                     id: { type: "string", format: "uuid" },
                     status: { type: "string" },
                     total: { type: "number" },
+                    subtotal: { type: "number" },
+                    gorjeta: { type: "number" },
                     garcom_id: { type: ["string", "null"] },
                     garcom_nome: { type: "string" },
                     created_at: { type: ["string", "null"], format: "date-time" },
@@ -1431,6 +1444,8 @@ export function registerOrderRoutes(app: App) {
             id: comanda.id,
             status: comanda.status,
             total: parseFloat(comanda.total || "0"),
+            subtotal: parseFloat(comanda.subtotal || "0"),
+            gorjeta: parseFloat(comanda.gorjeta || "0"),
             garcom_id: comanda.garcomId || null,
             garcom_nome: garcomNome,
             created_at: comanda.createdAt ? new Date(comanda.createdAt).toISOString() : null,
@@ -1447,10 +1462,10 @@ export function registerOrderRoutes(app: App) {
           };
         });
 
-        // Step 9: Compute resumo
+        // Step 9: Compute resumo (using subtotal for revenue)
         const totalArrecadado =
-          archivedComandasResult.reduce((sum, c) => sum + parseFloat(c.total || "0"), 0) +
-          activeComandasResult.reduce((sum, c) => sum + parseFloat(c.total || "0"), 0);
+          archivedComandasResult.reduce((sum, c) => sum + parseFloat(c.subtotal || "0"), 0) +
+          activeComandasResult.reduce((sum, c) => sum + parseFloat(c.subtotal || "0"), 0);
 
         const totalComandasCount = archivedComandasResult.length + activeComandasResult.length;
 

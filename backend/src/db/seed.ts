@@ -541,6 +541,35 @@ export async function seedDatabase(app: App) {
       } catch (err) {
         app.logger.warn({ err }, "Startup migration: failed to release mesas");
       }
+
+      // Startup migration: Add subtotal and gorjeta columns if they don't exist
+      app.logger.info("Running migration: adding subtotal/gorjeta columns");
+      try {
+        await (app.db as any).execute(
+          sql`ALTER TABLE comandas ADD COLUMN IF NOT EXISTS subtotal NUMERIC NOT NULL DEFAULT 0`
+        );
+        await (app.db as any).execute(
+          sql`ALTER TABLE comandas ADD COLUMN IF NOT EXISTS gorjeta NUMERIC NOT NULL DEFAULT 0`
+        );
+        await (app.db as any).execute(
+          sql`ALTER TABLE comandas_historico ADD COLUMN IF NOT EXISTS subtotal NUMERIC NOT NULL DEFAULT 0`
+        );
+        await (app.db as any).execute(
+          sql`ALTER TABLE comandas_historico ADD COLUMN IF NOT EXISTS gorjeta NUMERIC NOT NULL DEFAULT 0`
+        );
+
+        // Backfill: for rows with no gorjeta, assume subtotal = total
+        await (app.db as any).execute(
+          sql`UPDATE comandas SET subtotal = total WHERE subtotal = 0 AND total > 0`
+        );
+        await (app.db as any).execute(
+          sql`UPDATE comandas_historico SET subtotal = total WHERE subtotal = 0 AND total > 0`
+        );
+
+        app.logger.info("Migration: subtotal/gorjeta columns added and backfilled");
+      } catch (err) {
+        app.logger.warn({ err }, "Migration: subtotal/gorjeta columns already exist or failed");
+      }
     } catch (err) {
       app.logger.warn({ err }, "Mesa status diagnostics failed");
     }
