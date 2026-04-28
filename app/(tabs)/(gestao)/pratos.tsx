@@ -423,7 +423,7 @@ export default function GestaoPratos() {
               style={{
                 backgroundColor: selected.size > 0 ? "#FF3B30" : COLORS.border,
                 borderRadius: 8,
-                paddingHorizontal: 10,
+                paddingHorizontal: 12,
                 paddingVertical: 6,
                 flexDirection: "row",
                 alignItems: "center",
@@ -435,7 +435,7 @@ export default function GestaoPratos() {
               ) : (
                 <Ionicons name="trash" size={14} color="#fff" />
               )}
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>({selected.size})</Text>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Excluir ({selected.size})</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
