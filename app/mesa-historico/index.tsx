@@ -9,7 +9,7 @@ import {
   Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import { getMesaHistoricoId, clearMesaHistoricoId } from "@/utils/mesaHistoricoStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -308,7 +308,6 @@ function ComandaCard({ comanda }: { comanda: ComandaItem }) {
 export default function MesaHistoricoScreen() {
   const id = getMesaHistoricoId() ?? "";
   const COLORS = useColors();
-  const router = useRouter();
 
   const [data, setData] = useState<HistoricoData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -379,7 +378,7 @@ export default function MesaHistoricoScreen() {
     return () => {
       clearMesaHistoricoId();
     };
-  }, [fetchHistorico, id, router]);
+  }, [fetchHistorico, id]);
 
   if (!id) return null;
 
