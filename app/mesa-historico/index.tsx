@@ -9,7 +9,8 @@ import {
   Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
+import { getMesaHistoricoId, clearMesaHistoricoId } from "@/utils/mesaHistoricoStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
@@ -305,8 +306,7 @@ function ComandaCard({ comanda }: { comanda: ComandaItem }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function MesaHistoricoScreen() {
-  const params = useLocalSearchParams<{ id: string }>();
-  const id = params?.id;
+  const id = getMesaHistoricoId() ?? "";
   const COLORS = useColors();
   const router = useRouter();
 
@@ -370,12 +370,18 @@ export default function MesaHistoricoScreen() {
     }
   }, [id]);
 
-  useEffect(() => { fetchHistorico(); }, [fetchHistorico]);
+  useEffect(() => {
+    if (!id) {
+      router.back();
+      return;
+    }
+    fetchHistorico();
+    return () => {
+      clearMesaHistoricoId();
+    };
+  }, [fetchHistorico, id, router]);
 
-  // Guard: if id is missing, show nothing until router context settles
-  if (!id) {
-    return null;
-  }
+  if (!id) return null;
 
   const handleRefresh = () => {
     console.log("[MesaHistorico] Refresh manual");
