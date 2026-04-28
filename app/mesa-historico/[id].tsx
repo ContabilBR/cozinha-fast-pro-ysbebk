@@ -305,7 +305,8 @@ function ComandaCard({ comanda }: { comanda: ComandaItem }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function MesaHistoricoScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = params?.id;
   const COLORS = useColors();
   const router = useRouter();
 
@@ -370,6 +371,11 @@ export default function MesaHistoricoScreen() {
   }, [id]);
 
   useEffect(() => { fetchHistorico(); }, [fetchHistorico]);
+
+  // Guard: if id is missing, show nothing until router context settles
+  if (!id) {
+    return null;
+  }
 
   const handleRefresh = () => {
     console.log("[MesaHistorico] Refresh manual");
