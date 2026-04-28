@@ -5,6 +5,7 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,6 +15,7 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { Users } from "lucide-react-native";
 import { formatCurrency } from "@/utils/helpers";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const BASE_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 
@@ -26,10 +28,17 @@ interface MesaInfo {
   capacidade: number;
 }
 
+interface TopPrato {
+  prato_nome: string;
+  total_quantidade: number;
+  total_receita: number;
+}
+
 interface Resumo {
   total_arrecadado: number;
   total_comandas: number;
   total_pedidos: number;
+  top_pratos: TopPrato[];
 }
 
 interface PedidoItem {
@@ -277,6 +286,12 @@ export default function MesaHistoricoScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  const [searchText, setSearchText] = useState("");
+  const [dateFrom, setDateFrom] = useState<Date | null>(null);
+  const [dateTo, setDateTo] = useState<Date | null>(null);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
+
   const fetchHistorico = useCallback(async () => {
     console.log("[MesaHistorico] GET /api/mesas/" + id + "/historico");
     try {
@@ -296,6 +311,7 @@ export default function MesaHistoricoScreen() {
           total_arrecadado: Number(json.resumo?.total_arrecadado) || 0,
           total_comandas: Number(json.resumo?.total_comandas) || 0,
           total_pedidos: Number(json.resumo?.total_pedidos) || 0,
+          top_pratos: Array.isArray(json.resumo?.top_pratos) ? json.resumo.top_pratos : [],
         },
         comandas: (json.comandas || []).map((c: any) => ({
           ...c,
@@ -340,6 +356,86 @@ export default function MesaHistoricoScreen() {
   const totalComandas = String(data?.resumo?.total_comandas ?? 0);
   const totalPedidos = String(data?.resumo?.total_pedidos ?? 0);
   const navSubtitle = data ? `Mesa ${mesaNumero}` : "";
+
+  // Filtered comandas
+  const filteredComandas = (data?.comandas ?? []).filter((c) => {
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
+      const matchGarcom = c.garcom_nome?.toLowerCase().includes(q);
+      const matchDate = formatDateTime(c.created_at).toLowerCase().includes(q);
+      if (!matchGarcom && !matchDate) return false;
+    }
+    if (dateFrom) {
+      const start = new Date(dateFrom);
+      start.setHours(0, 0, 0, 0);
+      if (new Date(c.created_at) < start) return false;
+    }
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      if (new Date(c.created_at) > end) return false;
+    }
+    return true;
+  });
+
+  // Compute top pratos from filtered comandas
+  const computedTopPratos: TopPrato[] = (() => {
+    const map = new Map<string, { total_quantidade: number; total_receita: number }>();
+    filteredComandas.forEach((c) => {
+      c.pedidos.forEach((p) => {
+        const existing = map.get(p.prato_nome) ?? { total_quantidade: 0, total_receita: 0 };
+        map.set(p.prato_nome, {
+          total_quantidade: existing.total_quantidade + p.quantidade,
+          total_receita: existing.total_receita + p.quantidade * p.preco_unitario,
+        });
+      });
+    });
+    return Array.from(map.entries())
+      .map(([prato_nome, v]) => ({ prato_nome, ...v }))
+      .sort((a, b) => b.total_quantidade - a.total_quantidade)
+      .slice(0, 10);
+  })();
+
+  const hasFilters = !!searchText.trim() || !!dateFrom || !!dateTo;
+  const topPratos: TopPrato[] = hasFilters
+    ? computedTopPratos
+    : (data?.resumo?.top_pratos ?? []);
+
+  // Date label helpers
+  const dateFromLabel = dateFrom
+    ? `${String(dateFrom.getDate()).padStart(2, "0")}/${String(dateFrom.getMonth() + 1).padStart(2, "0")}/${dateFrom.getFullYear()}`
+    : "De";
+  const dateToLabel = dateTo
+    ? `${String(dateTo.getDate()).padStart(2, "0")}/${String(dateTo.getMonth() + 1).padStart(2, "0")}/${dateTo.getFullYear()}`
+    : "Até";
+
+  // Rank badge colors
+  const rankBgColor = (index: number) =>
+    index === 0
+      ? "rgba(251,191,36,0.15)"
+      : index === 1
+      ? "rgba(148,163,184,0.15)"
+      : index === 2
+      ? "rgba(180,120,60,0.12)"
+      : COLORS.background;
+
+  const rankBorderColor = (index: number) =>
+    index === 0
+      ? "rgba(251,191,36,0.3)"
+      : index === 1
+      ? "rgba(148,163,184,0.3)"
+      : index === 2
+      ? "rgba(180,120,60,0.2)"
+      : COLORS.border;
+
+  const rankTextColor = (index: number) =>
+    index === 0
+      ? "#FBBF24"
+      : index === 1
+      ? "#94A3B8"
+      : index === 2
+      ? "#B4783C"
+      : COLORS.textSecondary;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={["top", "left", "right"]}>
@@ -514,12 +610,200 @@ export default function MesaHistoricoScreen() {
             </View>
           </View>
 
+          {/* Pratos mais pedidos */}
+          {topPratos.length > 0 && (
+            <View style={{
+              backgroundColor: COLORS.surface,
+              borderRadius: 16,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              gap: 12,
+            }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
+                🏆 Pratos Mais Pedidos
+              </Text>
+              {topPratos.map((item, index) => {
+                const isLast = index === topPratos.length - 1;
+                const bgColor = rankBgColor(index);
+                const borderColor = rankBorderColor(index);
+                const textColor = rankTextColor(index);
+                const rankLabel = String(index + 1);
+                const pedidosLabel = item.total_quantidade !== 1 ? "pedidos" : "pedido";
+                const receitaLabel = formatCurrency(item.total_receita);
+                return (
+                  <View
+                    key={item.prato_nome}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingVertical: 8,
+                      borderBottomWidth: isLast ? 0 : 1,
+                      borderBottomColor: COLORS.border,
+                    }}
+                  >
+                    {/* Rank badge */}
+                    <View style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      backgroundColor: bgColor,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: borderColor,
+                    }}>
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: textColor }}>
+                        {rankLabel}
+                      </Text>
+                    </View>
+                    {/* Name */}
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text, flex: 1 }}>
+                      {item.prato_nome}
+                    </Text>
+                    {/* Stats */}
+                    <View style={{ alignItems: "flex-end", gap: 2 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>
+                          {item.total_quantidade}
+                        </Text>
+                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>
+                          ×
+                        </Text>
+                        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.primary }}>
+                          {pedidosLabel}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>
+                        {receitaLabel}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Search bar */}
+          <View style={{
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: COLORS.surface,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            gap: 10,
+          }}>
+            <Ionicons name="search-outline" size={18} color={COLORS.textSecondary} />
+            <TextInput
+              value={searchText}
+              onChangeText={(text) => {
+                console.log("[MesaHistorico] Search text changed:", text);
+                setSearchText(text);
+              }}
+              placeholder="Buscar por garçom ou data..."
+              placeholderTextColor={COLORS.textSecondary}
+              style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.text }}
+            />
+            {searchText.length > 0 && (
+              <Pressable onPress={() => { console.log("[MesaHistorico] Search cleared"); setSearchText(""); }}>
+                <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Date range filter */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* De */}
+            <Pressable
+              onPress={() => { console.log("[MesaHistorico] Date from picker opened"); setShowFromPicker(true); }}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: COLORS.surface,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: dateFrom ? COLORS.primary : COLORS.border,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Ionicons name="calendar-outline" size={16} color={dateFrom ? COLORS.primary : COLORS.textSecondary} />
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: dateFrom ? COLORS.text : COLORS.textSecondary, flex: 1 }}>
+                {dateFromLabel}
+              </Text>
+              {dateFrom && (
+                <Pressable onPress={(e) => { e.stopPropagation(); console.log("[MesaHistorico] Date from cleared"); setDateFrom(null); }}>
+                  <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
+                </Pressable>
+              )}
+            </Pressable>
+
+            {/* Até */}
+            <Pressable
+              onPress={() => { console.log("[MesaHistorico] Date to picker opened"); setShowToPicker(true); }}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: COLORS.surface,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: dateTo ? COLORS.primary : COLORS.border,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Ionicons name="calendar-outline" size={16} color={dateTo ? COLORS.primary : COLORS.textSecondary} />
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: dateTo ? COLORS.text : COLORS.textSecondary, flex: 1 }}>
+                {dateToLabel}
+              </Text>
+              {dateTo && (
+                <Pressable onPress={(e) => { e.stopPropagation(); console.log("[MesaHistorico] Date to cleared"); setDateTo(null); }}>
+                  <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
+                </Pressable>
+              )}
+            </Pressable>
+          </View>
+
+          {/* DateTimePicker modals */}
+          {showFromPicker && (
+            <DateTimePicker
+              value={dateFrom ?? new Date()}
+              mode="date"
+              display="default"
+              onChange={(_, date) => {
+                console.log("[MesaHistorico] Date from selected:", date);
+                setShowFromPicker(false);
+                if (date) setDateFrom(date);
+              }}
+            />
+          )}
+          {showToPicker && (
+            <DateTimePicker
+              value={dateTo ?? new Date()}
+              mode="date"
+              display="default"
+              onChange={(_, date) => {
+                console.log("[MesaHistorico] Date to selected:", date);
+                setShowToPicker(false);
+                if (date) setDateTo(date);
+              }}
+            />
+          )}
+
           {/* Comandas list */}
           <View style={{ gap: 10 }}>
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text }}>
               Comandas
             </Text>
-            {data && data.comandas.length === 0 ? (
+            {data && filteredComandas.length === 0 ? (
               <View style={{
                 backgroundColor: COLORS.surface,
                 borderRadius: 16,
@@ -531,11 +815,13 @@ export default function MesaHistoricoScreen() {
               }}>
                 <Text style={{ fontSize: 32 }}>🧾</Text>
                 <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.text, textAlign: "center" }}>
-                  Nenhuma comanda registrada para esta mesa
+                  {hasFilters
+                    ? "Nenhuma comanda encontrada para os filtros aplicados"
+                    : "Nenhuma comanda registrada para esta mesa"}
                 </Text>
               </View>
             ) : (
-              data?.comandas.map((comanda) => (
+              filteredComandas.map((comanda) => (
                 <ComandaCard key={comanda.id} comanda={comanda} />
               ))
             )}
