@@ -822,7 +822,9 @@ export default function MesaHistoricoScreen() {
               backgroundColor: COLORS.surface,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              padding: 24,
+              paddingTop: 24,
+              paddingHorizontal: 24,
+              paddingBottom: 32,
               gap: 16,
             }}
             onPress={(e) => e.stopPropagation()}
@@ -833,7 +835,7 @@ export default function MesaHistoricoScreen() {
             <DateTimePicker
               value={tempDate}
               mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
+              display={Platform.OS === "ios" ? "inline" : "default"}
               onChange={(_, date) => {
                 if (date) setTempDate(date);
               }}
