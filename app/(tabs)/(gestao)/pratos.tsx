@@ -110,6 +110,12 @@ export default function GestaoPratos() {
     }
   };
 
+  const formatPreco = (value: string): string => {
+    const num = parseFloat(value.replace(",", "."));
+    if (isNaN(num)) return value;
+    return num.toFixed(2).replace(".", ",");
+  };
+
   const fetchData = useCallback(async () => {
     console.log("[GestaoPratos] GET /api/pratos e /api/categorias");
     try {
@@ -161,7 +167,7 @@ export default function GestaoPratos() {
     setEditingPrato(p);
     setNome(p.nome ?? "");
     setDescricao(p.descricao ?? "");
-    setPreco(String(p.preco ?? ""));
+    setPreco(p.preco != null ? Number(p.preco).toFixed(2).replace(".", ",") : "");
     setCategoriaId(p.categoria_id ?? "");
     setDisponivel(p.disponivel !== false);
     setLocalImageUri(null);
@@ -956,6 +962,7 @@ export default function GestaoPratos() {
                   <TextInput
                     value={preco}
                     onChangeText={(t) => { setPreco(t); setModalError(""); }}
+                    onBlur={() => { if (preco.trim()) setPreco(formatPreco(preco)); }}
                     placeholder="0,00"
                     placeholderTextColor={COLORS.textTertiary}
                     keyboardType="decimal-pad"
