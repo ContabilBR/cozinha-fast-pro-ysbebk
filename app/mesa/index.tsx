@@ -162,7 +162,7 @@ export default function MesaIndexScreen() {
     console.log("[Mesa/Index] Mesa pressionada:", mesa.numero, "status:", mesa.status, "role:", role);
     if (isAdmin(role)) {
       console.log("[Mesa/Index] Admin/gerente — navegando para histórico:", mesa.id);
-      router.push({ pathname: '/mesa-historico/[id]', params: { id: mesa.id } });
+      router.push({ pathname: '/mesa-historico', params: { id: mesa.id } });
       return;
     }
     if (isDisponivel(mesa.status) && role === "garcom") {

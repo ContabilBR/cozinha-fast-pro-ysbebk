@@ -369,7 +369,7 @@ export default function DashboardScreen() {
                       onPress={() => {
                         console.log("[Dashboard] Table mini pressed:", table.numero, "id:", table.id, "isAdmin:", userIsAdmin);
                         if (userIsAdmin) {
-                          router.push({ pathname: '/mesa-historico/[id]', params: { id: table.id } });
+                          router.push({ pathname: '/mesa-historico', params: { id: table.id } });
                         } else {
                           router.push(`/mesa/${table.id}`);
                         }
