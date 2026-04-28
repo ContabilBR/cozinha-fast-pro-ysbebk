@@ -1242,6 +1242,17 @@ export function registerOrderRoutes(app: App) {
                   total_arrecadado: { type: "number" },
                   total_comandas: { type: "number" },
                   total_pedidos: { type: "number" },
+                  top_pratos: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        prato_nome: { type: "string" },
+                        total_quantidade: { type: "number" },
+                        total_receita: { type: "number" },
+                      },
+                    },
+                  },
                 },
               },
               comandas: {
@@ -1447,12 +1458,46 @@ export function registerOrderRoutes(app: App) {
           Object.values(archivedPedidosMap).reduce((sum, pedidos) => sum + pedidos.length, 0) +
           Object.values(activePedidosMap).reduce((sum, pedidos) => sum + pedidos.length, 0);
 
+        // Compute top_pratos from both archived and active pedidos
+        let topPratosMap: Record<string, { total_quantidade: number; total_receita: number }> = {};
+
+        // Aggregate from archived pedidos
+        for (const pedido of Object.values(archivedPedidosMap).flat()) {
+          const pratoNome = pedido.prato_nome;
+          if (!topPratosMap[pratoNome]) {
+            topPratosMap[pratoNome] = { total_quantidade: 0, total_receita: 0 };
+          }
+          topPratosMap[pratoNome].total_quantidade += pedido.quantidade;
+          topPratosMap[pratoNome].total_receita += pedido.quantidade * pedido.preco_unitario;
+        }
+
+        // Aggregate from active pedidos
+        for (const pedido of Object.values(activePedidosMap).flat()) {
+          const pratoNome = pedido.prato_nome;
+          if (!topPratosMap[pratoNome]) {
+            topPratosMap[pratoNome] = { total_quantidade: 0, total_receita: 0 };
+          }
+          topPratosMap[pratoNome].total_quantidade += pedido.quantidade;
+          topPratosMap[pratoNome].total_receita += pedido.quantidade * pedido.preco_unitario;
+        }
+
+        // Convert to array, sort by total_quantidade DESC, take top 10
+        const topPratos = Object.entries(topPratosMap)
+          .map(([prato_nome, data]) => ({
+            prato_nome,
+            total_quantidade: data.total_quantidade,
+            total_receita: parseFloat(data.total_receita.toFixed(2)),
+          }))
+          .sort((a, b) => b.total_quantidade - a.total_quantidade)
+          .slice(0, 10);
+
         app.logger.info(
           {
             mesaId,
             archivedComandasCount: archivedComandasResult.length,
             activeComandasCount: activeComandasResult.length,
             totalArrecadado,
+            topPratosCount: topPratos.length,
           },
           "Historical data retrieved successfully"
         );
@@ -1468,6 +1513,7 @@ export function registerOrderRoutes(app: App) {
             total_arrecadado: totalArrecadado,
             total_comandas: totalComandasCount,
             total_pedidos: totalPedidosCount,
+            top_pratos: topPratos,
           },
           comandas: comandasResponse,
         });
