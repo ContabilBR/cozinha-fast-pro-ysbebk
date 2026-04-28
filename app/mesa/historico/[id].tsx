@@ -69,6 +69,8 @@ interface ComandaItem {
   id: string;
   status: string;
   total: number;
+  subtotal: number;
+  gorjeta: number;
   garcom_id: string;
   garcom_nome: string;
   created_at: string;
@@ -158,7 +160,10 @@ function ComandaCard({ comanda }: { comanda: ComandaItem }) {
   const isAtiva = comanda.source === "ativa";
   const openedAt = formatDateTime(comanda.created_at);
   const closedAt = formatDateTime(comanda.closed_at);
-  const totalStr = formatCurrency(Number(comanda.total) || 0);
+  const subtotalStr = formatCurrency(Number(comanda.subtotal) || 0);
+  const gorjetaVal = Number(comanda.gorjeta) || 0;
+  const gorjetaStr = formatCurrency(gorjetaVal);
+  const hasGorjeta = gorjetaVal > 0;
   const hasClosed = !!comanda.closed_at;
 
   const handleToggle = () => {
@@ -204,9 +209,17 @@ function ComandaCard({ comanda }: { comanda: ComandaItem }) {
                 {statusCfg.label}
               </Text>
             </View>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
-              {totalStr}
-            </Text>
+            <View style={{ alignItems: "flex-end", gap: 2 }}>
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 14, color: COLORS.primary }}>
+                {subtotalStr}
+              </Text>
+              {hasGorjeta ? (
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: "#F59E0B" }}>
+                  +{gorjetaStr}
+                  {" gorj"}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
@@ -332,6 +345,8 @@ export default function MesaHistoricoScreen() {
         comandas: (json.comandas || []).map((c: any) => ({
           ...c,
           total: Number(c.total) || 0,
+          subtotal: Number(c.subtotal) || Number(c.total) || 0,
+          gorjeta: Number(c.gorjeta) || 0,
           pedidos: (c.pedidos || []).map((p: any) => ({
             ...p,
             preco_unitario: Number(p.preco_unitario) || 0,
@@ -582,7 +597,7 @@ export default function MesaHistoricoScreen() {
                   {totalArrecadado}
                 </Text>
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary, textAlign: "center" }}>
-                  Total Arrecadado
+                  Total Arrecadado (s/ gorjeta)
                 </Text>
               </View>
               {/* Comandas */}
