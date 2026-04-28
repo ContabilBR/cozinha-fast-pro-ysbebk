@@ -557,10 +557,9 @@ export default function ComandaDetailScreen() {
     });
   }, [pratos, searchQuery, selectedCategory]);
 
-  // Subtotal for the modal: prefer comanda.total, fall back to computed total
-  const subtotalForModal = comanda?.total != null && Number(comanda.total) > 0
-    ? Number(comanda.total)
-    : total;
+  // Always use the live computed total from pedidosEnviados — comanda.total in the DB
+  // is only updated on close and does not reflect newly added orders.
+  const subtotalForModal = total;
 
   const NavBar = ({ title }: { title: string }) => (
     <View style={styles.navBar}>
