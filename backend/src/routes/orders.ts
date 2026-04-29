@@ -1544,7 +1544,7 @@ export function registerOrderRoutes(app: App) {
     "/api/cozinha/comandas",
     {
       schema: {
-        description: "Get active comandas for kitchen display system (no authentication required)",
+        description: "Get all comandas for kitchen display system (no authentication required)",
         tags: ["cozinha"],
         response: {
           200: {
@@ -1562,6 +1562,20 @@ export function registerOrderRoutes(app: App) {
                     garcom_nome: { type: "string" },
                     total_itens: { type: "number" },
                     status: { type: "string" },
+                    pedidos: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string", format: "uuid" },
+                          prato_nome: { type: "string" },
+                          quantidade: { type: "number" },
+                          status: { type: "string" },
+                          observacao: { type: ["string", "null"] },
+                          created_at: { type: "string", format: "date-time" },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -1572,9 +1586,9 @@ export function registerOrderRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        app.logger.info({}, "Fetching active comandas for kitchen display");
+        app.logger.info({}, "Fetching all comandas for kitchen display");
 
-        // Query to get all active comandas with pedidos count and garcom info
+        // Query to get all comandas with garcom info
         const comandasQuery = sql`
           SELECT
             c.id,
@@ -1582,26 +1596,53 @@ export function registerOrderRoutes(app: App) {
             c.garcom_id,
             c.status,
             c.created_at,
-            COALESCE(SUM(p.quantidade), 0)::integer as total_itens,
             COALESCE(u.name, pr.name, 'Não informado') as garcom_nome
           FROM comandas c
-          LEFT JOIN pedidos p ON p.comanda_id = c.id
           LEFT JOIN "user" u ON u.id = c.garcom_id
           LEFT JOIN profiles pr ON pr.user_id = c.garcom_id
-          WHERE c.status != 'fechada' AND c.status != 'cancelada'
-          GROUP BY c.id, c.mesa_numero, c.garcom_id, c.status, c.created_at, u.name, pr.name
-          ORDER BY c.created_at ASC
+          ORDER BY c.created_at DESC
         `;
 
-        const result = await (app.db as any).execute(comandasQuery) as any[];
+        const comandasResult = await (app.db as any).execute(comandasQuery) as any[];
 
-        app.logger.info({ count: result.length }, "Active comandas retrieved for kitchen display");
+        // Query to get all pedidos with prato names
+        const pedidosQuery = sql`
+          SELECT
+            p.id,
+            p.comanda_id,
+            COALESCE(pr.nome, 'Prato') as prato_nome,
+            p.quantidade,
+            p.status,
+            p.observacao,
+            p.created_at
+          FROM pedidos p
+          LEFT JOIN pratos pr ON pr.id = p.prato_id
+          ORDER BY p.created_at ASC
+        `;
+
+        const pedidosResult = await (app.db as any).execute(pedidosQuery) as any[];
+
+        // Group pedidos by comanda_id for efficient lookup
+        const pedidosByComandaId = new Map<string, any[]>();
+        for (const pedido of pedidosResult) {
+          const comandaId = pedido.comanda_id;
+          if (!pedidosByComandaId.has(comandaId)) {
+            pedidosByComandaId.set(comandaId, []);
+          }
+          pedidosByComandaId.get(comandaId)!.push(pedido);
+        }
+
+        app.logger.info({ count: comandasResult.length }, "All comandas retrieved for kitchen display");
 
         // Transform results to the expected format
-        const comandas = result.map((row: any) => {
+        const comandas = comandasResult.map((row: any) => {
           // Extract last 6 characters of UUID and uppercase it
           const uuidStr = String(row.id);
           const numeroComanda = uuidStr.slice(-6).toUpperCase();
+
+          // Get pedidos for this comanda
+          const comandaPedidos = pedidosByComandaId.get(row.id) || [];
+          const totalItens = comandaPedidos.reduce((sum, p) => sum + (Number(p.quantidade) || 0), 0);
 
           return {
             id: row.id,
@@ -1609,14 +1650,22 @@ export function registerOrderRoutes(app: App) {
             mesa_numero: row.mesa_numero ? Number(row.mesa_numero) : null,
             created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
             garcom_nome: row.garcom_nome || "Não informado",
-            total_itens: Number(row.total_itens) || 0,
+            total_itens: totalItens,
             status: row.status,
+            pedidos: comandaPedidos.map((p: any) => ({
+              id: p.id,
+              prato_nome: p.prato_nome || "Prato",
+              quantidade: Number(p.quantidade) || 0,
+              status: p.status,
+              observacao: p.observacao || null,
+              created_at: p.created_at ? new Date(p.created_at).toISOString() : null,
+            })),
           };
         });
 
         return reply.code(200).send({ comandas });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to fetch active comandas for kitchen");
+        app.logger.error({ err: error }, "Failed to fetch all comandas for kitchen");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
