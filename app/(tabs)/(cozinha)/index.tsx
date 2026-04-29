@@ -6,6 +6,11 @@ import {
   RefreshControl,
   Animated,
   ActivityIndicator,
+  ScrollView,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -13,7 +18,21 @@ import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { apiGet, apiPut } from "@/utils/api";
 import { formatElapsed } from "@/utils/helpers";
-import { Flame, Clock, RefreshCw, ChefHat, Package, UtensilsCrossed, User } from "lucide-react-native";
+import {
+  Flame,
+  Clock,
+  RefreshCw,
+  ChefHat,
+  Package,
+  UtensilsCrossed,
+  User,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react-native";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface KitchenPedido {
   id: string;
@@ -28,6 +47,15 @@ interface KitchenPedido {
   comanda?: { mesa?: { numero: number } };
 }
 
+interface ComandaPedido {
+  id: string;
+  prato_nome: string;
+  quantidade: number;
+  status: string;
+  observacao: string | null;
+  created_at: string;
+}
+
 interface Comanda {
   id: string;
   numero_comanda: string;
@@ -36,6 +64,7 @@ interface Comanda {
   garcom_nome: string;
   total_itens: number;
   status: string;
+  pedidos: ComandaPedido[];
 }
 
 const NEXT_ACTION: Record<string, { status: string; label: string }> = {
@@ -57,6 +86,34 @@ const STATUS_LABELS: Record<string, string> = {
   pronto: "Pronto",
   entregue: "Entregue",
   cancelado: "Cancelado",
+};
+
+const COMANDA_STATUS_COLORS: Record<string, string> = {
+  aberta: "#6366F1",
+  fechada: "#22C55E",
+  cancelada: "#EF4444",
+};
+
+const COMANDA_STATUS_LABELS: Record<string, string> = {
+  aberta: "Aberta",
+  fechada: "Fechada",
+  cancelada: "Cancelada",
+};
+
+type ComandaFilter = "todas" | "abertas" | "fechadas" | "canceladas";
+
+const COMANDA_FILTERS: { key: ComandaFilter; label: string }[] = [
+  { key: "todas", label: "Todas" },
+  { key: "abertas", label: "Abertas" },
+  { key: "fechadas", label: "Fechadas" },
+  { key: "canceladas", label: "Canceladas" },
+];
+
+const COMANDA_FILTER_STATUS: Record<ComandaFilter, string | null> = {
+  todas: null,
+  abertas: "aberta",
+  fechadas: "fechada",
+  canceladas: "cancelada",
 };
 
 function KitchenItemCard({
@@ -235,6 +292,7 @@ function KitchenItemCard({
 
 function ComandaCard({ item, index }: { item: Comanda; index: number }) {
   const COLORS = useColors();
+  const [expanded, setExpanded] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
 
@@ -244,6 +302,12 @@ function ComandaCard({ item, index }: { item: Comanda; index: number }) {
       Animated.timing(translateY, { toValue: 0, duration: 350, delay: index * 60, useNativeDriver: true }),
     ]).start();
   }, [index, opacity, translateY]);
+
+  const handleToggle = () => {
+    console.log("[Cozinha] ComandaCard toggled:", item.id, "expanded:", !expanded);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  };
 
   const comandaCode = item.id.slice(-6).toUpperCase();
   const comandaLabel = "#" + comandaCode;
@@ -256,6 +320,11 @@ function ComandaCard({ item, index }: { item: Comanda; index: number }) {
   const mesaNum = String(item.mesa_numero);
   const garcomNome = item.garcom_nome;
   const totalItens = String(item.total_itens);
+
+  const comandaStatusColor = COMANDA_STATUS_COLORS[item.status] || "#94A3B8";
+  const comandaStatusLabel = COMANDA_STATUS_LABELS[item.status] || item.status;
+
+  const pedidos: ComandaPedido[] = Array.isArray(item.pedidos) ? item.pedidos : [];
 
   return (
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
@@ -270,63 +339,154 @@ function ComandaCard({ item, index }: { item: Comanda; index: number }) {
           overflow: "hidden",
         }}
       >
-        <View style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <View
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              backgroundColor: COLORS.primaryMuted,
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.primary }}>
-              {mesaNum}
-            </Text>
-          </View>
-
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text }}>
-              {comandaLabel}
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <User size={12} color={COLORS.textSecondary} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                {garcomNome}
+        <TouchableOpacity activeOpacity={0.7} onPress={handleToggle}>
+          <View style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: COLORS.primaryMuted,
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: COLORS.primary }}>
+                {mesaNum}
               </Text>
             </View>
 
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 14,
-                marginTop: 6,
-                paddingTop: 8,
-                borderTopWidth: 1,
-                borderTopColor: COLORS.divider,
-              }}
-            >
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 16, color: COLORS.text }}>
+                  {comandaLabel}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      backgroundColor: comandaStatusColor + "20",
+                      borderRadius: 8,
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: comandaStatusColor }}>
+                      {comandaStatusLabel}
+                    </Text>
+                  </View>
+                  {expanded ? (
+                    <ChevronUp size={16} color={COLORS.textSecondary} />
+                  ) : (
+                    <ChevronDown size={16} color={COLORS.textSecondary} />
+                  )}
+                </View>
+              </View>
+
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Clock size={12} color={COLORS.textSecondary} />
+                <User size={12} color={COLORS.textSecondary} />
                 <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                  {timeLabel}
+                  {garcomNome}
                 </Text>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Package size={12} color={COLORS.textSecondary} />
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                  {totalItens}
-                </Text>
-                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
-                  itens
-                </Text>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 14,
+                  marginTop: 6,
+                  paddingTop: 8,
+                  borderTopWidth: 1,
+                  borderTopColor: COLORS.divider,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Clock size={12} color={COLORS.textSecondary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                    {timeLabel}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Package size={12} color={COLORS.textSecondary} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                    {totalItens}
+                  </Text>
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                    itens
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
+
+        {expanded && (
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: COLORS.divider,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              gap: 8,
+            }}
+          >
+            {pedidos.length === 0 ? (
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary, textAlign: "center", paddingVertical: 8 }}>
+                Sem pedidos
+              </Text>
+            ) : (
+              pedidos.map((pedido) => {
+                const pedidoStatusColor = STATUS_COLORS[pedido.status] || "#94A3B8";
+                const pedidoStatusLabel = STATUS_LABELS[pedido.status] || pedido.status;
+                return (
+                  <View
+                    key={pedido.id}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                      paddingVertical: 6,
+                      borderBottomWidth: 1,
+                      borderBottomColor: COLORS.divider,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 6,
+                        backgroundColor: COLORS.primaryMuted,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 11, color: COLORS.primary }}>
+                        {pedido.quantidade}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: "Outfit_500Medium", fontSize: 13, color: COLORS.text, flex: 1 }}>
+                      {pedido.prato_nome}
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: pedidoStatusColor + "20",
+                        borderRadius: 6,
+                        paddingHorizontal: 7,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 10, color: pedidoStatusColor }}>
+                        {pedidoStatusLabel}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
       </View>
     </Animated.View>
   );
@@ -350,23 +510,26 @@ export default function CozinhaScreen() {
   const [comandasLoading, setComandasLoading] = useState(true);
   const [comandasRefreshing, setComandasRefreshing] = useState(false);
   const [comandasError, setComandasError] = useState("");
+  const [comandaFilter, setComandaFilter] = useState<ComandaFilter>("todas");
 
   const fetchFila = useCallback(async () => {
-    console.log("[Cozinha] Fetching kitchen queue from /api/pedidos");
+    console.log("[Cozinha] Fetching kitchen queue from /api/pedidos (pendente + em_preparo + pronto)");
     try {
-      const [pendentesRes, emPreparoRes] = await Promise.all([
+      const [pendentesRes, emPreparoRes, prontoRes] = await Promise.all([
         apiGet<any>("/api/pedidos?status=pendente"),
         apiGet<any>("/api/pedidos?status=em_preparo"),
+        apiGet<any>("/api/pedidos?status=pronto"),
       ]);
       const pendentes: KitchenPedido[] = Array.isArray(pendentesRes) ? pendentesRes : (pendentesRes.pedidos || []);
       const emPreparo: KitchenPedido[] = Array.isArray(emPreparoRes) ? emPreparoRes : (emPreparoRes.pedidos || []);
-      const all = [...pendentes, ...emPreparo];
+      const pronto: KitchenPedido[] = Array.isArray(prontoRes) ? prontoRes : (prontoRes.pedidos || []);
+      const all = [...pendentes, ...emPreparo, ...pronto];
       const sorted = all.sort((a, b) => {
         const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
         const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
         return aTime - bTime;
       });
-      console.log("[Cozinha] Loaded", sorted.length, "kitchen items (pendente + em_preparo)");
+      console.log("[Cozinha] Loaded", sorted.length, "kitchen items (pendente:", pendentes.length, "em_preparo:", emPreparo.length, "pronto:", pronto.length, ")");
       setItems(sorted);
       setLastRefresh(new Date());
       setError("");
@@ -433,6 +596,17 @@ export default function CozinhaScreen() {
     console.log("[Cozinha] Tab switched to:", tab);
     setActiveTab(tab);
   };
+
+  const handleFilterPress = (filter: ComandaFilter) => {
+    console.log("[Cozinha] Comanda filter changed to:", filter);
+    setComandaFilter(filter);
+  };
+
+  const filteredComandas = comandas.filter((c) => {
+    const targetStatus = COMANDA_FILTER_STATUS[comandaFilter];
+    if (targetStatus === null) return true;
+    return c.status === targetStatus;
+  });
 
   const pendingCount = items.filter((i) => i.status === "pendente").length;
   const inProgressCount = items.filter((i) => i.status === "em_preparo").length;
@@ -541,6 +715,42 @@ export default function CozinhaScreen() {
             </Text>
           </AnimatedPressable>
         </View>
+
+        {/* Comanda status filter pills */}
+        {activeTab === "comandas" && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginTop: 10 }}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: 0 }}
+          >
+            {COMANDA_FILTERS.map((f) => {
+              const isActive = comandaFilter === f.key;
+              return (
+                <AnimatedPressable
+                  key={f.key}
+                  onPress={() => handleFilterPress(f.key)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    backgroundColor: isActive ? COLORS.primary : COLORS.surfaceSecondary,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Outfit_600SemiBold",
+                      fontSize: 13,
+                      color: isActive ? "#fff" : COLORS.textSecondary,
+                    }}
+                  >
+                    {f.label}
+                  </Text>
+                </AnimatedPressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {/* Fila view */}
@@ -632,7 +842,7 @@ export default function CozinhaScreen() {
             </View>
           ) : (
             <FlatList
-              data={comandas}
+              data={filteredComandas}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
               contentInsetAdjustmentBehavior="automatic"
@@ -660,7 +870,7 @@ export default function CozinhaScreen() {
                     Nenhuma comanda
                   </Text>
                   <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary, textAlign: "center" }}>
-                    Não há comandas abertas no momento
+                    Não há comandas no momento
                   </Text>
                 </View>
               }
