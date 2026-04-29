@@ -2414,6 +2414,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // ==================== Cozinha ====================
+  test("Get kitchen active comandas", async () => {
+    const res = await api("/api/cozinha/comandas");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
+  });
+
   // ==================== Debug Endpoints ====================
   test("Debug sign-in with valid credentials", async () => {
     const testEmail = `debug-signin-${Date.now()}@example.com`;
