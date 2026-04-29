@@ -6,9 +6,11 @@ import {
   RefreshControl,
   Pressable,
   TextInput,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { getMesaHistoricoId, clearMesaHistoricoId } from "@/utils/mesaHistoricoStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -19,23 +21,14 @@ import { formatCurrency } from "@/utils/helpers";
 
 const BASE_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 
-// ─── Date mask helpers ────────────────────────────────────────────────────────
+// ─── Date display helper ──────────────────────────────────────────────────────
 
-function applyDateMask(text: string): string {
-  const digits = text.replace(/\D/g, "").slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-}
-
-function parseDate(text: string): Date | null {
-  const parts = text.split("/");
-  if (parts.length !== 3) return null;
-  const [dd, mm, yyyy] = parts.map(Number);
-  if (!dd || !mm || !yyyy || yyyy < 1900 || yyyy > 2100) return null;
-  const d = new Date(yyyy, mm - 1, dd);
-  if (isNaN(d.getTime())) return null;
-  return d;
+function formatDateDisplay(date: Date | null): string {
+  if (!date) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -320,8 +313,8 @@ export default function MesaHistoricoScreen() {
   const [searchText, setSearchText] = useState("");
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
-  const [dateFromText, setDateFromText] = useState("");
-  const [dateToText, setDateToText] = useState("");
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
 
   const fetchHistorico = useCallback(async () => {
     console.log("[MesaHistorico] GET /api/mesas/" + id + "/historico");
@@ -751,89 +744,193 @@ export default function MesaHistoricoScreen() {
             )}
           </View>
 
-          {/* Date range filter — inline text inputs with DD/MM/AAAA mask */}
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            {/* De */}
-            <View style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: COLORS.surface,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: dateFrom ? COLORS.primary : COLORS.border,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-            }}>
-              <Ionicons name="calendar-outline" size={16} color={dateFrom ? COLORS.primary : COLORS.textSecondary} />
-              <TextInput
-                value={dateFromText}
-                onChangeText={(t) => {
-                  const masked = applyDateMask(t);
-                  console.log("[MesaHistorico] Date from text changed:", masked);
-                  setDateFromText(masked);
-                  if (masked.length < 10) setDateFrom(null);
+          {/* Date range filter — inline calendar pickers */}
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {/* De button */}
+              <Pressable
+                onPress={() => {
+                  const next = !showFromPicker;
+                  console.log("[MesaHistorico] Date from picker toggled:", next);
+                  setShowFromPicker(next);
+                  if (next) setShowToPicker(false);
                 }}
-                onBlur={() => {
-                  const d = parseDate(dateFromText);
-                  console.log("[MesaHistorico] Date from blur — parsed:", d ? d.toISOString() : null);
-                  setDateFrom(d);
-                  if (!d && dateFromText.length > 0) setDateFromText("");
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: COLORS.surface,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: dateFrom ? COLORS.primary : COLORS.border,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
                 }}
-                placeholder="De DD/MM/AAAA"
-                placeholderTextColor={COLORS.textSecondary}
-                keyboardType="numeric"
-                maxLength={10}
-                style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.text }}
-              />
-              {dateFromText.length > 0 && (
-                <Pressable onPress={() => { console.log("[MesaHistorico] Date from cleared"); setDateFromText(""); setDateFrom(null); }}>
-                  <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
-                </Pressable>
-              )}
+              >
+                <Ionicons name="calendar-outline" size={16} color={dateFrom ? COLORS.primary : COLORS.textSecondary} />
+                <Text style={{
+                  flex: 1,
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 13,
+                  color: dateFrom ? COLORS.text : COLORS.textSecondary,
+                }}>
+                  {dateFrom ? formatDateDisplay(dateFrom) : "De"}
+                </Text>
+                {dateFrom ? (
+                  <Pressable
+                    onPress={() => {
+                      console.log("[MesaHistorico] Date from cleared");
+                      setDateFrom(null);
+                      setShowFromPicker(false);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
+
+              {/* Até button */}
+              <Pressable
+                onPress={() => {
+                  const next = !showToPicker;
+                  console.log("[MesaHistorico] Date to picker toggled:", next);
+                  setShowToPicker(next);
+                  if (next) setShowFromPicker(false);
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: COLORS.surface,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: dateTo ? COLORS.primary : COLORS.border,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                }}
+              >
+                <Ionicons name="calendar-outline" size={16} color={dateTo ? COLORS.primary : COLORS.textSecondary} />
+                <Text style={{
+                  flex: 1,
+                  fontFamily: "Outfit_400Regular",
+                  fontSize: 13,
+                  color: dateTo ? COLORS.text : COLORS.textSecondary,
+                }}>
+                  {dateTo ? formatDateDisplay(dateTo) : "Até"}
+                </Text>
+                {dateTo ? (
+                  <Pressable
+                    onPress={() => {
+                      console.log("[MesaHistorico] Date to cleared");
+                      setDateTo(null);
+                      setShowToPicker(false);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
             </View>
 
-            {/* Até */}
-            <View style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: COLORS.surface,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: dateTo ? COLORS.primary : COLORS.border,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-            }}>
-              <Ionicons name="calendar-outline" size={16} color={dateTo ? COLORS.primary : COLORS.textSecondary} />
-              <TextInput
-                value={dateToText}
-                onChangeText={(t) => {
-                  const masked = applyDateMask(t);
-                  console.log("[MesaHistorico] Date to text changed:", masked);
-                  setDateToText(masked);
-                  if (masked.length < 10) setDateTo(null);
-                }}
-                onBlur={() => {
-                  const d = parseDate(dateToText);
-                  console.log("[MesaHistorico] Date to blur — parsed:", d ? d.toISOString() : null);
-                  setDateTo(d);
-                  if (!d && dateToText.length > 0) setDateToText("");
-                }}
-                placeholder="Até DD/MM/AAAA"
-                placeholderTextColor={COLORS.textSecondary}
-                keyboardType="numeric"
-                maxLength={10}
-                style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.text }}
-              />
-              {dateToText.length > 0 && (
-                <Pressable onPress={() => { console.log("[MesaHistorico] Date to cleared"); setDateToText(""); setDateTo(null); }}>
-                  <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
-                </Pressable>
-              )}
-            </View>
+            {/* From picker */}
+            {showFromPicker ? (
+              <View style={{
+                backgroundColor: COLORS.surface,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                padding: 8,
+                marginTop: 4,
+              }}>
+                <DateTimePicker
+                  value={dateFrom ?? new Date()}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  onChange={(_, selected) => {
+                    console.log("[MesaHistorico] Date from selected:", selected ? selected.toISOString() : null);
+                    if (Platform.OS === "android") {
+                      setShowFromPicker(false);
+                      if (selected) setDateFrom(selected);
+                    } else {
+                      if (selected) setDateFrom(selected);
+                    }
+                  }}
+                  accentColor={COLORS.primary}
+                  themeVariant="light"
+                />
+                {Platform.OS === "ios" ? (
+                  <Pressable
+                    onPress={() => {
+                      console.log("[MesaHistorico] Date from picker confirmed");
+                      setShowFromPicker(false);
+                    }}
+                    style={{
+                      backgroundColor: COLORS.primary,
+                      borderRadius: 10,
+                      padding: 10,
+                      alignItems: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>
+                      Confirmar
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* To picker */}
+            {showToPicker ? (
+              <View style={{
+                backgroundColor: COLORS.surface,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+                padding: 8,
+                marginTop: 4,
+              }}>
+                <DateTimePicker
+                  value={dateTo ?? new Date()}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  onChange={(_, selected) => {
+                    console.log("[MesaHistorico] Date to selected:", selected ? selected.toISOString() : null);
+                    if (Platform.OS === "android") {
+                      setShowToPicker(false);
+                      if (selected) setDateTo(selected);
+                    } else {
+                      if (selected) setDateTo(selected);
+                    }
+                  }}
+                  accentColor={COLORS.primary}
+                  themeVariant="light"
+                />
+                {Platform.OS === "ios" ? (
+                  <Pressable
+                    onPress={() => {
+                      console.log("[MesaHistorico] Date to picker confirmed");
+                      setShowToPicker(false);
+                    }}
+                    style={{
+                      backgroundColor: COLORS.primary,
+                      borderRadius: 10,
+                      padding: 10,
+                      alignItems: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>
+                      Confirmar
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           {/* Comandas list */}
