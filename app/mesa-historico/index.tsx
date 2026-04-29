@@ -6,11 +6,9 @@ import {
   RefreshControl,
   Pressable,
   TextInput,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { getMesaHistoricoId, clearMesaHistoricoId } from "@/utils/mesaHistoricoStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -145,6 +143,189 @@ function getMesaStatusLabel(status: string): string {
     finalizada: "Finalizada",
   };
   return labels[status] || String(status);
+}
+
+// ─── InlineCalendar ───────────────────────────────────────────────────────────
+
+const MONTH_NAMES_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+const DAY_HEADERS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function buildCalendarGrid(year: number, month: number): (Date | null)[][] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const cells: (Date | null)[] = [];
+
+  // Fill leading days from previous month
+  for (let i = firstDay - 1; i >= 0; i--) {
+    cells.push(new Date(year, month - 1, daysInPrevMonth - i));
+  }
+  // Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(new Date(year, month, d));
+  }
+  // Fill trailing days from next month
+  const remaining = 42 - cells.length;
+  for (let d = 1; d <= remaining; d++) {
+    cells.push(new Date(year, month + 1, d));
+  }
+
+  // Split into 6 rows of 7
+  const rows: (Date | null)[][] = [];
+  for (let r = 0; r < 6; r++) {
+    rows.push(cells.slice(r * 7, r * 7 + 7));
+  }
+  return rows;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+function InlineCalendar({
+  value,
+  onSelect,
+  colors,
+}: {
+  value: Date | null;
+  onSelect: (date: Date) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const initial = value ?? new Date();
+  const [displayYear, setDisplayYear] = useState(initial.getFullYear());
+  const [displayMonth, setDisplayMonth] = useState(initial.getMonth());
+
+  const today = new Date();
+  const rows = buildCalendarGrid(displayYear, displayMonth);
+  const monthLabel = MONTH_NAMES_PT[displayMonth] + " " + displayYear;
+
+  const handlePrevMonth = () => {
+    console.log("[InlineCalendar] Navigate to previous month");
+    if (displayMonth === 0) {
+      setDisplayMonth(11);
+      setDisplayYear((y) => y - 1);
+    } else {
+      setDisplayMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    console.log("[InlineCalendar] Navigate to next month");
+    if (displayMonth === 11) {
+      setDisplayMonth(0);
+      setDisplayYear((y) => y + 1);
+    } else {
+      setDisplayMonth((m) => m + 1);
+    }
+  };
+
+  return (
+    <View style={{
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      marginTop: 4,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 2,
+    }}>
+      {/* Header */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <Pressable
+          onPress={handlePrevMonth}
+          style={{ padding: 8, borderRadius: 8, backgroundColor: colors.background }}
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.primary} />
+        </Pressable>
+        <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: colors.text }}>
+          {monthLabel}
+        </Text>
+        <Pressable
+          onPress={handleNextMonth}
+          style={{ padding: 8, borderRadius: 8, backgroundColor: colors.background }}
+        >
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
+      {/* Day headers */}
+      <View style={{ flexDirection: "row", marginBottom: 4 }}>
+        {DAY_HEADERS.map((d) => (
+          <View key={d} style={{ flex: 1, alignItems: "center" }}>
+            <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 11, color: colors.textSecondary }}>
+              {d}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Day grid */}
+      {rows.map((week, wi) => (
+        <View key={wi} style={{ flexDirection: "row" }}>
+          {week.map((date, di) => {
+            if (!date) {
+              return <View key={di} style={{ flex: 1, aspectRatio: 1, margin: 1 }} />;
+            }
+            const isCurrentMonth = date.getMonth() === displayMonth;
+            const isSelected = value ? isSameDay(date, value) : false;
+            const isToday = isSameDay(date, today);
+
+            const textColor = isSelected
+              ? "#fff"
+              : !isCurrentMonth
+              ? colors.textSecondary
+              : isToday
+              ? colors.primary
+              : colors.text;
+
+            const textOpacity = !isCurrentMonth ? 0.4 : 1;
+            const fontFamily = isSelected ? "Outfit_700Bold" : "Outfit_400Regular";
+
+            return (
+              <Pressable
+                key={di}
+                onPress={() => {
+                  console.log("[InlineCalendar] Day selected:", date.toISOString().slice(0, 10));
+                  onSelect(date);
+                }}
+                style={{ flex: 1, aspectRatio: 1, alignItems: "center", justifyContent: "center", margin: 1 }}
+              >
+                <View style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isSelected ? colors.primary : "transparent",
+                  borderWidth: isToday && !isSelected ? 1 : 0,
+                  borderColor: colors.primary,
+                }}>
+                  <Text style={{
+                    fontFamily,
+                    fontSize: 13,
+                    color: textColor,
+                    opacity: textOpacity,
+                  }}>
+                    {date.getDate()}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 // ─── Comanda Card ─────────────────────────────────────────────────────────────
@@ -838,98 +1019,28 @@ export default function MesaHistoricoScreen() {
 
             {/* From picker */}
             {showFromPicker ? (
-              <View style={{
-                backgroundColor: COLORS.surface,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                padding: 8,
-                marginTop: 4,
-              }}>
-                <DateTimePicker
-                  value={dateFrom ?? new Date()}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "inline" : "default"}
-                  onChange={(_, selected) => {
-                    console.log("[MesaHistorico] Date from selected:", selected ? selected.toISOString() : null);
-                    if (Platform.OS === "android") {
-                      setShowFromPicker(false);
-                      if (selected) setDateFrom(selected);
-                    } else {
-                      if (selected) setDateFrom(selected);
-                    }
-                  }}
-                  accentColor={COLORS.primary}
-                  themeVariant="light"
-                />
-                {Platform.OS === "ios" ? (
-                  <Pressable
-                    onPress={() => {
-                      console.log("[MesaHistorico] Date from picker confirmed");
-                      setShowFromPicker(false);
-                    }}
-                    style={{
-                      backgroundColor: COLORS.primary,
-                      borderRadius: 10,
-                      padding: 10,
-                      alignItems: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>
-                      Confirmar
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
+              <InlineCalendar
+                value={dateFrom}
+                onSelect={(d) => {
+                  console.log("[MesaHistorico] Date from selected:", d.toISOString().slice(0, 10));
+                  setDateFrom(d);
+                  setShowFromPicker(false);
+                }}
+                colors={COLORS}
+              />
             ) : null}
 
             {/* To picker */}
             {showToPicker ? (
-              <View style={{
-                backgroundColor: COLORS.surface,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                padding: 8,
-                marginTop: 4,
-              }}>
-                <DateTimePicker
-                  value={dateTo ?? new Date()}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "inline" : "default"}
-                  onChange={(_, selected) => {
-                    console.log("[MesaHistorico] Date to selected:", selected ? selected.toISOString() : null);
-                    if (Platform.OS === "android") {
-                      setShowToPicker(false);
-                      if (selected) setDateTo(selected);
-                    } else {
-                      if (selected) setDateTo(selected);
-                    }
-                  }}
-                  accentColor={COLORS.primary}
-                  themeVariant="light"
-                />
-                {Platform.OS === "ios" ? (
-                  <Pressable
-                    onPress={() => {
-                      console.log("[MesaHistorico] Date to picker confirmed");
-                      setShowToPicker(false);
-                    }}
-                    style={{
-                      backgroundColor: COLORS.primary,
-                      borderRadius: 10,
-                      padding: 10,
-                      alignItems: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: "#fff" }}>
-                      Confirmar
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
+              <InlineCalendar
+                value={dateTo}
+                onSelect={(d) => {
+                  console.log("[MesaHistorico] Date to selected:", d.toISOString().slice(0, 10));
+                  setDateTo(d);
+                  setShowToPicker(false);
+                }}
+                colors={COLORS}
+              />
             ) : null}
           </View>
 
