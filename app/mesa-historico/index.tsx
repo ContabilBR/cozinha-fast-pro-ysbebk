@@ -6,7 +6,6 @@ import {
   RefreshControl,
   Pressable,
   TextInput,
-  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -18,22 +17,26 @@ import { CardSkeleton } from "@/components/SkeletonLoader";
 import { Users } from "lucide-react-native";
 import { formatCurrency } from "@/utils/helpers";
 
-// ─── Calendar helpers ─────────────────────────────────────────────────────────
+const BASE_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 
-const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const WEEKDAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+// ─── Date mask helpers ────────────────────────────────────────────────────────
 
-function getCalendarDays(year: number, month: number): (number | null)[] {
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
+function applyDateMask(text: string): string {
+  const digits = text.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-const BASE_URL = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
+function parseDate(text: string): Date | null {
+  const parts = text.split("/");
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map(Number);
+  if (!dd || !mm || !yyyy || yyyy < 1900 || yyyy > 2100) return null;
+  const d = new Date(yyyy, mm - 1, dd);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -317,9 +320,8 @@ export default function MesaHistoricoScreen() {
   const [searchText, setSearchText] = useState("");
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [dateFromText, setDateFromText] = useState("");
+  const [dateToText, setDateToText] = useState("");
 
   const fetchHistorico = useCallback(async () => {
     console.log("[MesaHistorico] GET /api/mesas/" + id + "/historico");
@@ -442,14 +444,6 @@ export default function MesaHistoricoScreen() {
   const topPratos: TopPrato[] = hasFilters
     ? computedTopPratos
     : (data?.resumo?.top_pratos ?? []);
-
-  // Date label helpers
-  const dateFromLabel = dateFrom
-    ? `${String(dateFrom.getDate()).padStart(2, "0")}/${String(dateFrom.getMonth() + 1).padStart(2, "0")}/${dateFrom.getFullYear()}`
-    : "De";
-  const dateToLabel = dateTo
-    ? `${String(dateTo.getDate()).padStart(2, "0")}/${String(dateTo.getMonth() + 1).padStart(2, "0")}/${dateTo.getFullYear()}`
-    : "Até";
 
   // Rank badge colors
   const rankBgColor = (index: number) =>
@@ -757,61 +751,89 @@ export default function MesaHistoricoScreen() {
             )}
           </View>
 
-          {/* Date range filter */}
+          {/* Date range filter — inline text inputs with DD/MM/AAAA mask */}
           <View style={{ flexDirection: "row", gap: 10 }}>
             {/* De */}
-            <Pressable
-              onPress={() => { console.log("[MesaHistorico] Date from picker opened"); setCalendarMonth(dateFrom ?? new Date()); setShowFromPicker(true); }}
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: COLORS.surface,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: dateFrom ? COLORS.primary : COLORS.border,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-              }}
-            >
+            <View style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: COLORS.surface,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: dateFrom ? COLORS.primary : COLORS.border,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+            }}>
               <Ionicons name="calendar-outline" size={16} color={dateFrom ? COLORS.primary : COLORS.textSecondary} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: dateFrom ? COLORS.text : COLORS.textSecondary, flex: 1 }}>
-                {dateFromLabel}
-              </Text>
-              {dateFrom && (
-                <Pressable onPress={(e) => { e.stopPropagation(); console.log("[MesaHistorico] Date from cleared"); setDateFrom(null); }}>
+              <TextInput
+                value={dateFromText}
+                onChangeText={(t) => {
+                  const masked = applyDateMask(t);
+                  console.log("[MesaHistorico] Date from text changed:", masked);
+                  setDateFromText(masked);
+                  if (masked.length < 10) setDateFrom(null);
+                }}
+                onBlur={() => {
+                  const d = parseDate(dateFromText);
+                  console.log("[MesaHistorico] Date from blur — parsed:", d ? d.toISOString() : null);
+                  setDateFrom(d);
+                  if (!d && dateFromText.length > 0) setDateFromText("");
+                }}
+                placeholder="De DD/MM/AAAA"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="numeric"
+                maxLength={10}
+                style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.text }}
+              />
+              {dateFromText.length > 0 && (
+                <Pressable onPress={() => { console.log("[MesaHistorico] Date from cleared"); setDateFromText(""); setDateFrom(null); }}>
                   <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
                 </Pressable>
               )}
-            </Pressable>
+            </View>
 
             {/* Até */}
-            <Pressable
-              onPress={() => { console.log("[MesaHistorico] Date to picker opened"); setCalendarMonth(dateTo ?? new Date()); setShowToPicker(true); }}
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                backgroundColor: COLORS.surface,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: dateTo ? COLORS.primary : COLORS.border,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-              }}
-            >
+            <View style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              backgroundColor: COLORS.surface,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: dateTo ? COLORS.primary : COLORS.border,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+            }}>
               <Ionicons name="calendar-outline" size={16} color={dateTo ? COLORS.primary : COLORS.textSecondary} />
-              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: dateTo ? COLORS.text : COLORS.textSecondary, flex: 1 }}>
-                {dateToLabel}
-              </Text>
-              {dateTo && (
-                <Pressable onPress={(e) => { e.stopPropagation(); console.log("[MesaHistorico] Date to cleared"); setDateTo(null); }}>
+              <TextInput
+                value={dateToText}
+                onChangeText={(t) => {
+                  const masked = applyDateMask(t);
+                  console.log("[MesaHistorico] Date to text changed:", masked);
+                  setDateToText(masked);
+                  if (masked.length < 10) setDateTo(null);
+                }}
+                onBlur={() => {
+                  const d = parseDate(dateToText);
+                  console.log("[MesaHistorico] Date to blur — parsed:", d ? d.toISOString() : null);
+                  setDateTo(d);
+                  if (!d && dateToText.length > 0) setDateToText("");
+                }}
+                placeholder="Até DD/MM/AAAA"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="numeric"
+                maxLength={10}
+                style={{ flex: 1, fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.text }}
+              />
+              {dateToText.length > 0 && (
+                <Pressable onPress={() => { console.log("[MesaHistorico] Date to cleared"); setDateToText(""); setDateTo(null); }}>
                   <Ionicons name="close-circle" size={15} color={COLORS.textSecondary} />
                 </Pressable>
               )}
-            </Pressable>
+            </View>
           </View>
 
           {/* Comandas list */}
@@ -844,160 +866,6 @@ export default function MesaHistoricoScreen() {
           </View>
         </ScrollView>
       )}
-
-      {/* Custom calendar modal */}
-      <Modal
-        visible={showFromPicker || showToPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setShowFromPicker(false); setShowToPicker(false); }}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
-          onPress={() => { console.log("[MesaHistorico] Calendar modal dismissed via backdrop"); setShowFromPicker(false); setShowToPicker(false); }}
-        >
-          <Pressable
-            style={{
-              backgroundColor: COLORS.surface,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              paddingTop: 20,
-              paddingHorizontal: 20,
-              paddingBottom: 36,
-            }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Title */}
-            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 17, color: COLORS.text, textAlign: "center", marginBottom: 16 }}>
-              {showFromPicker ? "Data inicial" : "Data final"}
-            </Text>
-
-            {/* Month navigation */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <Pressable
-                onPress={() => {
-                  const prev = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
-                  console.log("[MesaHistorico] Calendar prev month:", prev.getMonth() + 1, prev.getFullYear());
-                  setCalendarMonth(prev);
-                }}
-                style={{ padding: 8 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="chevron-back" size={22} color={COLORS.text} />
-              </Pressable>
-              <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 15, color: COLORS.text }}>
-                {MONTH_NAMES[calendarMonth.getMonth()]}
-                {" "}
-                {calendarMonth.getFullYear()}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  const next = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
-                  console.log("[MesaHistorico] Calendar next month:", next.getMonth() + 1, next.getFullYear());
-                  setCalendarMonth(next);
-                }}
-                style={{ padding: 8 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
-              </Pressable>
-            </View>
-
-            {/* Weekday headers */}
-            <View style={{ flexDirection: "row", marginBottom: 4 }}>
-              {WEEKDAY_NAMES.map((wd) => (
-                <View key={wd} style={{ flex: 1, alignItems: "center", paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 12, color: COLORS.textSecondary }}>
-                    {wd}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Day grid */}
-            {(() => {
-              const year = calendarMonth.getFullYear();
-              const month = calendarMonth.getMonth();
-              const cells = getCalendarDays(year, month);
-              const rows: (number | null)[][] = [];
-              for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-              const today = new Date();
-              const selectedDate = showFromPicker ? dateFrom : dateTo;
-              return rows.map((row, rowIdx) => (
-                <View key={rowIdx} style={{ flexDirection: "row", marginBottom: 4 }}>
-                  {row.map((day, colIdx) => {
-                    if (day === null) {
-                      return <View key={colIdx} style={{ flex: 1 }} />;
-                    }
-                    const isSelected = selectedDate
-                      ? selectedDate.getDate() === day &&
-                        selectedDate.getMonth() === month &&
-                        selectedDate.getFullYear() === year
-                      : false;
-                    const isToday =
-                      today.getDate() === day &&
-                      today.getMonth() === month &&
-                      today.getFullYear() === year;
-                    const dayLabel = String(day);
-                    return (
-                      <Pressable
-                        key={colIdx}
-                        onPress={() => {
-                          const picked = new Date(year, month, day);
-                          if (showFromPicker) {
-                            console.log("[MesaHistorico] Date from selected:", picked.toISOString());
-                            setDateFrom(picked);
-                          } else {
-                            console.log("[MesaHistorico] Date to selected:", picked.toISOString());
-                            setDateTo(picked);
-                          }
-                          setShowFromPicker(false);
-                          setShowToPicker(false);
-                        }}
-                        style={{ flex: 1, alignItems: "center", paddingVertical: 4 }}
-                      >
-                        <View style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 18,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: isSelected ? COLORS.primary : "transparent",
-                          borderWidth: isToday && !isSelected ? 1.5 : 0,
-                          borderColor: isToday && !isSelected ? COLORS.primary : "transparent",
-                        }}>
-                          <Text style={{
-                            fontFamily: isSelected ? "Outfit_700Bold" : "Outfit_400Regular",
-                            fontSize: 14,
-                            color: isSelected ? "#fff" : isToday ? COLORS.primary : COLORS.text,
-                          }}>
-                            {dayLabel}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ));
-            })()}
-
-            {/* Cancel button */}
-            <Pressable
-              onPress={() => { console.log("[MesaHistorico] Calendar cancelled"); setShowFromPicker(false); setShowToPicker(false); }}
-              style={{
-                marginTop: 12,
-                paddingVertical: 14,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 15, color: COLORS.textSecondary }}>Cancelar</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
