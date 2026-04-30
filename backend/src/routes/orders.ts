@@ -1559,9 +1559,11 @@ export function registerOrderRoutes(app: App) {
                     numero_comanda: { type: "string" },
                     mesa_numero: { type: ["number", "null"] },
                     created_at: { type: "string", format: "date-time" },
+                    garcom_id: { type: "string" },
                     garcom_nome: { type: "string" },
-                    total_itens: { type: "number" },
                     status: { type: "string" },
+                    total: { type: "string" },
+                    total_itens: { type: "number" },
                     pedidos: {
                       type: "array",
                       items: {
@@ -1588,18 +1590,18 @@ export function registerOrderRoutes(app: App) {
       try {
         app.logger.info({}, "Fetching all comandas for kitchen display");
 
-        // Query to get all comandas with garcom info
+        // Query to get all comandas with garcom info from usuarios table
         const comandasQuery = sql`
           SELECT
             c.id,
             c.mesa_numero,
             c.garcom_id,
             c.status,
+            c.total,
             c.created_at,
-            COALESCE(u.name, pr.name, 'Não informado') as garcom_nome
+            COALESCE(u.nome, 'Não informado') as garcom_nome
           FROM comandas c
-          LEFT JOIN "user" u ON u.id = c.garcom_id
-          LEFT JOIN profiles pr ON pr.user_id = c.garcom_id
+          LEFT JOIN usuarios u ON u.id::text = c.garcom_id
           ORDER BY c.created_at DESC
         `;
 
@@ -1636,9 +1638,9 @@ export function registerOrderRoutes(app: App) {
 
         // Transform results to the expected format
         const comandas = comandasResult.map((row: any) => {
-          // Extract last 6 characters of UUID and uppercase it
+          // Extract last 8 characters of UUID and uppercase it (equivalent to RIGHT(c.id::text, 8))
           const uuidStr = String(row.id);
-          const numeroComanda = uuidStr.slice(-6).toUpperCase();
+          const numeroComanda = uuidStr.slice(-8).toUpperCase();
 
           // Get pedidos for this comanda
           const comandaPedidos = pedidosByComandaId.get(row.id) || [];
@@ -1649,9 +1651,11 @@ export function registerOrderRoutes(app: App) {
             numero_comanda: numeroComanda,
             mesa_numero: row.mesa_numero ? Number(row.mesa_numero) : null,
             created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+            garcom_id: row.garcom_id || null,
             garcom_nome: row.garcom_nome || "Não informado",
-            total_itens: totalItens,
             status: row.status,
+            total: row.total,
+            total_itens: totalItens,
             pedidos: comandaPedidos.map((p: any) => ({
               id: p.id,
               prato_nome: p.prato_nome || "Prato",
