@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -50,6 +51,8 @@ export default function GestaoGarconsScreen() {
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailDuplicate, setEmailDuplicate] = useState(false);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -105,6 +108,8 @@ export default function GestaoGarconsScreen() {
     setSenha("");
     setConfirmarSenha("");
     setModalError("");
+    setEmailDuplicate(false);
+    setEmailChecking(false);
     setShowModal(true);
   };
 
@@ -116,7 +121,35 @@ export default function GestaoGarconsScreen() {
     setSenha("");
     setConfirmarSenha("");
     setModalError("");
+    setEmailDuplicate(false);
+    setEmailChecking(false);
     setShowModal(true);
+  };
+
+  const handleEmailBlur = async () => {
+    if (!email.trim() || !email.includes("@")) return;
+    if (editingGarcom) return;
+    console.log("[GestaoGarcons] Verificando duplicidade de e-mail:", email.trim());
+    setEmailChecking(true);
+    try {
+      const result = await apiGet<{ exists: boolean; nome?: string }>(
+        `/api/garcons/check-email?email=${encodeURIComponent(email.trim())}`
+      );
+      console.log("[GestaoGarcons] check-email resposta:", result);
+      if (result.exists) {
+        setEmailDuplicate(true);
+        Alert.alert(
+          "E-mail já cadastrado",
+          `O e-mail "${email.trim()}" já está cadastrado para ${result.nome}. Utilize outro e-mail.`
+        );
+      } else {
+        setEmailDuplicate(false);
+      }
+    } catch (e: unknown) {
+      console.error("[GestaoGarcons] Erro ao verificar e-mail:", e);
+    } finally {
+      setEmailChecking(false);
+    }
   };
 
   const doSave = async () => {
@@ -656,15 +689,43 @@ export default function GestaoGarconsScreen() {
               <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
                 {editingGarcom ? "E-mail" : "E-mail *"}
               </Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="email@exemplo.com"
-                placeholderTextColor={COLORS.textTertiary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={inputStyle}
-              />
+              <View style={{ position: "relative" }}>
+                <TextInput
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    if (emailDuplicate) setEmailDuplicate(false);
+                  }}
+                  onBlur={handleEmailBlur}
+                  placeholder="email@exemplo.com"
+                  placeholderTextColor={COLORS.textTertiary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={[
+                    inputStyle,
+                    emailDuplicate && { borderColor: COLORS.danger },
+                    { paddingRight: emailChecking ? 40 : 12 },
+                  ]}
+                />
+                {emailChecking && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      top: 0,
+                      bottom: 0,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ActivityIndicator size="small" color={COLORS.textSecondary} />
+                  </View>
+                )}
+              </View>
+              {emailDuplicate && (
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.danger }}>
+                  E-mail já cadastrado. Utilize outro e-mail.
+                </Text>
+              )}
             </View>
 
             <View style={{ gap: 6 }}>
@@ -715,13 +776,14 @@ export default function GestaoGarconsScreen() {
                 console.log("[GestaoGarcons] Salvar garçom pressionado");
                 handleSave();
               }}
-              disabled={saving}
+              disabled={saving || emailDuplicate || emailChecking}
               style={{
-                backgroundColor: COLORS.primary,
+                backgroundColor: emailDuplicate ? COLORS.border : COLORS.primary,
                 borderRadius: 14,
                 height: 52,
                 alignItems: "center",
                 justifyContent: "center",
+                opacity: emailDuplicate || emailChecking ? 0.6 : 1,
               }}
             >
               {saving ? (
