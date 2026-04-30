@@ -116,6 +116,8 @@ export function registerGarconRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for POST /api/garcons");
+
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
@@ -237,6 +239,8 @@ export function registerGarconRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for PUT /api/garcons/:id");
+
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
@@ -322,6 +326,8 @@ export function registerGarconRoutes(app: App) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
+
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for DELETE /api/garcons/:id");
 
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 

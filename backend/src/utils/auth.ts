@@ -211,7 +211,14 @@ export function requireRole(
     const normalizedUserRole = userRole?.toLowerCase() ?? "";
     const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
     if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
-      actualReply.status(403).send({ error: "Forbidden" });
+      // Log the role authorization failure
+      console.error({
+        userId: authUserOrUser.id,
+        userRole: userRole,
+        allowedRoles: allowedRoles,
+        message: "Role authorization failed"
+      });
+      actualReply.status(403).send({ error: "Forbidden", message: "Insufficient permissions" });
       return false;
     }
   } else {
@@ -223,7 +230,14 @@ export function requireRole(
     const normalizedUserRole = userRole?.toLowerCase() ?? "";
     const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
     if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
-      actualReply.status(403).send({ error: "Forbidden" });
+      // Log the role authorization failure
+      console.error({
+        userId: authUserOrUser.id || authUserOrUser.userId,
+        userRole: userRole,
+        allowedRoles: allowedRoles,
+        message: "Role authorization failed"
+      });
+      actualReply.status(403).send({ error: "Forbidden", message: "Insufficient permissions" });
       return false;
     }
   }

@@ -121,6 +121,8 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for POST /api/usuarios");
+
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
@@ -201,6 +203,8 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for PUT /api/usuarios/:id");
+
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
@@ -268,6 +272,8 @@ export function registerUsuariosRoutes(app: App) {
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
+
+      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for DELETE /api/usuarios/:id");
 
       if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
