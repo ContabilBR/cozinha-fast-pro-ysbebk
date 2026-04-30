@@ -1393,7 +1393,7 @@ export function registerOrderRoutes(app: App) {
           }
         }
 
-        // Step 6: Fetch garcom names for all comandas
+        // Step 6: Fetch garcom names for all comandas from usuarios table
         const allGarcomIds = [
           ...archivedComandasResult.map((c) => c.garcomId).filter(Boolean),
           ...activeComandasResult.map((c) => c.garcomId).filter(Boolean),
@@ -1402,13 +1402,17 @@ export function registerOrderRoutes(app: App) {
 
         let garcomNameMap: Record<string, string> = {};
         if (uniqueGarcomIds.length > 0) {
-          const garcomResults = await app.db
-            .select({ id: user.id, name: user.name })
-            .from(user)
-            .where(inArray(user.id, uniqueGarcomIds));
+          // Convert text IDs to UUIDs for comparison and query usuarios table
+          const garcomResults = await (app.db as any).execute(
+            sql`
+              SELECT u.id::text as id, u.nome as nome
+              FROM usuarios u
+              WHERE u.id::text = ANY(${uniqueGarcomIds})
+            `
+          ) as any[];
 
           for (const garcom of garcomResults) {
-            garcomNameMap[garcom.id] = garcom.name;
+            garcomNameMap[garcom.id] = garcom.nome || "Não informado";
           }
         }
 
@@ -1438,7 +1442,7 @@ export function registerOrderRoutes(app: App) {
               : activePedidosMap[comanda.id] || [];
 
           const garcomNome =
-            garcomNameMap[comanda.garcomId || ""] || comanda.garcomId || "Desconhecido";
+            garcomNameMap[comanda.garcomId || ""] || "Não informado";
 
           return {
             id: comanda.id,

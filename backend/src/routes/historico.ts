@@ -21,6 +21,7 @@ export function registerHistoricoRoutes(app: App) {
                 mesa_id: { type: ["string", "null"], format: "uuid" },
                 mesa_numero: { type: ["integer", "null"] },
                 garcom_id: { type: ["string", "null"] },
+                garcom_nome: { type: "string" },
                 status: { type: "string" },
                 total: { type: "string" },
                 created_at: { type: "string", format: "date-time" },
@@ -54,17 +55,31 @@ export function registerHistoricoRoutes(app: App) {
       try {
         app.logger.info({}, "Fetching archived comandas and pedidos");
 
-        // Query all comandas_historico ordered by archived_at descending
-        const comandas = await app.db
-          .select()
-          .from(schema.comandasHistorico)
-          .orderBy(desc(schema.comandasHistorico.archivedAt));
+        // Query all comandas_historico with garcom info from usuarios table
+        const comandasQuery = sql`
+          SELECT
+            ch.id,
+            ch.mesa_id,
+            ch.mesa_numero,
+            ch.garcom_id,
+            ch.status,
+            ch.total,
+            ch.created_at,
+            ch.closed_at,
+            ch.archived_at,
+            COALESCE(u.nome, 'Não informado') as garcom_nome
+          FROM comandas_historico ch
+          LEFT JOIN usuarios u ON u.id::text = ch.garcom_id
+          ORDER BY ch.archived_at DESC
+        `;
+
+        const comandas = await (app.db as any).execute(comandasQuery) as any[];
 
         app.logger.info({ count: comandas.length }, "Archived comandas retrieved");
 
         // For each comanda, fetch its pedidos from pedidos_historico
         const result = await Promise.all(
-          comandas.map(async (comanda) => {
+          comandas.map(async (comanda: any) => {
             const pedidos = await app.db
               .select()
               .from(schema.pedidosHistorico)
@@ -73,14 +88,15 @@ export function registerHistoricoRoutes(app: App) {
 
             return {
               id: comanda.id,
-              mesa_id: comanda.mesaId,
-              mesa_numero: comanda.mesaNumero,
-              garcom_id: comanda.garcomId,
+              mesa_id: comanda.mesa_id,
+              mesa_numero: comanda.mesa_numero,
+              garcom_id: comanda.garcom_id,
+              garcom_nome: comanda.garcom_nome || "Não informado",
               status: comanda.status,
               total: comanda.total.toString(),
-              created_at: comanda.createdAt.toISOString(),
-              closed_at: comanda.closedAt ? comanda.closedAt.toISOString() : null,
-              archived_at: comanda.archivedAt.toISOString(),
+              created_at: new Date(comanda.created_at).toISOString(),
+              closed_at: comanda.closed_at ? new Date(comanda.closed_at).toISOString() : null,
+              archived_at: new Date(comanda.archived_at).toISOString(),
               pedidos: pedidos.map((p) => ({
                 id: p.id,
                 prato_id: p.pratoId,
