@@ -116,9 +116,9 @@ export function registerGarconRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for POST /api/garcons");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - garcons write (POST /api/garcons)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         if (!request.body.name || !request.body.email || !request.body.password) {
@@ -239,9 +239,9 @@ export function registerGarconRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for PUT /api/garcons/:id");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - garcons write (PUT /api/garcons/:id)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Updating garcon");
@@ -327,9 +327,9 @@ export function registerGarconRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for DELETE /api/garcons/:id");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - garcons write (DELETE /api/garcons/:id)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         app.logger.info({ userId: request.params.id }, "Deleting garcon");

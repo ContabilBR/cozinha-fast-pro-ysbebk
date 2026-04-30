@@ -121,9 +121,9 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for POST /api/usuarios");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (POST /api/usuarios)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.email || !request.body.senha) {
@@ -203,9 +203,9 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for PUT /api/usuarios/:id");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (PUT /api/usuarios/:id)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Updating usuario");
@@ -273,9 +273,9 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.debug({ userId: authUser.id, role: authUser.role }, "Checking role authorization for DELETE /api/usuarios/:id");
+      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (DELETE /api/usuarios/:id)");
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");
