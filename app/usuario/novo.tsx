@@ -38,6 +38,7 @@ export default function NovoUsuarioScreen() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
   const [role, setRole] = useState<UserRole>("garcom");
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +48,8 @@ export default function NovoUsuarioScreen() {
     if (!nome.trim()) { setError("Nome é obrigatório."); return; }
     if (!email.trim()) { setError("E-mail é obrigatório."); return; }
     if (!senha.trim()) { setError("Senha é obrigatória."); return; }
+    if (!confirmarSenha.trim()) { setError("Confirme a senha."); return; }
+    if (senha !== confirmarSenha) { setError("As senhas não coincidem."); return; }
     console.log("[NovoUsuario] Criar usuário pressionado, email:", email, "role:", role);
     setSubmitting(true);
     setError("");
@@ -164,6 +167,27 @@ export default function NovoUsuarioScreen() {
               keyboardType="default"
               style={inputStyle}
             />
+          </FormField>
+
+          <FormField label="Confirmar Senha *">
+            <TextInput
+              value={confirmarSenha}
+              onChangeText={setConfirmarSenha}
+              placeholder="Repita a senha"
+              placeholderTextColor={COLORS.textTertiary}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="default"
+              style={inputStyle}
+            />
+            {confirmarSenha.length > 0 && senha.length > 0 ? (
+              senha === confirmarSenha ? (
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.success }}>Senhas coincidem ✓</Text>
+              ) : (
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.danger }}>As senhas não coincidem.</Text>
+              )
+            ) : null}
           </FormField>
 
           <FormField label="Função">

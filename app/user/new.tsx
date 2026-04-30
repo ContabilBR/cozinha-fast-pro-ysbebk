@@ -58,6 +58,7 @@ export default function NewUserScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<UserRole>("garcom");
   const [active, setActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +68,8 @@ export default function NewUserScreen() {
     if (!name.trim()) { setError("Nome é obrigatório."); return; }
     if (!email.trim()) { setError("E-mail é obrigatório."); return; }
     if (!password.trim() || password.length < 6) { setError("Senha deve ter pelo menos 6 caracteres."); return; }
+    if (!confirmPassword.trim()) { setError("Confirme a senha."); return; }
+    if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
     console.log("[NewUser] Criar usuário pressionado:", email, "role:", role);
     setError("");
     setSubmitting(true);
@@ -104,6 +107,17 @@ export default function NewUserScreen() {
         <FormField label="Nome *" value={name} onChangeText={setName} placeholder="Nome completo" />
         <FormField label="E-mail *" value={email} onChangeText={setEmail} placeholder="email@exemplo.com" keyboardType="email-address" autoCapitalize="none" />
         <FormField label="Senha *" value={password} onChangeText={setPassword} placeholder="Mínimo 6 caracteres" secureTextEntry autoCapitalize="none" />
+
+        <View style={{ gap: 6 }}>
+          <FormField label="Confirmar Senha *" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repita a senha" secureTextEntry autoCapitalize="none" />
+          {confirmPassword.length > 0 && password.length > 0 ? (
+            password === confirmPassword ? (
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#22C55E" }}>Senhas coincidem ✓</Text>
+            ) : (
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: "#EF4444" }}>As senhas não coincidem.</Text>
+            )
+          ) : null}
+        </View>
 
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>Função</Text>

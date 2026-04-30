@@ -47,6 +47,7 @@ export default function GestaoGarconsScreen() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
 
@@ -102,6 +103,7 @@ export default function GestaoGarconsScreen() {
     setNome("");
     setEmail("");
     setSenha("");
+    setConfirmarSenha("");
     setModalError("");
     setShowModal(true);
   };
@@ -112,6 +114,7 @@ export default function GestaoGarconsScreen() {
     setNome(getDisplayName(g));
     setEmail(g.email ?? "");
     setSenha("");
+    setConfirmarSenha("");
     setModalError("");
     setShowModal(true);
   };
@@ -149,6 +152,9 @@ export default function GestaoGarconsScreen() {
     if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
     if (!editingGarcom && !email.trim()) { setModalError("E-mail é obrigatório."); return; }
     if (!editingGarcom && !senha.trim()) { setModalError("Senha é obrigatória."); return; }
+    if (!editingGarcom && !confirmarSenha.trim()) { setModalError("Confirme a senha."); return; }
+    if (!editingGarcom && senha !== confirmarSenha) { setModalError("As senhas não coincidem."); return; }
+    if (editingGarcom && senha.trim() && senha !== confirmarSenha) { setModalError("As senhas não coincidem."); return; }
     console.log("[GestaoGarcons] Confirmar salvar pressionado, editando:", editingGarcom?.id ?? "novo");
     setConfirmDialog({
       visible: true,
@@ -674,6 +680,29 @@ export default function GestaoGarconsScreen() {
                 style={inputStyle}
               />
             </View>
+
+            {(!editingGarcom || senha.length > 0) && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                  {editingGarcom ? "Confirmar nova senha" : "Confirmar Senha *"}
+                </Text>
+                <TextInput
+                  value={confirmarSenha}
+                  onChangeText={setConfirmarSenha}
+                  placeholder="Repita a senha"
+                  placeholderTextColor={COLORS.textTertiary}
+                  secureTextEntry
+                  style={inputStyle}
+                />
+                {confirmarSenha.length > 0 && senha.length > 0 ? (
+                  senha === confirmarSenha ? (
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.success }}>Senhas coincidem ✓</Text>
+                  ) : (
+                    <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.danger }}>As senhas não coincidem.</Text>
+                  )
+                ) : null}
+              </View>
+            )}
 
             {modalError ? (
               <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.danger }}>
