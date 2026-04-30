@@ -1322,17 +1322,35 @@ export function registerOrderRoutes(app: App) {
 
         const mesa = mesaResult[0];
 
-        // Step 2: Fetch archived comandas
-        const archivedComandasResult = await app.db
-          .select()
-          .from(schema.comandasHistorico)
-          .where(eq(schema.comandasHistorico.mesaId, mesaId));
+        // Step 2: Fetch archived comandas with garcom names via LEFT JOIN
+        const archivedComandasResult = await (app.db as any).execute(
+          sql`
+            SELECT
+              ch.id, ch.mesa_id, ch.mesa_numero, ch.garcom_id, ch.status,
+              ch.total, ch.subtotal, ch.gorjeta,
+              ch.created_at, ch.closed_at, ch.archived_at,
+              COALESCE(u.nome, 'Não informado') as garcom_nome
+            FROM comandas_historico ch
+            LEFT JOIN usuarios u ON u.id::text = ch.garcom_id
+            WHERE ch.mesa_id = ${mesaId}
+            ORDER BY ch.created_at DESC
+          `
+        ) as any[];
 
-        // Step 3: Fetch active comandas
-        const activeComandasResult = await app.db
-          .select()
-          .from(schema.comandas)
-          .where(eq(schema.comandas.mesaId, mesaId));
+        // Step 3: Fetch active comandas with garcom names via LEFT JOIN
+        const activeComandasResult = await (app.db as any).execute(
+          sql`
+            SELECT
+              c.id, c.mesa_id, c.mesa_numero, c.garcom_id, c.status,
+              c.total, c.subtotal, c.gorjeta,
+              c.created_at, c.closed_at,
+              COALESCE(u.nome, 'Não informado') as garcom_nome
+            FROM comandas c
+            LEFT JOIN usuarios u ON u.id::text = c.garcom_id
+            WHERE c.mesa_id = ${mesaId}
+            ORDER BY c.created_at DESC
+          `
+        ) as any[];
 
         // Collect all comanda IDs for the query below
         const archivedComandasIds = archivedComandasResult.map((c) => c.id);
@@ -1393,30 +1411,7 @@ export function registerOrderRoutes(app: App) {
           }
         }
 
-        // Step 6: Fetch garcom names for all comandas from usuarios table
-        const allGarcomIds = [
-          ...archivedComandasResult.map((c) => c.garcomId).filter(Boolean),
-          ...activeComandasResult.map((c) => c.garcomId).filter(Boolean),
-        ];
-        const uniqueGarcomIds = Array.from(new Set(allGarcomIds));
-
-        let garcomNameMap: Record<string, string> = {};
-        if (uniqueGarcomIds.length > 0) {
-          // Convert text IDs to UUIDs for comparison and query usuarios table
-          const garcomResults = await (app.db as any).execute(
-            sql`
-              SELECT u.id::text as id, u.nome as nome
-              FROM usuarios u
-              WHERE u.id::text = ANY(${uniqueGarcomIds})
-            `
-          ) as any[];
-
-          for (const garcom of garcomResults) {
-            garcomNameMap[garcom.id] = garcom.nome || "Não informado";
-          }
-        }
-
-        // Step 7 & 8: Merge and tag comandas, sort by created_at DESC
+        // Step 6: Merge and tag comandas, sort by created_at DESC
         const allComandasWithSource = [
           ...archivedComandasResult.map((c) => ({
             ...c,
@@ -1429,8 +1424,8 @@ export function registerOrderRoutes(app: App) {
         ];
 
         allComandasWithSource.sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
           return dateB - dateA; // DESC order
         });
 
@@ -1441,8 +1436,7 @@ export function registerOrderRoutes(app: App) {
               ? archivedPedidosMap[comanda.id] || []
               : activePedidosMap[comanda.id] || [];
 
-          const garcomNome =
-            garcomNameMap[comanda.garcomId || ""] || "Não informado";
+          const closedAtField = comanda.source === "historico" ? comanda.archived_at : comanda.closed_at;
 
           return {
             id: comanda.id,
@@ -1450,17 +1444,10 @@ export function registerOrderRoutes(app: App) {
             total: parseFloat(comanda.total || "0"),
             subtotal: parseFloat(comanda.subtotal || "0"),
             gorjeta: parseFloat(comanda.gorjeta || "0"),
-            garcom_id: comanda.garcomId || null,
-            garcom_nome: garcomNome,
-            created_at: comanda.createdAt ? new Date(comanda.createdAt).toISOString() : null,
-            closed_at:
-              comanda.source === "historico"
-                ? comanda.closedAt
-                  ? new Date(comanda.closedAt).toISOString()
-                  : null
-                : (comanda as any).closedAt
-                ? new Date((comanda as any).closedAt).toISOString()
-                : null,
+            garcom_id: comanda.garcom_id || null,
+            garcom_nome: comanda.garcom_nome,
+            created_at: comanda.created_at ? new Date(comanda.created_at).toISOString() : null,
+            closed_at: closedAtField ? new Date(closedAtField).toISOString() : null,
             source: comanda.source,
             pedidos,
           };
