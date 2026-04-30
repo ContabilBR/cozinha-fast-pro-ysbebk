@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, or } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
@@ -72,6 +72,81 @@ export function registerGarconRoutes(app: App) {
         );
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list garcons");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // GET /api/garcons/check-email - Check if an email exists in usuarios table
+  app.fastify.get(
+    "/api/garcons/check-email",
+    {
+      schema: {
+        description: "Check if an email exists in the usuarios table",
+        tags: ["garcons"],
+        querystring: {
+          type: "object",
+          required: ["email"],
+          properties: {
+            email: { type: "string", format: "email", description: "Email to check" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              exists: { type: "boolean" },
+              nome: { type: ["string", "null"] },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Querystring: { email?: string } }>, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
+      const { email } = request.query as { email?: string };
+
+      if (!email || email.trim() === "") {
+        app.logger.warn({}, "Check-email request missing email parameter");
+        return reply.code(400).send({ error: "email query param is required" });
+      }
+
+      try {
+        app.logger.info({ email }, "Checking if email exists in usuarios table");
+
+        const usuario = await app.db
+          .select({
+            id: schema.usuarios.id,
+            nome: schema.usuarios.nome,
+          })
+          .from(schema.usuarios)
+          .where(sql`LOWER(${schema.usuarios.email}) = LOWER(${email})`)
+          .limit(1);
+
+        if (usuario.length > 0) {
+          app.logger.info({ email, usuarioId: usuario[0].id }, "Email found in usuarios table");
+          return reply.code(200).send({
+            exists: true,
+            nome: usuario[0].nome,
+          });
+        }
+
+        app.logger.info({ email }, "Email not found in usuarios table");
+        return reply.code(200).send({
+          exists: false,
+          nome: null,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email }, "Failed to check email in usuarios table");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
