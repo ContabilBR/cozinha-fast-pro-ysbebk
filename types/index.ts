@@ -80,6 +80,7 @@ export interface Comanda {
   mesa_id: string;
   mesa?: Mesa;
   garcom_id?: string;
+  garcom_nome?: string;
   garcom?: User;
   status: ComandaStatus;
   total: number;
