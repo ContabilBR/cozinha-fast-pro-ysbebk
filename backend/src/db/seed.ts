@@ -156,6 +156,19 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
+    // Ensure seed restaurante exists
+    let seedRestauranteId: string;
+    const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+    if (existingRestaurante.length > 0) {
+      seedRestauranteId = existingRestaurante[0].id;
+    } else {
+      const [r] = await app.db.insert(schema.restaurante).values({
+        nome: 'CozinhaFast Demo',
+      }).returning();
+      seedRestauranteId = r.id;
+    }
+    app.logger.info({ seedRestauranteId }, "Seed restaurante resolved");
+
     // Step 1: Ensure all enum values exist using raw SQL
     app.logger.info("Ensuring user_role enum values exist");
     try {
@@ -240,6 +253,46 @@ export async function seedDatabase(app: App) {
       }
 
       app.logger.info("Seed users upserted successfully");
+
+      // Step 2a: Create profiles for seeded users
+      app.logger.info("Creating profiles for seeded users");
+      try {
+        for (const seedUser of seedUsers) {
+          try {
+            const user = await app.db
+              .select({ id: userTable.id })
+              .from(userTable)
+              .where(eq(userTable.email, seedUser.email))
+              .limit(1);
+
+            if (user.length > 0) {
+              // Check if profile exists
+              const existingProfile = await app.db
+                .select()
+                .from(schema.profiles)
+                .where(eq(schema.profiles.userId, user[0].id))
+                .limit(1);
+
+              if (existingProfile.length === 0) {
+                // Create profile with seed restaurante
+                await app.db.insert(schema.profiles).values({
+                  userId: user[0].id,
+                  restauranteId: seedRestauranteId,
+                  role: seedUser.role,
+                  name: seedUser.name,
+                  createdAt: now,
+                });
+                app.logger.debug({ email: seedUser.email, userId: user[0].id }, "Created profile for seed user");
+              }
+            }
+          } catch (err) {
+            app.logger.warn({ email: seedUser.email, err }, "Failed to create profile for seed user");
+          }
+        }
+        app.logger.info("Profiles created successfully");
+      } catch (err) {
+        app.logger.warn({ err }, "Failed to create profiles for seed users");
+      }
     } catch (err) {
       app.logger.error({ err }, "Failed to upsert seed users");
       throw err;
@@ -276,11 +329,11 @@ export async function seedDatabase(app: App) {
           if (existing.length === 0) {
             // Insert new usuario with hashed password
             await app.db.insert(schema.usuarios).values({
-              id: randomUUID(),
               nome: u.nome,
               email: u.email,
               senhaHash: senhaHash,
               role: u.role,
+              restauranteId: seedRestauranteId,
               createdAt: new Date(),
             });
             app.logger.debug({ email: u.email }, 'Inserted new seed usuario');
@@ -424,6 +477,7 @@ export async function seedDatabase(app: App) {
             numero: mesa.numero,
             capacidade: mesa.capacidade,
             status: mesa.status,
+            restauranteId: seedRestauranteId,
           });
         } catch (err) {
           app.logger.debug({ numero: mesa.numero, err }, "Mesa insert error");
@@ -451,6 +505,7 @@ export async function seedDatabase(app: App) {
             .values({
               nome: cat.nome,
               descricao: cat.descricao,
+              restauranteId: seedRestauranteId,
             })
             .returning();
           categoriaIds[cat.nome] = categoria.id;
@@ -479,6 +534,7 @@ export async function seedDatabase(app: App) {
             categoriaId: categoriaIds[prato.categoria],
             imagemUrl: prato.imagemUrl,
             disponivel: true,
+            restauranteId: seedRestauranteId,
           });
         }
       } catch (err) {
@@ -596,6 +652,7 @@ export async function seedDatabase(app: App) {
               .values({
                 nome: cp.nome,
                 descricao: cp.descricao,
+                restauranteId: seedRestauranteId,
               })
               .returning();
 

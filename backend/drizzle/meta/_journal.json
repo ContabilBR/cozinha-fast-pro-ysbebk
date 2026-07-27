@@ -113,6 +113,27 @@
       "when": 1785184565095,
       "tag": "20260727203605_great_quentin_quire",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1745884800000,
+      "tag": "20260429000000_add_restaurante_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1745884801000,
+      "tag": "20260429000001_backfill_restaurante_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785191443153,
+      "tag": "20260727223043_black_queen_noir",
+      "breakpoints": true
     }
   ]
 }

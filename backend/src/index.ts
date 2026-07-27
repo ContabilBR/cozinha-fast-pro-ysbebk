@@ -15,6 +15,7 @@ import { registerUploadRoutes } from './routes/upload.js';
 import { registerGarconRoutes } from './routes/garcons.js';
 import { registerHistoricoRoutes } from './routes/historico.js';
 import { registerRestauranteRoutes } from './routes/restaurante.js';
+import { registerRestauranteSignupRoutes } from './routes/restaurante-signup.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -91,6 +92,7 @@ registerUploadRoutes(app);
 registerGarconRoutes(app);
 registerHistoricoRoutes(app);
 registerRestauranteRoutes(app);
+registerRestauranteSignupRoutes(app);
 
 // Seed database on startup (only if not in production and explicitly enabled)
 if (process.env.NODE_ENV !== 'production' && process.env.SEED_ENABLED === 'true') {

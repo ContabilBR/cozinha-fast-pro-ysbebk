@@ -572,6 +572,7 @@ export function registerOrderRoutes(app: App) {
               precoUnitario: item.preco_unitario.toString(),
               observacao: item.observacao || null,
               status: "pendente" as any,
+              restauranteId: authUser.restauranteId,
             }))
           )
           .returning();

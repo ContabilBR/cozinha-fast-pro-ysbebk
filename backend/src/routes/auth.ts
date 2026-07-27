@@ -113,10 +113,23 @@ export function registerAuthRoutes(app: App) {
           updatedAt: now,
         });
 
-        // Create profile
+        // Get or create default restaurante for new users
+        let restauranteId: string;
+        const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+        if (existingRestaurante.length > 0) {
+          restauranteId = existingRestaurante[0].id;
+        } else {
+          const [newRestaurante] = await app.db
+            .insert(schema.restaurante)
+            .values({ nome: 'Default Restaurant' })
+            .returning();
+          restauranteId = newRestaurante.id;
+        }
+
+        // Create profile with restaurante association
         await app.db.insert(schema.profiles).values({
-          id: randomUUID(),
           userId: userId,
+          restauranteId: restauranteId,
           role: "garcom",
           name,
           createdAt: now,

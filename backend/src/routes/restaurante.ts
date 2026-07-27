@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 
 interface UpdateRestauranteBody {
   nome: string;
@@ -42,17 +42,18 @@ export function registerRestauranteRoutes(app: App) {
       if (!authUser) return;
 
       try {
-        app.logger.info({}, "Getting restaurante info");
+        const tenantId = requireTenant(authUser);
+        app.logger.info({ tenantId }, "Getting restaurante info");
 
         const result = await app.db
           .select()
           .from(schema.restaurante)
-          .orderBy(schema.restaurante.createdAt)
+          .where(eq(schema.restaurante.id, tenantId))
           .limit(1);
 
         if (result.length === 0) {
-          app.logger.info({}, "No restaurante record found");
-          return reply.code(200).send({});
+          app.logger.info({ tenantId }, "No restaurante record found");
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
         const restaurante = result[0];
@@ -117,19 +118,20 @@ export function registerRestauranteRoutes(app: App) {
       if (!authUser) return;
 
       try {
+        const tenantId = requireTenant(authUser);
+
         // Validate nome is present
         if (!request.body.nome) {
           return reply.code(400).send({ error: "nome é obrigatório" });
         }
 
-        app.logger.info({ nome: request.body.nome }, "Upserting restaurante");
+        app.logger.info({ nome: request.body.nome, tenantId }, "Upserting restaurante");
 
-        // Check if any record exists
+        // Check if the tenant's restaurante exists
         const existing = await app.db
           .select()
           .from(schema.restaurante)
-          .orderBy(schema.restaurante.createdAt)
-          .limit(1);
+          .where(eq(schema.restaurante.id, tenantId));
 
         let restaurante;
 
@@ -144,25 +146,15 @@ export function registerRestauranteRoutes(app: App) {
               cnpj: request.body.cnpj,
               updatedAt: new Date(),
             })
-            .where(eq(schema.restaurante.id, existing[0].id))
+            .where(eq(schema.restaurante.id, tenantId))
             .returning();
 
           restaurante = updated;
           app.logger.info({ restauranteId: restaurante.id }, "Restaurante updated successfully");
         } else {
-          // Insert new record
-          const [created] = await app.db
-            .insert(schema.restaurante)
-            .values({
-              nome: request.body.nome,
-              filial: request.body.filial,
-              endereco: request.body.endereco,
-              cnpj: request.body.cnpj,
-            })
-            .returning();
-
-          restaurante = created;
-          app.logger.info({ restauranteId: restaurante.id }, "Restaurante created successfully");
+          // This shouldn't happen in normal flow - tenant must have a restaurante
+          app.logger.warn({ tenantId }, "Tenant restaurante not found for update");
+          return reply.code(404).send({ error: "Restaurante not found" });
         }
 
         return reply.code(200).send({
@@ -206,32 +198,40 @@ export function registerRestauranteRoutes(app: App) {
       if (!authUser) return;
 
       try {
-        app.logger.info({}, "Deleting restaurante");
+        const tenantId = requireTenant(authUser);
+        app.logger.info({ tenantId }, "Deleting restaurante");
 
-        // Fetch the first record
-        const result = await app.db
+        // Check if the tenant's restaurante exists
+        const existing = await app.db
           .select()
           .from(schema.restaurante)
-          .orderBy(schema.restaurante.createdAt)
+          .where(eq(schema.restaurante.id, tenantId))
           .limit(1);
 
-        if (result.length === 0) {
-          app.logger.warn({}, "No restaurante record found for deletion");
+        if (existing.length === 0) {
+          app.logger.warn({ tenantId }, "Restaurante not found for deletion");
           return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
-        const restaurante = result[0];
+        // Try to delete the record
+        try {
+          await app.db
+            .delete(schema.restaurante)
+            .where(eq(schema.restaurante.id, tenantId));
 
-        // Delete the record
-        await app.db
-          .delete(schema.restaurante)
-          .where(eq(schema.restaurante.id, restaurante.id));
-
-        app.logger.info({ restauranteId: restaurante.id }, "Restaurante deleted successfully");
-
-        return reply.code(200).send({ success: true });
-      } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete restaurante");
+          app.logger.info({ restauranteId: tenantId }, "Restaurante deleted successfully");
+          return reply.code(200).send({ success: true });
+        } catch (deleteError: any) {
+          // Handle FK constraint violation - can't delete if referenced by other tables
+          // Error code 23503 = Foreign key violation
+          if (deleteError?.code === '23503' || deleteError?.message?.includes('foreign key') || deleteError?.message?.includes('violates foreign key')) {
+            app.logger.warn({ err: deleteError }, "Cannot delete restaurante - has dependent records");
+            return reply.code(400).send({ error: "Não é possível deletar restaurante com registros relacionados" });
+          }
+          throw deleteError;
+        }
+      } catch (error: any) {
+        app.logger.error({ err: error, code: error?.code, message: error?.message }, "Failed to delete restaurante");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

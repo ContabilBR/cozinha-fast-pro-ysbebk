@@ -324,6 +324,24 @@ describe("API Integration Tests", () => {
     expect(data.profiles).toBeDefined();
   });
 
+  // ==================== Debug Usuarios ====================
+  test("Get debug usuarios with masked passwords", async () => {
+    const res = await api("/api/debug/usuarios");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.usuarios).toBeDefined();
+    expect(Array.isArray(data.usuarios)).toBe(true);
+    // Verify response structure if usuarios exist
+    if (data.usuarios.length > 0) {
+      const usuario = data.usuarios[0];
+      expect(usuario.id).toBeDefined();
+      expect(usuario.nome).toBeDefined();
+      expect(usuario.email).toBeDefined();
+      expect(usuario.senha_hash).toBeDefined();
+      expect(usuario.role).toBeDefined();
+    }
+  });
+
   // ==================== Users CRUD ====================
   test("List all users", async () => {
     const res = await authenticatedApi("/api/users", authToken);
@@ -2597,6 +2615,75 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 404);
+  });
+
+  // ==================== Restaurantes Signup ====================
+  test("Create new restaurante with admin user", async () => {
+    const res = await api("/api/restaurantes/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "New Restaurant",
+        cnpj: "98765432000123",
+        adminNome: "Admin User",
+        adminEmail: `admin-${Date.now()}@newrestaurant.com`,
+        adminSenha: "adminPassword123456",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.restaurante).toBeDefined();
+    expect(data.restaurante.id).toBeDefined();
+    expect(data.restaurante.nome).toBe("New Restaurant");
+    expect(data.usuario).toBeDefined();
+    expect(data.usuario.role).toBe("administrador");
+    expect(data.token).toBeDefined();
+  });
+
+  test("Create restaurante with missing required field returns 400", async () => {
+    const res = await api("/api/restaurantes/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cnpj: "98765432000123",
+        adminNome: "Admin User",
+        adminEmail: `admin-${Date.now()}@test.com`,
+        // missing required nome and adminSenha
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create restaurante with duplicate admin email returns 409", async () => {
+    const dupEmail = `admin-dup-${Date.now()}@test.com`;
+
+    // Create first restaurante
+    const firstRes = await api("/api/restaurantes/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "First Restaurant",
+        cnpj: "11111111000111",
+        adminNome: "First Admin",
+        adminEmail: dupEmail,
+        adminSenha: "password123456",
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    // Try to create with same admin email
+    const dupRes = await api("/api/restaurantes/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Second Restaurant",
+        cnpj: "22222222000222",
+        adminNome: "Second Admin",
+        adminEmail: dupEmail,
+        adminSenha: "different",
+      }),
+    });
+    await expectStatus(dupRes, 409);
   });
 
   // ==================== Sign Out (Last Tests) ====================

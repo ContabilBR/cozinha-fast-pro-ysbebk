@@ -9,6 +9,7 @@ export interface AuthContext {
   email: string;
   role: string;
   name: string;
+  restauranteId: string;
 }
 
 export async function requireAuth(
@@ -26,11 +27,8 @@ export async function requireAuth(
     }
 
     const token = authHeader.slice(7).trim();
-    app.logger.debug({ token: token.substring(0, 20) }, "Validating bearer token");
 
     // Step 1: Try custom usuarios_session table first
-    app.logger.debug({ token: token.substring(0, 20) }, "Checking usuarios_session table");
-
     const usuariosSessions = await app.db
       .select()
       .from(schema.usuariosSession)
@@ -40,16 +38,12 @@ export async function requireAuth(
     if (usuariosSessions && usuariosSessions.length > 0) {
       const usuarioSession = usuariosSessions[0];
 
-      // Check if session has expired
       if (new Date(usuarioSession.expiresAt) < new Date()) {
-        app.logger.warn({ sessionId: usuarioSession.id }, "Usuarios session expired");
         reply.status(401).send({ error: "Unauthorized" });
         return null;
       }
 
-      app.logger.debug({ userId: usuarioSession.userId }, "Found token in usuarios_session, looking up user");
-
-      // Try to find user in usuarios table first (use safe UUID comparison with id::text = $1)
+      // Path A: usuarios_session → usuarios table
       const usuarioResults = await app.db
         .select()
         .from(schema.usuarios)
@@ -58,17 +52,20 @@ export async function requireAuth(
 
       if (usuarioResults && usuarioResults.length > 0) {
         const usuario = usuarioResults[0];
-        app.logger.info({ userId: usuario.id, email: usuario.email }, "Usuarios session validation successful");
-
+        if (!usuario.restauranteId) {
+          reply.status(403).send({ error: "No tenant" });
+          return null;
+        }
         return {
           id: usuario.id.toString(),
           email: usuario.email,
           role: usuario.role,
           name: usuario.nome,
+          restauranteId: usuario.restauranteId.toString(),
         };
       }
 
-      // Fall back to Better Auth user table
+      // Path B: usuarios_session → user table + profiles
       const userResults = await app.db
         .select()
         .from(userTable)
@@ -77,9 +74,8 @@ export async function requireAuth(
 
       if (userResults && userResults.length > 0) {
         const user = userResults[0];
-        let userRole = user.role ?? "garcom";
+        let userRole = (user as any).role ?? "garcom";
 
-        // Check profiles table for role override
         const profileResults = await app.db
           .select()
           .from(schema.profiles)
@@ -88,26 +84,28 @@ export async function requireAuth(
 
         if (profileResults && profileResults.length > 0) {
           userRole = profileResults[0].role;
+          if (!profileResults[0].restauranteId) {
+            reply.status(403).send({ error: "No tenant" });
+            return null;
+          }
+          return {
+            id: user.id,
+            email: user.email,
+            role: userRole,
+            name: user.name || "",
+            restauranteId: profileResults[0].restauranteId.toString(),
+          };
         }
 
-        app.logger.info({ userId: user.id, role: userRole }, "Usuarios session validation successful (Better Auth user)");
-
-        return {
-          id: user.id,
-          email: user.email,
-          role: userRole,
-          name: user.name || "",
-        };
+        reply.status(403).send({ error: "No tenant" });
+        return null;
       }
 
-      app.logger.warn({ userId: usuarioSession.userId }, "User not found in either usuarios or user table");
       reply.status(401).send({ error: "User not found" });
       return null;
     }
 
     // Step 2: Fall back to Better Auth session table
-    app.logger.debug({ token: token.substring(0, 20) }, "Token not found in usuarios_session, trying Better Auth session");
-
     const sessions = await app.db
       .select()
       .from(sessionTable)
@@ -115,23 +113,18 @@ export async function requireAuth(
       .limit(1);
 
     if (!sessions || sessions.length === 0) {
-      app.logger.warn({ token: token.substring(0, 20) }, "Session not found in either table");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
 
     const session = sessions[0];
 
-    // Check if session has expired
     if (new Date(session.expiresAt) < new Date()) {
-      app.logger.warn({ sessionId: session.id }, "Better Auth session expired");
       reply.status(401).send({ error: "Unauthorized" });
       return null;
     }
 
-    app.logger.debug({ userId: session.userId }, "Found token in Better Auth session, looking up user");
-
-    // Try to find user in user table first
+    // Path C: Better Auth session → user table + profiles
     const users = await app.db
       .select()
       .from(userTable)
@@ -140,49 +133,55 @@ export async function requireAuth(
 
     if (users && users.length > 0) {
       const user = users[0];
-      let userRole = user.role ?? "garcom";
+      let userRole = (user as any).role ?? "garcom";
 
-      // Check profiles table for role override
-      const profiles = await app.db
+      const profilesList = await app.db
         .select()
         .from(schema.profiles)
         .where(eq(schema.profiles.userId, user.id))
         .limit(1);
 
-      if (profiles && profiles.length > 0) {
-        userRole = profiles[0].role;
+      if (profilesList && profilesList.length > 0) {
+        userRole = profilesList[0].role;
+        if (!profilesList[0].restauranteId) {
+          reply.status(403).send({ error: "No tenant" });
+          return null;
+        }
+        return {
+          id: user.id,
+          email: user.email,
+          role: userRole,
+          name: user.name || "",
+          restauranteId: profilesList[0].restauranteId.toString(),
+        };
       }
 
-      app.logger.info({ userId: user.id, email: user.email, role: userRole }, "Better Auth session validation successful");
-
-      return {
-        id: user.id,
-        email: user.email,
-        role: userRole,
-        name: user.name || "",
-      };
+      reply.status(403).send({ error: "No tenant" });
+      return null;
     }
 
-    // Fall back to usuarios table if not found in user table (use safe UUID comparison with id::text = $1)
-    const usuarios = await app.db
+    // Path D: Better Auth session → usuarios table
+    const usuariosD = await app.db
       .select()
       .from(schema.usuarios)
       .where(sql`${schema.usuarios.id}::text = ${session.userId}`)
       .limit(1);
 
-    if (usuarios && usuarios.length > 0) {
-      const usuario = usuarios[0];
-      app.logger.info({ userId: usuario.id, email: usuario.email }, "Better Auth session validation successful (usuarios user)");
-
+    if (usuariosD && usuariosD.length > 0) {
+      const usuario = usuariosD[0];
+      if (!usuario.restauranteId) {
+        reply.status(403).send({ error: "No tenant" });
+        return null;
+      }
       return {
         id: usuario.id.toString(),
         email: usuario.email,
         role: usuario.role,
         name: usuario.nome,
+        restauranteId: usuario.restauranteId.toString(),
       };
     }
 
-    app.logger.warn({ userId: session.userId }, "User not found in either user or usuarios table");
     reply.status(401).send({ error: "User not found" });
     return null;
   } catch (error) {
@@ -198,48 +197,33 @@ export function requireRole(
   allowedRolesOrReply?: string[] | FastifyReply,
   reply?: FastifyReply
 ): boolean {
-  // Handle both old (3 args) and new (2 args) signatures for backward compatibility
   let userRole: string;
   let actualReply: FastifyReply;
 
   if (Array.isArray(allowedRolesOrProfile)) {
-    // New signature: (authContext, allowedRoles, reply)
     userRole = authUserOrUser.role;
     actualReply = allowedRolesOrReply as FastifyReply;
     const allowedRoles = allowedRolesOrProfile as string[];
-    // Case-insensitive role check
     const normalizedUserRole = userRole?.toLowerCase() ?? "";
     const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
     if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
-      // Log the role authorization failure
-      console.error({
-        userId: authUserOrUser.id,
-        userRole: userRole,
-        allowedRoles: allowedRoles,
-        message: "Role authorization failed"
-      });
       actualReply.status(403).send({ error: "Forbidden", message: "Insufficient permissions" });
       return false;
     }
   } else {
-    // Old signature: (user, profile, allowedRoles, reply)
     userRole = allowedRolesOrProfile?.role || authUserOrUser?.role;
     actualReply = reply!;
     const allowedRoles = allowedRolesOrReply as string[];
-    // Case-insensitive role check
     const normalizedUserRole = userRole?.toLowerCase() ?? "";
     const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase());
     if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
-      // Log the role authorization failure
-      console.error({
-        userId: authUserOrUser.id || authUserOrUser.userId,
-        userRole: userRole,
-        allowedRoles: allowedRoles,
-        message: "Role authorization failed"
-      });
       actualReply.status(403).send({ error: "Forbidden", message: "Insufficient permissions" });
       return false;
     }
   }
   return true;
+}
+
+export function requireTenant(auth: AuthContext): string {
+  return auth.restauranteId;
 }
