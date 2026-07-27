@@ -2307,6 +2307,68 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
+  // ==================== Garcons Check Email ====================
+  test("Check if email exists - returns true for existing email", async () => {
+    const existingEmail = `check-email-${Date.now()}@example.com`;
+
+    // Create a garcon with this email first
+    const createRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Garcon Check Email",
+        email: existingEmail,
+        password: "senha123456",
+      }),
+    });
+    await expectStatus(createRes, 201);
+
+    // Now check if it exists
+    const res = await authenticatedApi(
+      `/api/garcons/check-email?email=${encodeURIComponent(existingEmail)}`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.exists).toBe(true);
+    expect(data.nome).toBeDefined();
+  });
+
+  test("Check if email exists - returns false for non-existent email", async () => {
+    const nonExistentEmail = `nonexistent-${Date.now()}@example.com`;
+
+    const res = await authenticatedApi(
+      `/api/garcons/check-email?email=${encodeURIComponent(nonExistentEmail)}`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.exists).toBe(false);
+  });
+
+  test("Check email without authentication returns 401", async () => {
+    const res = await api(
+      `/api/garcons/check-email?email=test@example.com`
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Check email missing email parameter returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/garcons/check-email",
+      authToken
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Check email with invalid email format returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/garcons/check-email?email=not-an-email",
+      authToken
+    );
+    await expectStatus(res, 400);
+  });
+
   // ==================== Garcom Pedidos ====================
   test("Get authenticated garcom's pedidos", async () => {
     const res = await authenticatedApi("/api/garcom/pedidos", authToken);
@@ -2423,93 +2485,6 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.comandas)).toBe(true);
   });
 
-  // ==================== Debug Endpoints ====================
-  test("Debug sign-in with valid credentials", async () => {
-    const testEmail = `debug-signin-${Date.now()}@example.com`;
-    const testPassword = "debugPassword123456";
-
-    // Create a user first
-    const signUpRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: "Debug Test User",
-      }),
-    });
-    await expectStatus(signUpRes, 201);
-
-    // Test debug signin
-    const res = await api("/api/debug/signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.userFound).toBeDefined();
-    expect(data.accountFound).toBeDefined();
-    expect(data.passwordMatch).toBeDefined();
-  });
-
-  test("Debug sign-in with invalid password", async () => {
-    const testEmail = `debug-invalid-${Date.now()}@example.com`;
-    const testPassword = "correctPassword123456";
-
-    // Create a user first
-    const signUpRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: "Debug Invalid Test User",
-      }),
-    });
-    await expectStatus(signUpRes, 201);
-
-    // Test debug signin with wrong password
-    const res = await api("/api/debug/signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: "wrongPassword123456",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.userFound).toBeDefined();
-    expect(data.accountFound).toBeDefined();
-    expect(data.passwordMatch).toBe(false);
-  });
-
-  test("Debug sign-in with non-existent user", async () => {
-    const res = await api("/api/debug/signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent-debug@example.com",
-        password: "anyPassword123456",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.userFound).toBeDefined();
-    expect(data.userFound).toBe(false);
-  });
-
-  test("Get debug usuarios list", async () => {
-    const res = await api("/api/debug/usuarios");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.usuarios).toBeDefined();
-    expect(Array.isArray(data.usuarios)).toBe(true);
-  });
 
   // ==================== Historico ====================
   test("Get all archived comandas from historico", async () => {

@@ -1,4 +1,4 @@
-CREATE TABLE "usuarios_session" (
+CREATE TABLE IF NOT EXISTS "usuarios_session" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"token" text NOT NULL,
 	"user_id" text NOT NULL,

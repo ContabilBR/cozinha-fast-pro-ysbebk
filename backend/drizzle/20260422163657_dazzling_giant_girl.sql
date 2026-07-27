@@ -1,1 +1,1 @@
-ALTER TABLE "comandas" ADD COLUMN "mesa_numero" integer;
+ALTER TABLE "comandas" ADD COLUMN IF NOT EXISTS "mesa_numero" integer;

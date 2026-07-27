@@ -10,31 +10,31 @@ const seedAuthUsers = [
   {
     name: "Administrador",
     email: "admin@cozinhafast.com",
-    password: "123456",
+    password: process.env.SEED_ADMIN_PASSWORD ?? 'change-me-on-first-login',
     role: "administrador",
   },
   {
     name: "Gerente",
     email: "gerente@cozinhafast.com",
-    password: "123456",
+    password: process.env.SEED_GERENTE_PASSWORD ?? 'change-me-on-first-login',
     role: "gerente",
   },
   {
     name: "Gerente Teste",
     email: "gerente@teste.com",
-    password: "123456",
+    password: process.env.SEED_GERENTE_PASSWORD ?? 'change-me-on-first-login',
     role: "gerente",
   },
   {
     name: "Garçom",
     email: "garcom@cozinhafast.com",
-    password: "garcom123",
+    password: process.env.SEED_GARCOM_PASSWORD ?? 'change-me-on-first-login',
     role: "garcom",
   },
   {
     name: "Cozinheiro",
     email: "cozinheiro@cozinhafast.com",
-    password: "cozinheiro123",
+    password: process.env.SEED_COZINHEIRO_PASSWORD ?? 'change-me-on-first-login',
     role: "cozinheiro",
   },
 ];
@@ -138,10 +138,10 @@ export async function cleanupMesasAndComandas(app: App) {
 
 // Seed 4 core users that must always exist - using raw database inserts only
 const seedUsers = [
-  { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: "admin123" },
-  { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: "gerente123" },
-  { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: "garcom123" },
-  { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: "cozinheiro123" },
+  { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: process.env.SEED_ADMIN_PASSWORD ?? 'change-me-on-first-login' },
+  { email: "gerente@cozinhafast.com", name: "Gerente", role: "gerente", password: process.env.SEED_GERENTE_PASSWORD ?? 'change-me-on-first-login' },
+  { email: "garcom@cozinhafast.com", name: "Garçom", role: "garcom", password: process.env.SEED_GARCOM_PASSWORD ?? 'change-me-on-first-login' },
+  { email: "cozinheiro@cozinhafast.com", name: "Cozinheiro", role: "cozinheiro", password: process.env.SEED_COZINHEIRO_PASSWORD ?? 'change-me-on-first-login' },
 ];
 
 export async function seedDatabase(app: App) {
@@ -249,8 +249,8 @@ export async function seedDatabase(app: App) {
     app.logger.info("Upserting seed usuarios");
 
     try {
-      // Hash password "123456" at runtime
-      const senhaHash = bcryptjs.hashSync('123456', 10);
+      // Hash password at runtime
+      const senhaHash = bcryptjs.hashSync(process.env.SEED_ADMIN_PASSWORD ?? 'change-me-on-first-login', 10);
       app.logger.info({ hashLength: senhaHash.length, hashStart: senhaHash.substring(0, 20) }, 'Password hashed for seed');
 
       // Prepare seed data
@@ -315,8 +315,8 @@ export async function seedDatabase(app: App) {
           .limit(1);
 
         if (esUser.length > 0 && esUser[0].senhaHash === null) {
-          // Hash the default password "garcom123" with bcrypt cost factor 10
-          const defaultHash = bcryptjs.hashSync('garcom123', 10);
+          // Hash the default password with bcrypt cost factor 10
+          const defaultHash = bcryptjs.hashSync(process.env.SEED_GARCOM_PASSWORD ?? 'change-me-on-first-login', 10);
 
           await app.db
             .update(schema.usuarios)

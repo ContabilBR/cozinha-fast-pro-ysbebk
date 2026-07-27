@@ -13,7 +13,6 @@ import { registerUsuariosRoutes } from './routes/usuarios.js';
 import { registerRelatoriosRoutes } from './routes/relatorios.js';
 import { registerUploadRoutes } from './routes/upload.js';
 import { registerGarconRoutes } from './routes/garcons.js';
-import { registerDebugRoutes } from './routes/debug.js';
 import { registerHistoricoRoutes } from './routes/historico.js';
 import { registerRestauranteRoutes } from './routes/restaurante.js';
 import { seedDatabase } from './db/seed.js';
@@ -90,12 +89,13 @@ registerUsuariosRoutes(app);
 registerRelatoriosRoutes(app);
 registerUploadRoutes(app);
 registerGarconRoutes(app);
-registerDebugRoutes(app);
 registerHistoricoRoutes(app);
 registerRestauranteRoutes(app);
 
-// Seed database on startup
-await seedDatabase(app);
+// Seed database on startup (only if not in production and explicitly enabled)
+if (process.env.NODE_ENV !== 'production' && process.env.SEED_ENABLED === 'true') {
+  await seedDatabase(app);
+}
 
 await app.run();
 app.logger.info('Application running');

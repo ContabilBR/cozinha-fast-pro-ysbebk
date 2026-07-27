@@ -1,4 +1,4 @@
-CREATE TABLE "comandas_historico" (
+CREATE TABLE IF NOT EXISTS "comandas_historico" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"mesa_id" uuid,
 	"mesa_numero" integer,
@@ -10,7 +10,7 @@ CREATE TABLE "comandas_historico" (
 	"archived_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "pedidos_historico" (
+CREATE TABLE IF NOT EXISTS "pedidos_historico" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"comanda_id" uuid NOT NULL,
 	"prato_id" uuid,

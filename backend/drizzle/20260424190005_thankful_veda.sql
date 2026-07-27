@@ -1,4 +1,4 @@
-CREATE TABLE "restaurante" (
+CREATE TABLE IF NOT EXISTS "restaurante" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"nome" text NOT NULL,
 	"filial" text,
