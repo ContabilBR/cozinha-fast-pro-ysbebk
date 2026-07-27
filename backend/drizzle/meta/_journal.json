@@ -169,6 +169,13 @@
       "when": 1785192538851,
       "tag": "20260727224858_quick_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785193163147,
+      "tag": "20260727225923_unusual_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

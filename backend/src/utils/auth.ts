@@ -52,13 +52,17 @@ export async function requireAuth(
 
       if (usuarioResults && usuarioResults.length > 0) {
         const usuario = usuarioResults[0];
-        // Return AuthContext even if restauranteId is null - let route handlers decide what to do
+        const rid = usuario.restauranteId?.toString();
+        if (!rid) {
+          reply.status(403).send({ error: "No tenant" });
+          return null;
+        }
         return {
           id: usuario.id.toString(),
           email: usuario.email,
           role: usuario.role,
           name: usuario.nome,
-          restauranteId: usuario.restauranteId?.toString() || "",
+          restauranteId: rid,
         };
       }
 
@@ -81,13 +85,17 @@ export async function requireAuth(
 
         if (profileResults && profileResults.length > 0) {
           userRole = profileResults[0].role;
-          // Return AuthContext even if restauranteId is null - let route handlers decide what to do
+          const rid = profileResults[0].restauranteId?.toString();
+          if (!rid) {
+            reply.status(403).send({ error: "No tenant" });
+            return null;
+          }
           return {
             id: user.id,
             email: user.email,
             role: userRole,
             name: user.name || "",
-            restauranteId: profileResults[0].restauranteId?.toString() || "",
+            restauranteId: rid,
           };
         }
 
@@ -137,13 +145,17 @@ export async function requireAuth(
 
       if (profilesList && profilesList.length > 0) {
         userRole = profilesList[0].role;
-        // Return AuthContext even if restauranteId is null - let route handlers decide what to do
+        const rid = profilesList[0].restauranteId?.toString();
+        if (!rid) {
+          reply.status(403).send({ error: "No tenant" });
+          return null;
+        }
         return {
           id: user.id,
           email: user.email,
           role: userRole,
           name: user.name || "",
-          restauranteId: profilesList[0].restauranteId?.toString() || "",
+          restauranteId: rid,
         };
       }
 
@@ -160,13 +172,17 @@ export async function requireAuth(
 
     if (usuariosD && usuariosD.length > 0) {
       const usuario = usuariosD[0];
-      // Return AuthContext even if restauranteId is null - let route handlers decide what to do
+      const rid = usuario.restauranteId?.toString();
+      if (!rid) {
+        reply.status(403).send({ error: "No tenant" });
+        return null;
+      }
       return {
         id: usuario.id.toString(),
         email: usuario.email,
         role: usuario.role,
         name: usuario.nome,
-        restauranteId: usuario.restauranteId?.toString() || "",
+        restauranteId: rid,
       };
     }
 
@@ -213,5 +229,8 @@ export function requireRole(
 }
 
 export function requireTenant(auth: AuthContext): string {
+  if (!auth.restauranteId) {
+    throw new Error("No tenant associated with this session");
+  }
   return auth.restauranteId;
 }
