@@ -43,6 +43,13 @@ export function registerRestauranteRoutes(app: App) {
 
       try {
         const tenantId = requireTenant(authUser);
+
+        // If user has no tenant, return 404
+        if (!tenantId) {
+          app.logger.warn({}, "User has no tenant for get operation");
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
+
         app.logger.info({ tenantId }, "Getting restaurante info");
 
         const result = await app.db
@@ -119,6 +126,12 @@ export function registerRestauranteRoutes(app: App) {
 
       try {
         const tenantId = requireTenant(authUser);
+
+        // If user has no tenant, return 404
+        if (!tenantId) {
+          app.logger.warn({}, "User has no tenant for put operation");
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
 
         // Validate nome is present
         if (!request.body.nome) {
@@ -199,39 +212,59 @@ export function registerRestauranteRoutes(app: App) {
 
       try {
         const tenantId = requireTenant(authUser);
+
+        // If user has no tenant, return 404
+        if (!tenantId) {
+          app.logger.warn({}, "User has no tenant for delete operation");
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
+
         app.logger.info({ tenantId }, "Deleting restaurante");
 
         // Check if the tenant's restaurante exists
-        const existing = await app.db
-          .select()
-          .from(schema.restaurante)
-          .where(eq(schema.restaurante.id, tenantId))
-          .limit(1);
+        let existing;
+        try {
+          existing = await app.db
+            .select()
+            .from(schema.restaurante)
+            .where(eq(schema.restaurante.id, tenantId))
+            .limit(1);
+        } catch (selectError: any) {
+          app.logger.error({ err: selectError, tenantId }, "Failed to query restaurante for deletion");
+          throw selectError;
+        }
 
-        if (existing.length === 0) {
+        if (!existing || existing.length === 0) {
           app.logger.warn({ tenantId }, "Restaurante not found for deletion");
           return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
         // Try to delete the record
         try {
-          await app.db
+          const deleteResult = await app.db
             .delete(schema.restaurante)
             .where(eq(schema.restaurante.id, tenantId));
 
-          app.logger.info({ restauranteId: tenantId }, "Restaurante deleted successfully");
+          app.logger.info({ restauranteId: tenantId, deleteResult }, "Restaurante deleted successfully");
           return reply.code(200).send({ success: true });
         } catch (deleteError: any) {
           // Handle FK constraint violation - can't delete if referenced by other tables
-          // Error code 23503 = Foreign key violation
-          if (deleteError?.code === '23503' || deleteError?.message?.includes('foreign key') || deleteError?.message?.includes('violates foreign key')) {
+          // Error code 23503 = Foreign key violation (postgres-js may expose it differently)
+          const errorMessage = (deleteError?.message || "").toLowerCase();
+          const errorCode = deleteError?.code;
+          app.logger.debug({ errorCode, errorMessage, deleteErrorStr: String(deleteError) }, "Delete error details");
+
+          if (errorCode === '23503' || errorCode === 23503 ||
+              errorMessage.includes('foreign key') ||
+              errorMessage.includes('violates foreign key') ||
+              errorMessage.includes('still referenced')) {
             app.logger.warn({ err: deleteError }, "Cannot delete restaurante - has dependent records");
             return reply.code(400).send({ error: "Não é possível deletar restaurante com registros relacionados" });
           }
           throw deleteError;
         }
       } catch (error: any) {
-        app.logger.error({ err: error, code: error?.code, message: error?.message }, "Failed to delete restaurante");
+        app.logger.error({ err: error, code: error?.code, message: error?.message, stack: error?.stack }, "Failed to delete restaurante");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
