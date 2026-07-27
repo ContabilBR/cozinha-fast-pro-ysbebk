@@ -5,7 +5,7 @@ import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
-import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 import { resolveGarcomId } from "../utils/garcom.js";
 
 interface CreateGarconBody {
@@ -200,7 +200,12 @@ export function registerGarconRoutes(app: App) {
           return reply.code(400).send({ error: "name, email, and password are required" });
         }
 
-        app.logger.info({ email: request.body.email }, "Creating new garcon");
+        const restauranteId = requireTenant(authUser);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ email: request.body.email, restauranteId }, "Creating new garcon");
 
         // Check if user already exists
         const existing = await app.db
@@ -247,6 +252,7 @@ export function registerGarconRoutes(app: App) {
           email: request.body.email,
           senhaHash: hashedPassword,
           role: "garcom",
+          restauranteId,
           createdAt: now,
         });
 

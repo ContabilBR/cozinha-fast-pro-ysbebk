@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, ne, and, inArray } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
 interface CreateMesaBody {
   numero: number;
@@ -157,13 +157,18 @@ export function registerTableRoutes(app: App) {
           return reply.code(400).send({ error: "numero is required" });
         }
 
-        app.logger.info({ numero: request.body.numero }, "Creating mesa");
+        const restauranteId = requireTenant(authUser);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
 
-        // Check for duplicate numero
+        app.logger.info({ numero: request.body.numero, restauranteId }, "Creating mesa");
+
+        // Check for duplicate numero (per restaurante)
         const existing = await app.db
           .select()
           .from(schema.mesas)
-          .where(eq(schema.mesas.numero, request.body.numero))
+          .where(and(eq(schema.mesas.numero, request.body.numero), eq(schema.mesas.restauranteId, restauranteId)))
           .limit(1);
 
         if (existing.length > 0) {
@@ -177,6 +182,7 @@ export function registerTableRoutes(app: App) {
             numero: request.body.numero,
             status: statusValue as any,
             capacidade: request.body.capacidade || 4,
+            restauranteId,
           })
           .returning();
 

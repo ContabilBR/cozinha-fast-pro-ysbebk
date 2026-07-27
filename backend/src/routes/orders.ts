@@ -3,7 +3,7 @@ import { eq, sql, inArray, or, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 import { resolveGarcomId } from "../utils/garcom.js";
 
 interface CreateComandaBody {
@@ -210,6 +210,11 @@ export function registerOrderRoutes(app: App) {
           return reply.code(400).send({ error: "mesa_id is required" });
         }
 
+        const restauranteId = requireTenant(authUser);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
         // Check if mesa exists
         const mesaRecords = await app.db
           .select()
@@ -230,6 +235,7 @@ export function registerOrderRoutes(app: App) {
           {
             mesaId,
             garcomId,
+            restauranteId,
             authUserEmail: authUser.email,
           },
           "Creating comanda with auth user id as garcom_id"
@@ -255,6 +261,7 @@ export function registerOrderRoutes(app: App) {
               garcomId,
               status: "aberta",
               total: initialTotal,
+              restauranteId,
             })
             .returning();
 
@@ -269,6 +276,7 @@ export function registerOrderRoutes(app: App) {
               precoUnitario: item.preco_unitario.toString(),
               observacao: item.observacao || null,
               status: "pendente" as any,
+              restauranteId,
             }));
 
             await tx
@@ -677,7 +685,12 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
-        app.logger.info({ comandaId: request.params.id }, "Closing and archiving comanda");
+        const restauranteId = requireTenant(session);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ comandaId: request.params.id, restauranteId }, "Closing and archiving comanda");
 
         // STEP 1: First query mesa_id before any archive logic
         const mesaIdResult = await app.db
@@ -767,6 +780,7 @@ export function registerOrderRoutes(app: App) {
             createdAt: createdAt,
             closedAt: closedAt,
             archivedAt: closedAt,
+            restauranteId,
           });
 
           // Copy pedidos to historico
@@ -783,6 +797,7 @@ export function registerOrderRoutes(app: App) {
                 status: p.status,
                 createdAt: p.createdAt,
                 archivedAt: closedAt,
+                restauranteId,
               }))
             );
           }

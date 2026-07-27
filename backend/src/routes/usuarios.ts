@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
 interface CreateUsuarioBody {
   nome: string;
@@ -130,7 +130,12 @@ export function registerUsuariosRoutes(app: App) {
           return reply.code(400).send({ error: "nome, email, and senha are required" });
         }
 
-        app.logger.info({ email: request.body.email }, "Creating usuario");
+        const restauranteId = requireTenant(authUser);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ email: request.body.email, restauranteId }, "Creating usuario");
 
         const hashedPassword = await bcrypt.hash(request.body.senha, 10);
 
@@ -141,6 +146,7 @@ export function registerUsuariosRoutes(app: App) {
             email: request.body.email,
             senhaHash: hashedPassword,
             role: request.body.role || "garcom",
+            restauranteId,
           })
           .returning();
 

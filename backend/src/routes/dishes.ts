@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, and, sql, like } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
 interface CreatePratoBody {
   nome: string;
@@ -197,7 +197,12 @@ export function registerDishRoutes(app: App) {
           return reply.code(400).send({ error: "nome and preco are required" });
         }
 
-        app.logger.info({ nome: request.body.nome }, "Creating prato");
+        const restauranteId = requireTenant(authUser);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ nome: request.body.nome, restauranteId }, "Creating prato");
 
         const normalizedPreco = normalizeDecimal(request.body.preco);
 
@@ -210,6 +215,7 @@ export function registerDishRoutes(app: App) {
             categoriaId: request.body.categoriaId,
             imagemUrl: request.body.imagemUrl,
             disponivel: request.body.disponivel !== false,
+            restauranteId,
           })
           .returning();
 

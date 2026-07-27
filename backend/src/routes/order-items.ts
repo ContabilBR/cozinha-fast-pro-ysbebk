@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, sql, desc } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 
 interface CreatePedidoBody {
   comanda_id?: string;
@@ -182,7 +182,12 @@ export function registerOrderItemRoutes(app: App) {
           return reply.code(400).send({ error: "comanda_id and prato_id are required" });
         }
 
-        app.logger.info({ comandaId, pratoId }, "Creating pedido");
+        const restauranteId = requireTenant(session);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ comandaId, pratoId, restauranteId }, "Creating pedido");
 
         // Look up prato to get price
         const prato = await app.db
@@ -219,6 +224,7 @@ export function registerOrderItemRoutes(app: App) {
             precoUnitario,
             observacao: request.body.observacao,
             status: "pendente",
+            restauranteId,
           })
           .returning();
 
@@ -553,7 +559,12 @@ export function registerOrderItemRoutes(app: App) {
       if (!session) return;
 
       try {
-        app.logger.info({ pedidoId: request.params.id }, "Deleting pedido");
+        const restauranteId = requireTenant(session);
+        if (!restauranteId) {
+          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        app.logger.info({ pedidoId: request.params.id, restauranteId }, "Deleting pedido");
 
         // Step a: Fetch the pedido
         const existing = await app.db
@@ -636,6 +647,7 @@ export function registerOrderItemRoutes(app: App) {
               createdAt: comanda.createdAt,
               closedAt: comanda.closedAt,
               archivedAt: new Date(),
+              restauranteId,
             });
 
             await app.db.insert(schema.pedidosHistorico).values({
@@ -649,6 +661,7 @@ export function registerOrderItemRoutes(app: App) {
               status: pedido.status,
               createdAt: pedido.createdAt,
               archivedAt: new Date(),
+              restauranteId,
             });
 
             await app.db.delete(schema.comandas).where(eq(schema.comandas.id, pedido.comandaId));
