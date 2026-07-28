@@ -30,6 +30,7 @@ import {
   ChevronUp,
   Check,
 } from "lucide-react-native";
+import { useRealtime, type RealtimeStatus } from "@/hooks/useRealtime";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -617,14 +618,45 @@ export default function CozinhaScreen() {
     }
   }, []);
 
+  // Debounce ref for grouping rapid realtime events
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRealtimeEvent = useCallback(() => {
+    if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+    realtimeDebounceRef.current = setTimeout(() => {
+      console.log("[Cozinha] Realtime event — refreshing comandas");
+      fetchComandas();
+    }, 300);
+  }, [fetchComandas]);
+
+  const realtimeStatus = useRealtime({
+    onEvent: handleRealtimeEvent,
+  });
+
+  // Initial fetch
   useEffect(() => {
     fetchComandas();
+  }, [fetchComandas]);
+
+  // Fallback polling — only when realtime is disconnected
+  useEffect(() => {
+    if (realtimeStatus === "connected") return;
     const interval = setInterval(() => {
-      console.log("[Cozinha] Auto-refresh (30s)");
+      console.log("[Cozinha] Fallback poll (30s) — realtime disconnected");
       fetchComandas();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchComandas]);
+  }, [realtimeStatus, fetchComandas]);
+
+  // Refetch when reconnecting (events may have been missed)
+  const prevStatusRef = useRef<RealtimeStatus>(realtimeStatus);
+  useEffect(() => {
+    if (prevStatusRef.current !== "connected" && realtimeStatus === "connected") {
+      console.log("[Cozinha] Realtime reconnected — refetching");
+      fetchComandas();
+    }
+    prevStatusRef.current = realtimeStatus;
+  }, [realtimeStatus, fetchComandas]);
 
   const handleRefresh = () => {
     console.log("[Cozinha] Manual refresh - tab:", activeTab);
@@ -699,9 +731,27 @@ export default function CozinhaScreen() {
                 Cozinha
               </Text>
             </View>
-            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
-              {pendingCountStr} pendentes · {inProgressCountStr} em preparo
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 13, color: COLORS.textSecondary }}>
+                {pendingCountStr} pendentes · {inProgressCountStr} em preparo
+              </Text>
+              {realtimeStatus === "connected" ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" }} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: "#22C55E" }}>Tempo real</Text>
+                </View>
+              ) : realtimeStatus === "connecting" ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#F59E0B" }} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: "#F59E0B" }}>Reconectando…</Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.textSecondary }} />
+                  <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 11, color: COLORS.textSecondary }}>Reconectando…</Text>
+                </View>
+              )}
+            </View>
           </View>
           <AnimatedPressable
             onPress={handleRefresh}
