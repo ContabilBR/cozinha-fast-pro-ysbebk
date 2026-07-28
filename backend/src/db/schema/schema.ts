@@ -203,3 +203,21 @@ export const restaurante = pgTable("restaurante", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
+
+export const notasFiscais = pgTable("notas_fiscais", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  comandaHistoricoId: uuid("comanda_historico_id"),
+  referenciaFocus: text("referencia_focus").notNull(),
+  status: nfceStatusEnum("status").default("pendente").notNull(),
+  chaveAcesso: text("chave_acesso"),
+  numeroNota: integer("numero_nota"),
+  serie: integer("serie"),
+  xmlUrl: text("xml_url"),
+  danfeUrl: text("danfe_url"),
+  protocolo: text("protocolo"),
+  mensagemSefaz: text("mensagem_sefaz"),
+  motivoCancelamento: text("motivo_cancelamento"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
