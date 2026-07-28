@@ -87,7 +87,7 @@ export function registerDishRoutes(app: App) {
           app.logger.debug({ err: cleanupError }, "Cleanup of corrupted imagem_url values skipped");
         }
 
-        // Build filters first
+        // Build filters
         const filters: any[] = [];
 
         if (categoria_id) {
@@ -99,8 +99,7 @@ export function registerDishRoutes(app: App) {
           filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
         }
 
-        // Build query with filters applied
-        const baseQuery = app.db
+        const query = app.db
           .select({
             id: schema.pratos.id,
             nome: schema.pratos.nome,
@@ -116,10 +115,9 @@ export function registerDishRoutes(app: App) {
           .from(schema.pratos)
           .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
 
-        // Apply filters if any exist
         const pratos = await (filters.length > 0
-          ? baseQuery.where(and(...filters)).orderBy(schema.pratos.nome)
-          : baseQuery.orderBy(schema.pratos.nome));
+          ? query.where(and(...filters)).orderBy(schema.pratos.nome)
+          : query.orderBy(schema.pratos.nome));
 
         app.logger.info({ count: pratos.length }, "Listed pratos");
 
@@ -288,6 +286,7 @@ export function registerDishRoutes(app: App) {
       if (!session) return;
 
       try {
+        const restauranteId = requireTenant(session);
         app.logger.info({ pratoId: request.params.id }, "Getting prato");
 
         const pratos = await app.db
@@ -305,7 +304,7 @@ export function registerDishRoutes(app: App) {
           })
           .from(schema.pratos)
           .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id))
-          .where(eq(schema.pratos.id, request.params.id));
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)));
 
         if (!pratos.length) {
           return reply.code(404).send({ error: "Prato not found" });
@@ -394,12 +393,13 @@ export function registerDishRoutes(app: App) {
       if (!requireRole(authUser, ["admin", "administrador", "gerente"], reply)) return;
 
       try {
+        const restauranteId = requireTenant(authUser);
         app.logger.info({ pratoId: request.params.id }, "Updating prato");
 
         const existing = await app.db
           .select()
           .from(schema.pratos)
-          .where(eq(schema.pratos.id, request.params.id));
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Prato not found" });
@@ -418,7 +418,7 @@ export function registerDishRoutes(app: App) {
         const [updated] = await app.db
           .update(schema.pratos)
           .set(updates)
-          .where(eq(schema.pratos.id, request.params.id))
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)))
           .returning();
 
         app.logger.info({ pratoId: updated.id }, "Prato updated successfully");
@@ -469,18 +469,19 @@ export function registerDishRoutes(app: App) {
       if (!requireRole(authUser, ["admin", "administrador", "gerente"], reply)) return;
 
       try {
+        const restauranteId = requireTenant(authUser);
         app.logger.info({ pratoId: request.params.id }, "Deleting prato");
 
         const existing = await app.db
           .select()
           .from(schema.pratos)
-          .where(eq(schema.pratos.id, request.params.id));
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Prato not found" });
         }
 
-        await app.db.delete(schema.pratos).where(eq(schema.pratos.id, request.params.id));
+        await app.db.delete(schema.pratos).where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)));
 
         app.logger.info({ pratoId: request.params.id }, "Prato deleted successfully");
 
