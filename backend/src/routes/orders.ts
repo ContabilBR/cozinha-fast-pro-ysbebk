@@ -105,15 +105,18 @@ export function registerOrderRoutes(app: App) {
           LEFT JOIN pedidos p ON p.comanda_id = c.id
         `;
 
-        // Add WHERE clause conditionally based on role
+        const restauranteId = requireTenant(authUser);
+
+        // Add WHERE clause conditionally based on role — always filter by tenant
         if (!isManager) {
-          sqlQuery = sql`${sqlQuery} WHERE c.garcom_id = ${authUserId}`;
+          sqlQuery = sql`${sqlQuery} WHERE c.restaurante_id = ${restauranteId}::uuid AND c.garcom_id = ${authUserId}`;
           if (request.query.status) {
             sqlQuery = sql`${sqlQuery} AND c.status = ${request.query.status}`;
           }
         } else {
+          sqlQuery = sql`${sqlQuery} WHERE c.restaurante_id = ${restauranteId}::uuid`;
           if (request.query.status) {
-            sqlQuery = sql`${sqlQuery} WHERE c.status = ${request.query.status}`;
+            sqlQuery = sql`${sqlQuery} AND c.status = ${request.query.status}`;
           }
         }
 
@@ -384,6 +387,7 @@ export function registerOrderRoutes(app: App) {
       if (!session) return;
 
       try {
+        const restauranteId = requireTenant(session);
         app.logger.info({ comandaId: request.params.id }, "Getting comanda");
 
         // Get comanda with mesa_numero from JOIN with mesas
@@ -399,7 +403,7 @@ export function registerOrderRoutes(app: App) {
           })
           .from(schema.comandas)
           .leftJoin(schema.mesas, eq(schema.mesas.id, schema.comandas.mesaId))
-          .where(eq(schema.comandas.id, request.params.id));
+          .where(and(eq(schema.comandas.id, request.params.id), eq(schema.comandas.restauranteId, restauranteId)));
 
         if (!comandas.length) {
           return reply.code(404).send({ error: "Comanda not found" });
