@@ -280,7 +280,8 @@ describe("Tenant Isolation Tests", () => {
     });
     expect(pratoRes.status).toBe(200);
     const data = await pratoRes.json();
-    expect(data.id).toBe(pratoAId);
+    const prato = data.prato ?? data;
+    expect(prato.id).toBe(pratoAId);
   });
 
   // Test: Restaurant A admin can still see their comanda
