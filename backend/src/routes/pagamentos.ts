@@ -183,6 +183,21 @@ export function registerPagamentoRoutes(app: App) {
   // POST /api/comandas/:id/divisao — calcular divisão da conta
   app.fastify.post<{ Params: { id: string }; Body: { tipo: string; num_pessoas?: number; gorjeta?: number; pessoas?: Array<{ nome: string; pedido_ids: string[] }> } }>(
     "/api/comandas/:id/divisao",
+    {
+      schema: {
+        params: { type: "object", properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+        body: {
+          type: "object",
+          properties: {
+            tipo: { type: "string", enum: ["igual", "por_itens"] },
+            num_pessoas: { type: "number", minimum: 2 },
+            gorjeta: { type: "number", minimum: 0 },
+            pessoas: { type: "array" },
+          },
+          required: ["tipo"],
+        },
+      },
+    },
     async (request: FastifyRequest<{ Params: { id: string }; Body: { tipo: string; num_pessoas?: number; gorjeta?: number; pessoas?: Array<{ nome: string; pedido_ids: string[] }> } }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);
@@ -251,7 +266,7 @@ export function registerPagamentoRoutes(app: App) {
             const itens: any[] = [];
 
             for (const pedidoId of pessoa.pedido_ids) {
-              const pedido = pedidoMap.get(pedidoId);
+              const pedido = pedidoMap.get(pedidoId) as any;
               if (pedido) {
                 const valor = parseFloat(pedido.precoUnitario) * pedido.quantidade;
                 subtotal += valor;
