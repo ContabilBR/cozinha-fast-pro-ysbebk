@@ -1652,6 +1652,26 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Close comanda without authentication returns 401", async () => {
+    // Create a comanda first
+    const createRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const createData = await createRes.json();
+
+    const res = await api(`/api/comandas/${createData.comanda.id}/fechar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gorjeta: 5.00 }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Cancel comanda", async () => {
     // Create a new comanda to cancel
     const createRes = await authenticatedApi("/api/comandas", authToken, {
