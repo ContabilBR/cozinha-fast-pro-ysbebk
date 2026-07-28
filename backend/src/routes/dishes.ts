@@ -74,6 +74,14 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Querystring: { categoria_id?: string; disponivel?: string } }>, reply: FastifyReply) => {
+      let restauranteId: string | undefined;
+      const authUser = await app.auth.api.getSession({
+        headers: new Headers(request.headers as any)
+      }).catch(() => null);
+      if (authUser?.user) {
+        restauranteId = requireTenant(authUser.user);
+      }
+
       try {
         const { categoria_id, disponivel } = request.query;
         app.logger.info({ categoria_id, disponivel }, "Listing pratos");
@@ -97,6 +105,10 @@ export function registerDishRoutes(app: App) {
         if (disponivel !== undefined) {
           const disponibleBoolean = disponivel === "true";
           filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
+        }
+
+        if (restauranteId) {
+          filters.push(eq(schema.pratos.restauranteId, restauranteId));
         }
 
         const query = app.db
