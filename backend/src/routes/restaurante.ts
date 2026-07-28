@@ -225,7 +225,7 @@ export function registerRestauranteRoutes(app: App) {
         const existing = await app.db
           .select()
           .from(schema.restaurante)
-          .where(eq(schema.restaurante.id, tenantId))
+          .where(eq(schema.restaurante.id, tenantId as any))
           .limit(1);
 
         if (!existing || existing.length === 0) {
@@ -234,29 +234,53 @@ export function registerRestauranteRoutes(app: App) {
         }
 
         // Try to delete the record
-        await app.db
-          .delete(schema.restaurante)
-          .where(eq(schema.restaurante.id, tenantId))
-          .execute();
+        let deleteError: any = null;
+        try {
+          await app.db
+            .delete(schema.restaurante)
+            .where(eq(schema.restaurante.id, tenantId as any));
+        } catch (err: any) {
+          deleteError = err;
+        }
+
+        if (deleteError) {
+          // Check if it's a foreign key constraint violation
+          const errorStr = JSON.stringify(deleteError).toLowerCase();
+          const message = String(deleteError?.message || "").toLowerCase();
+          const detail = String(deleteError?.detail || "").toLowerCase();
+          const code = deleteError?.code;
+
+          app.logger.warn({
+            code,
+            message,
+            detail,
+            hasFK: errorStr.includes('foreign key') || errorStr.includes('restrict') || code === '23503'
+          }, "Delete failed - checking if FK constraint");
+
+          // Check various FK error indicators
+          const isFKError = code === '23503' ||
+                           code === 23503 ||
+                           message.includes('foreign key') ||
+                           message.includes('violates') ||
+                           detail.includes('foreign key') ||
+                           detail.includes('restrict') ||
+                           errorStr.includes('fk') ||
+                           errorStr.includes('foreign key') ||
+                           errorStr.includes('still referenced');
+
+          if (isFKError) {
+            app.logger.warn({ tenantId }, "Cannot delete restaurante - has dependent records");
+            return reply.code(400).send({ error: "Não é possível deletar restaurante com registros relacionados" });
+          }
+
+          app.logger.error({ err: deleteError, code, message }, "Delete failed with non-FK error");
+          throw deleteError;
+        }
 
         app.logger.info({ restauranteId: tenantId }, "Restaurante deleted successfully");
         return reply.code(200).send({ success: true });
       } catch (error: any) {
-        // Handle FK constraint violation - can't delete if referenced by other tables
-        const errorMessage = String(error?.message || error || "").toLowerCase();
-        const errorCode = error?.code;
-        app.logger.warn({ err: error, code: errorCode, message: errorMessage }, "Delete operation error details");
-
-        if (errorCode === '23503' || errorCode === 23503 ||
-            errorMessage.includes('foreign key') ||
-            errorMessage.includes('violates foreign key') ||
-            errorMessage.includes('still referenced') ||
-            errorMessage.includes('restrict')) {
-          app.logger.warn({ err: error }, "Cannot delete restaurante - has dependent records");
-          return reply.code(400).send({ error: "Não é possível deletar restaurante com registros relacionados" });
-        }
-
-        app.logger.error({ err: error, code: errorCode, message: errorMessage }, "Failed to delete restaurante");
+        app.logger.error({ err: error }, "Failed to delete restaurante");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

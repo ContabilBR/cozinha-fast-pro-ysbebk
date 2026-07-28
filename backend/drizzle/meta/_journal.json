@@ -176,6 +176,13 @@
       "when": 1785193163147,
       "tag": "20260727225923_unusual_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785196792403,
+      "tag": "20260727235952_wealthy_sauron",
+      "breakpoints": true
     }
   ]
 }

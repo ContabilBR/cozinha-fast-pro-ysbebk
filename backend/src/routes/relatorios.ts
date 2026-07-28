@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, sum, count, gte, lt, ne, and, or, sql } from "drizzle-orm";
+import { eq, sum, count, gte, lt, ne, and, sql } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 export function registerRelatoriosRoutes(app: App) {
   // GET /api/relatorios/resumo - Summary/Dashboard
@@ -9,7 +10,7 @@ export function registerRelatoriosRoutes(app: App) {
     "/api/relatorios/resumo",
     {
       schema: {
-        description: "Get summary/dashboard data",
+        description: "Get summary/dashboard data (requires authentication)",
         tags: ["relatorios"],
         response: {
           200: {
@@ -46,31 +47,44 @@ export function registerRelatoriosRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          500: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
       try {
-        app.logger.info({}, "Getting resumo");
+        const tenantId = authUser.restauranteId;
+        app.logger.info({ tenantId }, "Getting resumo");
 
         // Total mesas
         const totalMesasResult = await app.db
           .select({ count: count() })
-          .from(schema.mesas);
+          .from(schema.mesas)
+          .where(eq(schema.mesas.restauranteId, tenantId as any));
         const totalMesas = totalMesasResult[0]?.count || 0;
 
         // Mesas ocupadas (status != 'disponivel')
         const mesasOcupadasResult = await app.db
           .select({ count: count() })
           .from(schema.mesas)
-          .where(ne(schema.mesas.status, "disponivel"));
+          .where(and(
+            eq(schema.mesas.restauranteId, tenantId as any),
+            ne(schema.mesas.status, "disponivel")
+          ));
         const mesasOcupadas = mesasOcupadasResult[0]?.count || 0;
 
         // Comandas abertas
         const comandasAbertasResult = await app.db
           .select({ count: count() })
           .from(schema.comandas)
-          .where(eq(schema.comandas.status, "aberta"));
+          .where(and(
+            eq(schema.comandas.restauranteId, tenantId as any),
+            eq(schema.comandas.status, "aberta")
+          ));
         const comandasAbertas = comandasAbertasResult[0]?.count || 0;
 
         // Pedidos pendentes (only in open comandas)
@@ -80,6 +94,7 @@ export function registerRelatoriosRoutes(app: App) {
           .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
           .where(
             and(
+              eq(schema.pedidos.restauranteId, tenantId as any),
               eq(schema.pedidos.status, "pendente"),
               eq(schema.comandas.status, "aberta")
             )
@@ -87,7 +102,6 @@ export function registerRelatoriosRoutes(app: App) {
         const pedidosPendentes = pedidosPendentesResult[0]?.count || 0;
 
         // Receita hoje - sum from both comandas and comandas_historico
-        // closed_at >= today's start AND closed_at < tomorrow's start (UTC)
         const todayStart = sql`DATE_TRUNC('day', NOW())`;
         const tomorrowStart = sql`DATE_TRUNC('day', NOW()) + INTERVAL '1 day'`;
 
@@ -96,6 +110,7 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.comandas)
           .where(
             and(
+              eq(schema.comandas.restauranteId, tenantId as any),
               eq(schema.comandas.status, "fechada"),
               gte(schema.comandas.closedAt, todayStart),
               lt(schema.comandas.closedAt, tomorrowStart)
@@ -107,6 +122,7 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.comandasHistorico)
           .where(
             and(
+              eq(schema.comandasHistorico.restauranteId, tenantId as any),
               eq(schema.comandasHistorico.status, "fechada"),
               gte(schema.comandasHistorico.closedAt, todayStart),
               lt(schema.comandasHistorico.closedAt, tomorrowStart)
@@ -118,7 +134,6 @@ export function registerRelatoriosRoutes(app: App) {
         const receitaHoje = receitaHojeCom + receitaHojeHist;
 
         // Receita semana - sum from both comandas and comandas_historico
-        // closed_at >= NOW() - 7 days
         const sevenDaysAgo = sql`NOW() - INTERVAL '7 days'`;
 
         const receitaSemanaComandasResult = await app.db
@@ -126,6 +141,7 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.comandas)
           .where(
             and(
+              eq(schema.comandas.restauranteId, tenantId as any),
               eq(schema.comandas.status, "fechada"),
               gte(schema.comandas.closedAt, sevenDaysAgo)
             )
@@ -136,6 +152,7 @@ export function registerRelatoriosRoutes(app: App) {
           .from(schema.comandasHistorico)
           .where(
             and(
+              eq(schema.comandasHistorico.restauranteId, tenantId as any),
               eq(schema.comandasHistorico.status, "fechada"),
               gte(schema.comandasHistorico.closedAt, sevenDaysAgo)
             )
@@ -145,16 +162,22 @@ export function registerRelatoriosRoutes(app: App) {
         const receitaSemanaHist = parseFloat(receitaSemanaHistoricoResult[0]?.total || "0");
         const receitaSemana = receitaSemanaCom + receitaSemanaHist;
 
-        // Total revenue - sum of all closed comandas from both tables (using subtotal)
+        // Total revenue - sum of all closed comandas from both tables
         const totalRevenueComandasResult = await app.db
           .select({ total: sum(schema.comandas.subtotal) })
           .from(schema.comandas)
-          .where(eq(schema.comandas.status, "fechada"));
+          .where(and(
+            eq(schema.comandas.restauranteId, tenantId as any),
+            eq(schema.comandas.status, "fechada")
+          ));
 
         const totalRevenueHistoricoResult = await app.db
           .select({ total: sum(schema.comandasHistorico.subtotal) })
           .from(schema.comandasHistorico)
-          .where(eq(schema.comandasHistorico.status, "fechada"));
+          .where(and(
+            eq(schema.comandasHistorico.restauranteId, tenantId as any),
+            eq(schema.comandasHistorico.status, "fechada")
+          ));
 
         const totalRevenueCom = parseFloat(totalRevenueComandasResult[0]?.total || "0");
         const totalRevenueHist = parseFloat(totalRevenueHistoricoResult[0]?.total || "0");
@@ -163,16 +186,19 @@ export function registerRelatoriosRoutes(app: App) {
         // Comandas historico count
         const comandasHistoricoCountResult = await app.db
           .select({ count: count() })
-          .from(schema.comandasHistorico);
+          .from(schema.comandasHistorico)
+          .where(eq(schema.comandasHistorico.restauranteId, tenantId as any));
         const comandasHistoricoCount = comandasHistoricoCountResult[0]?.count || 0;
 
         // Total orders - count from both pedidos and pedidos_historico
         const totalPedidosResult = await app.db
           .select({ count: count() })
-          .from(schema.pedidos);
+          .from(schema.pedidos)
+          .where(eq(schema.pedidos.restauranteId, tenantId as any));
         const totalPedidosHist = await app.db
           .select({ count: count() })
-          .from(schema.pedidosHistorico);
+          .from(schema.pedidosHistorico)
+          .where(eq(schema.pedidosHistorico.restauranteId, tenantId as any));
         const totalOrders = (totalPedidosResult[0]?.count || 0) + (totalPedidosHist[0]?.count || 0);
 
         // Open orders (same as comandasAbertas)
@@ -182,11 +208,17 @@ export function registerRelatoriosRoutes(app: App) {
         const totalClosedComandasCom = await app.db
           .select({ count: count() })
           .from(schema.comandas)
-          .where(eq(schema.comandas.status, "fechada"));
+          .where(and(
+            eq(schema.comandas.restauranteId, tenantId as any),
+            eq(schema.comandas.status, "fechada")
+          ));
         const totalClosedComandasHist = await app.db
           .select({ count: count() })
           .from(schema.comandasHistorico)
-          .where(eq(schema.comandasHistorico.status, "fechada"));
+          .where(and(
+            eq(schema.comandasHistorico.restauranteId, tenantId as any),
+            eq(schema.comandasHistorico.status, "fechada")
+          ));
 
         const countClosedCom = totalClosedComandasCom[0]?.count || 0;
         const countClosedHist = totalClosedComandasHist[0]?.count || 0;
@@ -203,6 +235,7 @@ export function registerRelatoriosRoutes(app: App) {
                 SUM(p.quantidade)::integer as quantity_sold
               FROM pedidos p
               INNER JOIN pratos pr ON p.prato_id = pr.id
+              WHERE p.restaurante_id = ${tenantId}::uuid
               GROUP BY pr.nome
               ORDER BY quantity_sold DESC
             `
@@ -214,7 +247,7 @@ export function registerRelatoriosRoutes(app: App) {
                 prato_nome as dish_name,
                 SUM(quantidade)::integer as quantity_sold
               FROM pedidos_historico
-              WHERE prato_nome IS NOT NULL
+              WHERE restaurante_id = ${tenantId}::uuid AND prato_nome IS NOT NULL
               GROUP BY prato_nome
               ORDER BY quantity_sold DESC
             `
@@ -252,11 +285,13 @@ export function registerRelatoriosRoutes(app: App) {
         const comandasStatusResult = await app.db
           .select({ status: schema.comandas.status, count: count() })
           .from(schema.comandas)
+          .where(eq(schema.comandas.restauranteId, tenantId as any))
           .groupBy(schema.comandas.status);
 
         const comandasHistoricoStatusResult = await app.db
           .select({ status: schema.comandasHistorico.status, count: count() })
           .from(schema.comandasHistorico)
+          .where(eq(schema.comandasHistorico.restauranteId, tenantId as any))
           .groupBy(schema.comandasHistorico.status);
 
         const statusMap = new Map<string, number>();
@@ -279,7 +314,7 @@ export function registerRelatoriosRoutes(app: App) {
 
         app.logger.info(
           {
-            totalMesas, mesasOcupadas, comandasAbertas, pedidosPendentes, receitaHoje, receitaSemana,
+            tenantId, totalMesas, mesasOcupadas, comandasAbertas, pedidosPendentes, receitaHoje, receitaSemana,
             totalRevenue, comandasHistoricoCount, totalOrders, openOrders, avgTicket, topDishesCount: topDishes.length
           },
           "Resumo retrieved successfully"

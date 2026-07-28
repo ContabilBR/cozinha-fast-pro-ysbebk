@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, desc, isNotNull, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
+import { requireAuth as customRequireAuth } from "../utils/auth.js";
 
 export function registerHistoricoRoutes(app: App) {
   // GET /api/historico - Get all archived comandas with their pedidos
@@ -9,10 +10,11 @@ export function registerHistoricoRoutes(app: App) {
     "/api/historico",
     {
       schema: {
-        description: "Get all archived comandas with their pedidos (no auth required)",
+        description: "Get all archived comandas and their order items (requires authentication)",
         tags: ["historico"],
         response: {
           200: {
+            description: "List of archived comandas with pedidos",
             type: "array",
             items: {
               type: "object",
@@ -47,15 +49,20 @@ export function registerHistoricoRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
           500: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        app.logger.info({}, "Fetching archived comandas and pedidos");
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-        // Query all comandas_historico with garcom info from usuarios table
+      try {
+        const tenantId = authUser.restauranteId;
+        app.logger.info({ tenantId }, "Fetching historico");
+
+        // Query comandas_historico filtered by tenant with garcom info
         const comandasQuery = sql`
           SELECT
             ch.id,
@@ -70,12 +77,13 @@ export function registerHistoricoRoutes(app: App) {
             COALESCE(u.nome, 'Não informado') as garcom_nome
           FROM comandas_historico ch
           LEFT JOIN usuarios u ON u.id::text = ch.garcom_id
+          WHERE ch.restaurante_id = ${tenantId}::uuid
           ORDER BY ch.archived_at DESC
         `;
 
         const comandas = await (app.db as any).execute(comandasQuery) as any[];
 
-        app.logger.info({ count: comandas.length }, "Archived comandas retrieved");
+        app.logger.info({ tenantId, count: comandas.length }, "Archived comandas retrieved");
 
         // For each comanda, fetch its pedidos from pedidos_historico
         const result = await Promise.all(
@@ -84,7 +92,15 @@ export function registerHistoricoRoutes(app: App) {
               .select()
               .from(schema.pedidosHistorico)
               .where(eq(schema.pedidosHistorico.comandaId, comanda.id))
-              .orderBy(desc(schema.pedidosHistorico.archivedAt));
+              .then((allPedidos) =>
+                allPedidos
+                  .filter((p) => p.restauranteId === tenantId)
+                  .sort((a, b) => {
+                    const dateA = new Date(b.archivedAt).getTime();
+                    const dateB = new Date(a.archivedAt).getTime();
+                    return dateA - dateB;
+                  })
+              );
 
             return {
               id: comanda.id,
@@ -112,7 +128,8 @@ export function registerHistoricoRoutes(app: App) {
           })
         );
 
-        return reply.code(200).send(result);
+        app.logger.info({ tenantId, count: result.length }, "Historico fetched successfully");
+        return result;
       } catch (error) {
         app.logger.error({ err: error }, "Failed to fetch historico");
         return reply.code(500).send({ error: "Internal server error" });

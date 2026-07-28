@@ -97,7 +97,7 @@ export const profiles = pgTable("profiles", {
   role: text("role").notNull().default("garcom"),
   name: text("name"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  restauranteId: uuid("restaurante_id").references(() => restaurante.id, { onDelete: "set null" }),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
 // Usuarios (App-level user management, separate from auth users)

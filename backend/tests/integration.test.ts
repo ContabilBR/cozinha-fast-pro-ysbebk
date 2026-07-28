@@ -2410,16 +2410,21 @@ describe("API Integration Tests", () => {
 
   // ==================== Cozinha ====================
   test("Get kitchen active comandas", async () => {
-    const res = await api("/api/cozinha/comandas");
+    const res = await authenticatedApi("/api/cozinha/comandas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.comandas).toBeDefined();
     expect(Array.isArray(data.comandas)).toBe(true);
   });
 
+  test("Get kitchen comandas without authentication returns 401", async () => {
+    const res = await api("/api/cozinha/comandas");
+    await expectStatus(res, 401);
+  });
+
   // ==================== Historico ====================
   test("Get all archived comandas from historico", async () => {
-    const res = await api("/api/historico");
+    const res = await authenticatedApi("/api/historico", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -2436,9 +2441,14 @@ describe("API Integration Tests", () => {
     }
   });
 
+  test("Get historico without authentication returns 401", async () => {
+    const res = await api("/api/historico");
+    await expectStatus(res, 401);
+  });
+
   // ==================== Relatorios ====================
   test("Get relatorio resumo", async () => {
-    const res = await api("/api/relatorios/resumo");
+    const res = await authenticatedApi("/api/relatorios/resumo", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.total_mesas).toBeDefined();
@@ -2447,6 +2457,11 @@ describe("API Integration Tests", () => {
     expect(data.pedidos_pendentes).toBeDefined();
     expect(data.receita_hoje).toBeDefined();
     expect(data.receita_semana).toBeDefined();
+  });
+
+  test("Get relatorio resumo without authentication returns 401", async () => {
+    const res = await api("/api/relatorios/resumo");
+    await expectStatus(res, 401);
   });
 
   // ==================== Upload ====================

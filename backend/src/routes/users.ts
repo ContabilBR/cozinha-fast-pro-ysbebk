@@ -166,12 +166,25 @@ export function registerUserRoutes(app: App) {
           updatedAt: now,
         });
 
+        // Get or create default restaurante for new users
+        let restauranteId: string;
+        const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+        if (existingRestaurante.length > 0) {
+          restauranteId = existingRestaurante[0].id;
+        } else {
+          const [newRestaurante] = await app.db
+            .insert(schema.restaurante)
+            .values({ nome: 'Default Restaurant' })
+            .returning();
+          restauranteId = newRestaurante.id;
+        }
+
         // Create profile
         await app.db.insert(schema.profiles).values({
-          id: randomUUID(),
           userId: userId,
           role: role,
           name: request.body.name,
+          restauranteId: restauranteId,
           createdAt: now,
         });
 

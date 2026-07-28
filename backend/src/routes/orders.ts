@@ -1546,12 +1546,12 @@ export function registerOrderRoutes(app: App) {
     }
   );
 
-  // GET /api/cozinha/comandas - Get active comandas for kitchen display (no auth required)
+  // GET /api/cozinha/comandas - Get active comandas for kitchen display (requires authentication)
   app.fastify.get(
     "/api/cozinha/comandas",
     {
       schema: {
-        description: "Get all comandas for kitchen display system (no authentication required)",
+        description: "Get all comandas for kitchen display system (requires authentication)",
         tags: ["cozinha"],
         response: {
           200: {
@@ -1590,14 +1590,20 @@ export function registerOrderRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          500: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        app.logger.info({}, "Fetching all comandas for kitchen display");
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
-        // Query to get all comandas with garcom info from usuarios table
+      try {
+        const tenantId = authUser.restauranteId;
+        app.logger.info({ tenantId }, "Fetching comandas for kitchen display");
+
+        // Query to get all comandas for this tenant with garcom info from usuarios table
         const comandasQuery = sql`
           SELECT
             c.id,
@@ -1609,12 +1615,13 @@ export function registerOrderRoutes(app: App) {
             COALESCE(u.nome, 'Não informado') as garcom_nome
           FROM comandas c
           LEFT JOIN usuarios u ON u.id::text = c.garcom_id
+          WHERE c.restaurante_id = ${tenantId}::uuid
           ORDER BY c.created_at DESC
         `;
 
         const comandasResult = await (app.db as any).execute(comandasQuery) as any[];
 
-        // Query to get all pedidos with prato names
+        // Query to get all pedidos for this tenant with prato names
         const pedidosQuery = sql`
           SELECT
             p.id,
@@ -1626,6 +1633,7 @@ export function registerOrderRoutes(app: App) {
             p.created_at
           FROM pedidos p
           LEFT JOIN pratos pr ON pr.id = p.prato_id
+          WHERE p.restaurante_id = ${tenantId}::uuid
           ORDER BY p.created_at ASC
         `;
 
@@ -1641,7 +1649,7 @@ export function registerOrderRoutes(app: App) {
           pedidosByComandaId.get(comandaId)!.push(pedido);
         }
 
-        app.logger.info({ count: comandasResult.length }, "All comandas retrieved for kitchen display");
+        app.logger.info({ tenantId, count: comandasResult.length }, "Comandas retrieved for kitchen display");
 
         // Transform results to the expected format
         const comandas = comandasResult.map((row: any) => {
@@ -1676,7 +1684,7 @@ export function registerOrderRoutes(app: App) {
 
         return reply.code(200).send({ comandas });
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to fetch all comandas for kitchen");
+        app.logger.error({ err: error }, "Failed to fetch comandas for kitchen");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }

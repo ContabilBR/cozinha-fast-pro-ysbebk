@@ -295,4 +295,56 @@ describe("Tenant Isolation Tests", () => {
     const data = await comandaRes.json();
     expect(data.id).toBe(comandaAId);
   });
+
+  // Test: Restaurant B admin cannot see historico from restaurant A
+  test("Restaurant B admin cannot see historico from restaurant A", async () => {
+    const historicoRes = await api("/api/historico", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${tokenB}`,
+      },
+    });
+    expect(historicoRes.status).toBe(200);
+    const data = await historicoRes.json();
+    expect(Array.isArray(data)).toBe(true);
+    // Should not contain any entry with comandaAId
+    expect(!data.some((h: any) => h.id === comandaAId)).toBe(true);
+  });
+
+  // Test: Restaurant B admin relatorios resumo does not include revenue from restaurant A
+  test("Restaurant B admin relatorios resumo does not include revenue from restaurant A", async () => {
+    const relatoriosRes = await api("/api/relatorios/resumo", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${tokenB}`,
+      },
+    });
+    expect(relatoriosRes.status).toBe(200);
+    const data = await relatoriosRes.json();
+    expect(data.total_revenue).toBe(0);
+    expect(typeof data.total_mesas).toBe("number");
+  });
+
+  // Test: GET /api/cozinha/comandas without token returns 401
+  test("GET /api/cozinha/comandas without token returns 401", async () => {
+    const cozinhaRes = await api("/api/cozinha/comandas", {
+      method: "GET",
+    });
+    expect(cozinhaRes.status).toBe(401);
+  });
+
+  // Test: GET /api/cozinha/comandas with token B does not return comandas from restaurant A
+  test("GET /api/cozinha/comandas with token B does not return comandas from restaurant A", async () => {
+    const cozinhaRes = await api("/api/cozinha/comandas", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${tokenB}`,
+      },
+    });
+    expect(cozinhaRes.status).toBe(200);
+    const data = await cozinhaRes.json();
+    const comandas = data.comandas || [];
+    // Should not contain comanda from restaurant A
+    expect(!comandas.some((c: any) => c.id === comandaAId)).toBe(true);
+  });
 });
