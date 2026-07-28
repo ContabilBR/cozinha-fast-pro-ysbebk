@@ -1885,6 +1885,50 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Update pedido with new quantity and observacao", async () => {
+    // Create a fresh pedido for this test since testPedidoId may have been deleted
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: comandaMesaId,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const createRes = await authenticatedApi("/api/pedidos", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: comandaData.comanda.id,
+        prato_id: pedidoPratoId,
+        quantidade: 1,
+        observacao: "Original note",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const pedidoData = await createRes.json();
+
+    // Now update the pedido
+    const res = await authenticatedApi(`/api/pedidos/${pedidoData.pedido.id}`, authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quantidade: 3,
+        observacao: "Updated note - special request",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.comanda_id).toBeDefined();
+    expect(data.prato_id).toBeDefined();
+    expect(data.quantidade).toBeDefined();
+    expect(data.preco_unitario).toBeDefined();
+    expect(data.status).toBeDefined();
+  });
+
   test("Update pedido without authentication returns 401", async () => {
     const res = await api(`/api/pedidos/${testPedidoId}`, {
       method: "PUT",

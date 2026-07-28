@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, sum, count, gte, lt, ne, and, sql } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 
 export function registerRelatoriosRoutes(app: App) {
   // GET /api/relatorios/resumo - Summary/Dashboard
@@ -57,7 +57,7 @@ export function registerRelatoriosRoutes(app: App) {
       if (!authUser) return;
 
       try {
-        const tenantId = authUser.restauranteId;
+        const tenantId = requireTenant(authUser);
         app.logger.info({ tenantId }, "Getting resumo");
 
         // Total mesas
