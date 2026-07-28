@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq, desc, sql } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 
 export function registerHistoricoRoutes(app: App) {
   // GET /api/historico - Get all archived comandas with their pedidos
@@ -59,7 +59,7 @@ export function registerHistoricoRoutes(app: App) {
       if (!authUser) return;
 
       try {
-        const tenantId = authUser.restauranteId;
+        const tenantId = requireTenant(authUser);
         app.logger.info({ tenantId }, "Fetching historico");
 
         // Query comandas_historico filtered by tenant with garcom info
