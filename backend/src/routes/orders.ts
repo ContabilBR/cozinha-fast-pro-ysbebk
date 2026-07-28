@@ -5,6 +5,7 @@ import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 import { resolveGarcomId } from "../utils/garcom.js";
+import { realtimeHub } from "../utils/realtime.js";
 
 interface CreateComandaBody {
   mesaId?: string;
@@ -305,6 +306,18 @@ export function registerOrderRoutes(app: App) {
         });
 
         app.logger.info({ comandaId: comanda.id, mesaId }, "Comanda created successfully");
+
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(authUser);
+          realtimeHub.publishEvent(restauranteId, {
+            type: "comanda.created",
+            entityId: comanda.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.created event");
+        }
 
         return reply.code(201).send({
           comanda: {
@@ -889,6 +902,17 @@ export function registerOrderRoutes(app: App) {
           `[fechar] comanda ${request.params.id}: subtotal=${subtotal}, gorjeta=${gorjetaValue}, total=${totalFinal}`
         );
 
+        // Publish realtime event
+        try {
+          realtimeHub.publishEvent(restauranteId, {
+            type: "comanda.closed",
+            entityId: request.params.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.closed event");
+        }
+
         return reply.code(200).send({
           success: true,
           mesa_numero: comanda.mesaNumero,
@@ -972,6 +996,18 @@ export function registerOrderRoutes(app: App) {
         }
 
         app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
+
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(session);
+          realtimeHub.publishEvent(restauranteId, {
+            type: "comanda.cancelled",
+            entityId: updated.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.cancelled event");
+        }
 
         return reply.code(200).send({
           id: updated.id,

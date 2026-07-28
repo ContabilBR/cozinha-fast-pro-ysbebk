@@ -3,6 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
+import { realtimeHub } from "../utils/realtime.js";
 
 interface CreatePedidoBody {
   comanda_id?: string;
@@ -237,6 +238,17 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ pedidoId: pedido.id }, "Pedido created successfully");
 
+        // Publish realtime event
+        try {
+          realtimeHub.publishEvent(restauranteId, {
+            type: "pedido.created",
+            entityId: pedido.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish pedido.created event");
+        }
+
         return reply.code(201).send({
           pedido: {
             id: pedido.id,
@@ -400,6 +412,18 @@ export function registerOrderItemRoutes(app: App) {
           .returning();
 
         app.logger.info({ pedidoId: updated.id }, "Pedido status updated successfully");
+
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(session);
+          realtimeHub.publishEvent(restauranteId, {
+            type: "pedido.status_changed",
+            entityId: updated.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish pedido.status_changed event");
+        }
 
         return reply.code(200).send({
           id: updated.id,

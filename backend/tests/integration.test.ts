@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile } from "./helpers";
+import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile, connectAuthenticatedWebSocket } from "./helpers";
 
 describe("API Integration Tests", () => {
   let authToken: string;
@@ -3103,5 +3103,13 @@ describe("API Integration Tests", () => {
       method: "POST",
     });
     await expectStatus(res, 401);
+  });
+
+  // ==================== Realtime WebSocket ====================
+  test("Connect to realtime WebSocket with authentication", async () => {
+    const ws = await connectAuthenticatedWebSocket("/api/realtime", authToken);
+    expect(ws).toBeDefined();
+    expect(ws.readyState).toBe(1); // OPEN state
+    ws.close();
   });
 });

@@ -179,7 +179,7 @@ export async function connectWebSocket(path: string): Promise<WebSocket> {
  */
 export async function connectAuthenticatedWebSocket(path: string, token: string): Promise<WebSocket> {
   const ws = await connectWebSocket(path);
-  ws.send(token);
+  ws.send(JSON.stringify({ token }));
   const response = await waitForMessage(ws);
   const data = JSON.parse(response);
   if (data.error) {
