@@ -703,24 +703,29 @@ describe("API Integration Tests", () => {
   });
 
   test("List all pratos", async () => {
-    const res = await api("/api/pratos");
+    const res = await authenticatedApi("/api/pratos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
   test("List pratos filtered by disponivel", async () => {
-    const res = await api("/api/pratos?disponivel=true");
+    const res = await authenticatedApi("/api/pratos?disponivel=true", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
   test("List pratos filtered by categoria_id", async () => {
-    const res = await api(`/api/pratos?categoria_id=${pratoCategoryId}`);
+    const res = await authenticatedApi(`/api/pratos?categoria_id=${pratoCategoryId}`, authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List pratos without authentication returns 401", async () => {
+    const res = await api("/api/pratos");
+    await expectStatus(res, 401);
   });
 
   test("Create prato", async () => {

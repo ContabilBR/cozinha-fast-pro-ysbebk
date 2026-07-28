@@ -74,17 +74,13 @@ export function registerDishRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Querystring: { categoria_id?: string; disponivel?: string } }>, reply: FastifyReply) => {
-      let restauranteId: string | undefined;
-      const authUser = await app.auth.api.getSession({
-        headers: new Headers(request.headers as any)
-      }).catch(() => null);
-      if (authUser?.user) {
-        restauranteId = requireTenant(authUser.user);
-      }
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
 
       try {
+        const restauranteId = requireTenant(session);
         const { categoria_id, disponivel } = request.query;
-        app.logger.info({ categoria_id, disponivel }, "Listing pratos");
+        app.logger.info({ categoria_id, disponivel, restauranteId }, "Listing pratos");
 
         // Cleanup: Remove corrupted base64 values from imagem_url
         try {
@@ -95,8 +91,8 @@ export function registerDishRoutes(app: App) {
           app.logger.debug({ err: cleanupError }, "Cleanup of corrupted imagem_url values skipped");
         }
 
-        // Build filters
-        const filters: any[] = [];
+        // Build filters - tenant filter always present
+        const filters: any[] = [eq(schema.pratos.restauranteId, restauranteId)];
 
         if (categoria_id) {
           filters.push(eq(schema.pratos.categoriaId, categoria_id));
@@ -105,10 +101,6 @@ export function registerDishRoutes(app: App) {
         if (disponivel !== undefined) {
           const disponibleBoolean = disponivel === "true";
           filters.push(eq(schema.pratos.disponivel, disponibleBoolean));
-        }
-
-        if (restauranteId) {
-          filters.push(eq(schema.pratos.restauranteId, restauranteId));
         }
 
         const query = app.db
@@ -127,9 +119,7 @@ export function registerDishRoutes(app: App) {
           .from(schema.pratos)
           .leftJoin(schema.categorias, eq(schema.pratos.categoriaId, schema.categorias.id));
 
-        const pratos = await (filters.length > 0
-          ? query.where(and(...filters)).orderBy(schema.pratos.nome)
-          : query.orderBy(schema.pratos.nome));
+        const pratos = await query.where(and(...filters)).orderBy(schema.pratos.nome);
 
         app.logger.info({ count: pratos.length }, "Listed pratos");
 
