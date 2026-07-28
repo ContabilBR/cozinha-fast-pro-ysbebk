@@ -21,6 +21,8 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
   "entregue",
   "cancelado",
 ]);
+export const formaPagamentoEnum = pgEnum("forma_pagamento", ["pix", "dinheiro", "cartao_credito", "cartao_debito"]);
+export const pagamentoStatusEnum = pgEnum("pagamento_status", ["pendente", "confirmado", "cancelado"]);
 
 // Mesas (Tables)
 export const mesas = pgTable("mesas", {
@@ -93,6 +95,23 @@ export const pedidos = pgTable("pedidos", {
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
+// Pagamentos (Payments)
+export const pagamentos = pgTable("pagamentos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  comandaId: uuid("comanda_id").notNull().references(() => comandas.id, { onDelete: "cascade" }),
+  formaPagamento: formaPagamentoEnum("forma_pagamento").notNull(),
+  status: pagamentoStatusEnum("status").default("pendente").notNull(),
+  valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
+  troco: numeric("troco", { precision: 10, scale: 2 }).default("0").notNull(),
+  pixTxId: text("pix_tx_id"),
+  pixQrCode: text("pix_qr_code"),
+  pixQrCodeBase64: text("pix_qr_code_base64"),
+  referencia: text("referencia"),
+  confirmadoEm: timestamp("confirmado_em", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
 // Profiles for users
 export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -153,6 +172,22 @@ export const pedidosHistorico = pgTable("pedidos_historico", {
   precoUnitario: numeric("preco_unitario", { precision: 10, scale: 2 }).notNull(),
   observacao: text("observacao"),
   status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
+// Pagamentos Historico (Archived Payments)
+export const pagamentosHistorico = pgTable("pagamentos_historico", {
+  id: uuid("id").primaryKey(),
+  comandaId: uuid("comanda_id").notNull(),
+  formaPagamento: text("forma_pagamento").notNull(),
+  status: text("status").notNull(),
+  valor: numeric("valor", { precision: 10, scale: 2 }).notNull(),
+  troco: numeric("troco", { precision: 10, scale: 2 }).default("0").notNull(),
+  pixTxId: text("pix_tx_id"),
+  referencia: text("referencia"),
+  confirmadoEm: timestamp("confirmado_em", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   archivedAt: timestamp("archived_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),

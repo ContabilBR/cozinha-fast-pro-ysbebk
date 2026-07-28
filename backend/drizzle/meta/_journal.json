@@ -190,6 +190,13 @@
       "when": 1785249601036,
       "tag": "20260728144001_spotty_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1785258852026,
+      "tag": "20260728171412_petite_wild_pack",
+      "breakpoints": true
     }
   ]
 }
