@@ -1031,7 +1031,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get mesa with invalid UUID format returns 400", async () => {
-    const res = authenticatedApi("/api/mesas/invalid-uuid", authToken);
+    const res = await authenticatedApi("/api/mesas/invalid-uuid", authToken);
     await expectStatus(res, 400);
   });
 

@@ -127,7 +127,15 @@ export async function expectStatus(res: Response, ...expected: number[]): Promis
       // body stays as "(unable to read body)"
     }
     if (body.length > 500) body = body.slice(0, 500) + "...";
-    const path = new URL(res.url).pathname + new URL(res.url).search;
+    let path = "(unknown path)";
+    try {
+      if (res.url) {
+        const url = new URL(res.url);
+        path = url.pathname + url.search;
+      }
+    } catch (e) {
+      // path stays as "(unknown path)"
+    }
     console.error(`${path} — Expected ${expected.join("|")}, got ${res.status} — ${body}`);
     throw ``;
   }
