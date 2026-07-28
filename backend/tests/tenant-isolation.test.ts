@@ -105,7 +105,7 @@ describe("Tenant Isolation Tests", () => {
     });
     expect(pratoRes.status).toBe(201);
     const pratoData = await pratoRes.json();
-    pratoAId = pratoData.id;
+    pratoAId = pratoData.prato?.id ?? pratoData.id;
     expect(pratoAId).toBeDefined();
   });
 
