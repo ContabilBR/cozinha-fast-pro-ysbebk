@@ -1,67 +1,64 @@
 export interface RealtimeEvent {
   type: string;
   entityId: string;
+  tenantId: string;
   occurredAt: string;
   payload?: Record<string, unknown>;
 }
 
-interface Connection {
+interface Client {
   ws: any;
-  restauranteId: string;
+  tenantId: string;
 }
 
 class RealtimeHub {
-  private connections = new Map<string, Connection>();
-  private tenantConnections = new Map<string, Set<string>>();
-  private connectionCounter = 0;
+  private clients = new Map<string, Client>();
+  private tenantClients = new Map<string, Set<string>>();
+  private clientCounter = 0;
 
-  registerConnection(ws: any, restauranteId: string): string {
-    const connectionId = `conn_${++this.connectionCounter}`;
-    this.connections.set(connectionId, { ws, restauranteId });
+  registerConnection(ws: any, tenantId: string): string {
+    const clientId = `client_${++this.clientCounter}`;
+    this.clients.set(clientId, { ws, tenantId });
 
-    if (!this.tenantConnections.has(restauranteId)) {
-      this.tenantConnections.set(restauranteId, new Set());
+    if (!this.tenantClients.has(tenantId)) {
+      this.tenantClients.set(tenantId, new Set());
     }
-    this.tenantConnections.get(restauranteId)!.add(connectionId);
-
-    return connectionId;
+    this.tenantClients.get(tenantId)!.add(clientId);
+    return clientId;
   }
 
-  deregisterConnection(id: string): void {
-    const conn = this.connections.get(id);
-    if (!conn) return;
+  deregisterConnection(clientId: string): void {
+    const client = this.clients.get(clientId);
+    if (!client) return;
 
-    this.connections.delete(id);
-    const tenantSet = this.tenantConnections.get(conn.restauranteId);
+    this.clients.delete(clientId);
+    const tenantSet = this.tenantClients.get(client.tenantId);
     if (tenantSet) {
-      tenantSet.delete(id);
+      tenantSet.delete(clientId);
       if (tenantSet.size === 0) {
-        this.tenantConnections.delete(conn.restauranteId);
+        this.tenantClients.delete(client.tenantId);
       }
     }
   }
 
-  publish(restauranteId: string, event: RealtimeEvent): void {
-    const connectionIds = this.tenantConnections.get(restauranteId);
-    if (!connectionIds) return;
+  publish(tenantId: string, eventData: Omit<RealtimeEvent, 'tenantId'>): void {
+    const clientIds = this.tenantClients.get(tenantId);
+    if (!clientIds) return;
 
+    const event: RealtimeEvent = { ...eventData, tenantId };
     const message = JSON.stringify(event);
-    for (const connectionId of connectionIds) {
-      const conn = this.connections.get(connectionId);
-      if (!conn) continue;
+    for (const clientId of clientIds) {
+      const client = this.clients.get(clientId);
+      if (!client) continue;
 
       try {
-        if (conn.ws.readyState === 1) { // OPEN
-          conn.ws.send(message);
+        if (client.ws.readyState === 1) { // OPEN
+          client.ws.send(message);
         }
       } catch (err) {
         // Ignore send errors
       }
     }
-  }
-
-  getTenantConnectionCount(restauranteId: string): number {
-    return this.tenantConnections.get(restauranteId)?.size || 0;
   }
 }
 
