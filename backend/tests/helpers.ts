@@ -116,7 +116,16 @@ export async function signUpTestUser(): Promise<TestUser> {
  */
 export async function expectStatus(res: Response, ...expected: number[]): Promise<void> {
   if (!expected.includes(res.status)) {
-    let body = await res.clone().text().catch(() => "(unable to read body)");
+    let body = "(unable to read body)";
+    try {
+      if (typeof res.clone === "function") {
+        body = await res.clone().text();
+      } else if (typeof res.text === "function") {
+        body = await res.text();
+      }
+    } catch (e) {
+      // body stays as "(unable to read body)"
+    }
     if (body.length > 500) body = body.slice(0, 500) + "...";
     const path = new URL(res.url).pathname + new URL(res.url).search;
     console.error(`${path} — Expected ${expected.join("|")}, got ${res.status} — ${body}`);

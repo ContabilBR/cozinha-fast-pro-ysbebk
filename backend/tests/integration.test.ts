@@ -969,20 +969,23 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Mesas CRUD ====================
-  test("List all mesas", async () => {
-    const res = await api("/api/mesas");
+  test("List all mesas with authentication", async () => {
+    const res = await authenticatedApi("/api/mesas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.mesas).toBeDefined();
-    expect(Array.isArray(data.mesas)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("List mesas without authentication returns 401", async () => {
+    const res = await api("/api/mesas");
+    await expectStatus(res, 401);
   });
 
   test("List mesas filtered by status", async () => {
-    const res = await api("/api/mesas?status=disponivel");
+    const res = await authenticatedApi("/api/mesas?status=disponivel", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.mesas).toBeDefined();
-    expect(Array.isArray(data.mesas)).toBe(true);
+    expect(Array.isArray(data)).toBe(true);
   });
 
   test("Create mesa", async () => {
@@ -995,7 +998,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    testTableId = data.mesa.id;
+    testTableId = data.id;
   });
 
   test("Create mesa without authentication returns 401", async () => {
@@ -1028,7 +1031,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Get mesa with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi("/api/mesas/invalid-uuid", authToken);
+    const res = authenticatedApi("/api/mesas/invalid-uuid", authToken);
     await expectStatus(res, 400);
   });
 
@@ -1123,7 +1126,7 @@ describe("API Integration Tests", () => {
 
     // Delete it
     const res = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}`,
+      `/api/mesas/${mesaData.id}`,
       adminToken,
       {
         method: "DELETE",
@@ -1171,7 +1174,7 @@ describe("API Integration Tests", () => {
 
     // Try to delete with regular user
     const res = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}`,
+      `/api/mesas/${mesaData.id}`,
       regularUserToken,
       {
         method: "DELETE",
@@ -1195,7 +1198,7 @@ describe("API Integration Tests", () => {
 
     // Force delete it
     const res = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}/force`,
+      `/api/mesas/${mesaData.id}/force`,
       adminToken,
       {
         method: "DELETE",
@@ -1246,7 +1249,7 @@ describe("API Integration Tests", () => {
 
     // Try to force delete with regular user
     const res = await authenticatedApi(
-      `/api/mesas/${mesaData.mesa.id}/force`,
+      `/api/mesas/${mesaData.id}/force`,
       regularUserToken,
       {
         method: "DELETE",
@@ -1268,7 +1271,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    comandaMesaId = data.mesa.id;
+    comandaMesaId = data.id;
   });
 
   // ==================== Mesas Get Current Comanda ====================

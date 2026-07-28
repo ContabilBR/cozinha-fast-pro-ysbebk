@@ -1,11 +1,11 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
-import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
+import { eq, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
+import { user as userTable, account as accountTable } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
-import { randomUUID } from "crypto";
-import * as bcrypt from "bcrypt";
 import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
+import * as bcrypt from "bcrypt";
+import { randomUUID } from "crypto";
 
 interface CreateUserBody {
   name: string;
@@ -17,19 +17,17 @@ interface CreateUserBody {
 interface UpdateUserBody {
   name?: string;
   email?: string;
-  password?: string;
   role?: string;
   active?: boolean;
 }
 
 export function registerUserRoutes(app: App) {
-
-  // GET /api/users - List all users
+  // GET /api/users - List all users for the tenant
   app.fastify.get(
     "/api/users",
     {
       schema: {
-        description: "List all users",
+        description: "List all users in the tenant (requires authentication)",
         tags: ["users"],
         response: {
           200: {
@@ -41,11 +39,11 @@ export function registerUserRoutes(app: App) {
                 name: { type: "string" },
                 email: { type: "string" },
                 email_verified: { type: "boolean" },
-                image: { type: ["string", "null"] },
+                image: { type: "string", nullable: true },
                 role: { type: "string" },
                 active: { type: "boolean" },
-                created_at: { type: "string" },
-                updated_at: { type: "string" },
+                created_at: { type: "string", format: "date-time" },
+                updated_at: { type: "string", format: "date-time" },
               },
             },
           },
@@ -54,13 +52,30 @@ export function registerUserRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        app.logger.info({}, "Listing all users");
+        const tenantId = authUser.restauranteId;
+        app.logger.info({ tenantId }, "Listing users");
 
-        const users = await app.db.select().from(userTable).orderBy(userTable.name);
+        const users = await app.db
+          .select({
+            id: userTable.id,
+            name: userTable.name,
+            email: userTable.email,
+            emailVerified: userTable.emailVerified,
+            image: userTable.image,
+            active: userTable.active,
+            role: schema.profiles.role,
+            createdAt: userTable.createdAt,
+            updatedAt: userTable.updatedAt,
+          })
+          .from(userTable)
+          .innerJoin(schema.profiles, eq(userTable.id, schema.profiles.userId))
+          .where(eq(schema.profiles.restauranteId, tenantId as any));
+
+        app.logger.info({ tenantId, count: users.length }, "Users listed successfully");
 
         return users.map((u) => ({
           id: u.id,
@@ -75,17 +90,17 @@ export function registerUserRoutes(app: App) {
         }));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list users");
-        return reply.status(500).send({ error: "Internal server error" });
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // POST /api/users - Create new user
+  // POST /api/users - Create a new user
   app.fastify.post<{ Body: CreateUserBody }>(
     "/api/users",
     {
       schema: {
-        description: "Create a new user",
+        description: "Create a new user (requires admin/gerente role)",
         tags: ["users"],
         body: {
           type: "object",
@@ -105,12 +120,11 @@ export function registerUserRoutes(app: App) {
               name: { type: "string" },
               email: { type: "string" },
               role: { type: "string" },
-              active: { type: "boolean" },
-              created_at: { type: "string" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           409: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -119,43 +133,59 @@ export function registerUserRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        if (!request.body.name || !request.body.email || !request.body.password) {
-          return reply.status(400).send({ error: "name, email, and password are required" });
+        const tenantId = authUser.restauranteId;
+
+        // Check current database role (might have been updated after token was issued)
+        const authUserProfile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to create user");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        app.logger.info({ email: request.body.email }, "Creating new user");
+        const { name, email, password, role = "garcom" } = request.body;
 
-        // Check if user already exists
+        app.logger.info({ tenantId, email }, "Creating user");
+
+        // Check for duplicate email
         const existing = await app.db
           .select()
           .from(userTable)
-          .where(eq(userTable.email, request.body.email));
+          .where(eq(userTable.email, email))
+          .limit(1);
 
         if (existing.length > 0) {
-          return reply.status(409).send({ error: "User with this email already exists" });
+          app.logger.warn({ email }, "Email already exists");
+          return reply.code(409).send({ error: "Email já cadastrado" });
         }
 
-        // Create user
         const userId = randomUUID();
         const now = new Date();
-        const role = request.body.role || "garcom";
 
+        // Create user
         await app.db.insert(userTable).values({
           id: userId,
-          name: request.body.name,
-          email: request.body.email,
+          name,
+          email,
           emailVerified: false,
-          role: role as any,
           active: true,
           createdAt: now,
           updatedAt: now,
         });
 
         // Hash password and create account
-        const hashedPassword = await bcrypt.hash(request.body.password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
         await app.db.insert(accountTable).values({
           id: randomUUID(),
           accountId: userId,
@@ -166,63 +196,49 @@ export function registerUserRoutes(app: App) {
           updatedAt: now,
         });
 
-        // Get or create default restaurante for new users
-        let restauranteId: string;
-        const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
-        if (existingRestaurante.length > 0) {
-          restauranteId = existingRestaurante[0].id;
-        } else {
-          const [newRestaurante] = await app.db
-            .insert(schema.restaurante)
-            .values({ nome: 'Default Restaurant' })
-            .returning();
-          restauranteId = newRestaurante.id;
-        }
-
         // Create profile
         await app.db.insert(schema.profiles).values({
           userId: userId,
           role: role,
-          name: request.body.name,
-          restauranteId: restauranteId,
+          name,
+          restauranteId: tenantId as any,
           createdAt: now,
         });
 
-        app.logger.info({ userId }, "User created successfully");
+        app.logger.info({ userId, tenantId }, "User created successfully");
 
         return reply.code(201).send({
           id: userId,
-          name: request.body.name,
-          email: request.body.email,
-          role: role,
-          active: true,
-          created_at: now.toISOString(),
+          name,
+          email,
+          role,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to create user");
-        return reply.status(500).send({ error: "Internal server error" });
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // PUT /api/users/:id - Update user
+  // PUT /api/users/:id - Update a user
   app.fastify.put<{ Params: { id: string }; Body: UpdateUserBody }>(
     "/api/users/:id",
     {
       schema: {
-        description: "Update user",
+        description: "Update a user (requires admin/gerente role to update others, can update self)",
         tags: ["users"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         body: {
           type: "object",
           properties: {
             name: { type: "string" },
             email: { type: "string", format: "email" },
-            password: { type: "string" },
             role: { type: "string", enum: ["administrador", "gerente", "garcom", "cozinheiro"] },
             active: { type: "boolean" },
           },
@@ -235,83 +251,119 @@ export function registerUserRoutes(app: App) {
               name: { type: "string" },
               email: { type: "string" },
               role: { type: "string" },
-              active: { type: "boolean" },
-              created_at: { type: "string" },
-              updated_at: { type: "string" },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateUserBody }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        app.logger.info({ userId: request.params.id }, "Updating user");
+        const tenantId = authUser.restauranteId;
+        const { id } = request.params;
+        const { name, email, role, active } = request.body;
 
-        const existing = await app.db.select().from(userTable).where(eq(userTable.id, request.params.id));
+        app.logger.info({ tenantId, userId: id, isOwn: authUser.id === id }, "Updating user");
 
-        if (!existing.length) {
-          return reply.status(404).send({ error: "User not found" });
+        // Verify user belongs to tenant
+        const profile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        if (profile.length === 0) {
+          app.logger.warn({ tenantId, userId: id }, "User not found");
+          return reply.code(404).send({ error: "Usuário não encontrado" });
         }
 
-        const updates: any = {};
-        if (request.body.name !== undefined) updates.name = request.body.name;
-        if (request.body.email !== undefined) updates.email = request.body.email;
-        if (request.body.role !== undefined) updates.role = request.body.role;
-        if (request.body.active !== undefined) updates.active = request.body.active;
-        updates.updatedAt = new Date();
+        // Get current user's profile to check actual database role
+        const authUserProfile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
 
-        const [updated] = await app.db
-          .update(userTable)
-          .set(updates)
-          .where(eq(userTable.id, request.params.id))
-          .returning();
+        // Only allow updating own profile without role check, or require admin for updating others
+        const isOwnProfile = authUser.id === id;
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
 
-        // If role was updated, also update the profile
-        if (request.body.role !== undefined) {
-          await app.db
-            .update(schema.profiles)
-            .set({ role: request.body.role })
-            .where(eq(schema.profiles.userId, request.params.id));
+        if (!isOwnProfile && !isAdmin) {
+          app.logger.warn({ tenantId, userId: id }, "User lacks permission to update other user");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        app.logger.info({ userId: updated.id }, "User updated");
+        const updateData = {};
+        if (name !== undefined) {
+          Object.assign(updateData, { name });
+        }
+        if (email !== undefined) {
+          Object.assign(updateData, { email });
+        }
+        if (active !== undefined && isAdmin) {
+          Object.assign(updateData, { active });
+        }
 
-        return reply.status(200).send({
-          id: updated.id,
-          name: updated.name,
-          email: updated.email,
-          role: updated.role,
-          active: updated.active,
-          created_at: updated.createdAt.toISOString(),
-          updated_at: updated.updatedAt.toISOString(),
+        if (Object.keys(updateData).length > 0) {
+          await app.db.update(userTable).set(updateData).where(eq(userTable.id, id));
+        }
+
+        // Allow updating role if own profile OR if admin
+        if (role !== undefined && (isOwnProfile || isAdmin)) {
+          await app.db.update(schema.profiles).set({ role }).where(eq(schema.profiles.userId, id));
+        }
+
+        app.logger.info({ userId: id }, "User updated successfully");
+
+        const updated = await app.db
+          .select()
+          .from(userTable)
+          .where(eq(userTable.id, id))
+          .limit(1);
+
+        return reply.code(200).send({
+          id: updated[0].id,
+          name: updated[0].name,
+          email: updated[0].email,
+          role: role || profile[0].role,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update user");
-        return reply.status(500).send({ error: "Internal server error" });
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // DELETE /api/users/:id - Delete (deactivate) user
+  // DELETE /api/users/:id - Soft delete (deactivate) a user
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/users/:id",
     {
       schema: {
-        description: "Delete user",
+        description: "Soft delete (deactivate) a user (requires admin/gerente role)",
         tags: ["users"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         response: {
-          204: { description: "User deleted" },
+          204: { description: "User deleted successfully" },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -320,28 +372,54 @@ export function registerUserRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        app.logger.info({ userId: request.params.id }, "Deleting user");
+        const tenantId = authUser.restauranteId;
 
-        const existing = await app.db.select().from(userTable).where(eq(userTable.id, request.params.id));
+        // Check current database role (might have been updated after token was issued)
+        const authUserProfile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
 
-        if (!existing.length) {
-          return reply.status(404).send({ error: "User not found" });
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to delete user");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        await app.db
-          .update(userTable)
-          .set({ active: false, updatedAt: new Date() })
-          .where(eq(userTable.id, request.params.id));
+        const { id } = request.params;
 
-        app.logger.info({ userId: request.params.id }, "User deleted");
+        app.logger.info({ tenantId, userId: id }, "Deactivating user");
 
-        return reply.status(204).send();
+        // Verify user belongs to tenant
+        const profile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        if (profile.length === 0) {
+          app.logger.warn({ tenantId, userId: id }, "User not found");
+          return reply.code(404).send({ error: "Usuário não encontrado" });
+        }
+
+        // Soft delete - set active to false
+        await app.db.update(userTable).set({ active: false }).where(eq(userTable.id, id));
+
+        app.logger.info({ userId: id }, "User deactivated successfully");
+        return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to delete user");
-        return reply.status(500).send({ error: "Internal server error" });
+        return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );

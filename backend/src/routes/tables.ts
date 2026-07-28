@@ -1,8 +1,8 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, ne, and, inArray } from "drizzle-orm";
+import { eq, ne, and } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireRole } from "../utils/auth.js";
 
 interface CreateMesaBody {
   numero: number;
@@ -22,7 +22,7 @@ export function registerTableRoutes(app: App) {
     "/api/mesas",
     {
       schema: {
-        description: "List all mesas ordered by numero with optional status filter",
+        description: "List all mesas ordered by numero with optional status filter (requires authentication)",
         tags: ["mesas"],
         querystring: {
           type: "object",
@@ -32,75 +32,57 @@ export function registerTableRoutes(app: App) {
         },
         response: {
           200: {
-            type: "object",
-            properties: {
-              mesas: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string", format: "uuid" },
-                    numero: { type: "number" },
-                    status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
-                    capacidade: { type: "number" },
-                    created_at: { type: "string", format: "date-time" },
-                  },
-                },
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                numero: { type: "number" },
+                status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
+                capacidade: { type: "number" },
+                created_at: { type: "string", format: "date-time" },
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Querystring: { status?: string } }>, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
       try {
-        app.logger.info({ status: request.query.status }, "Listing mesas");
+        const tenantId = authUser.restauranteId;
+        app.logger.info({ tenantId, status: request.query.status }, "Listing mesas");
 
-        // Get all mesas ordered by numero, with optional status filter
-        let mesas: any[];
+        let mesasQuery = app.db
+          .select()
+          .from(schema.mesas)
+          .where(eq(schema.mesas.restauranteId, tenantId as any))
+          .orderBy(schema.mesas.numero);
+
         if (request.query.status) {
-          mesas = await app.db
-            .select({
-              id: schema.mesas.id,
-              numero: schema.mesas.numero,
-              status: schema.mesas.status,
-              capacidade: schema.mesas.capacidade,
-              createdAt: schema.mesas.createdAt,
-            })
+          mesasQuery = app.db
+            .select()
             .from(schema.mesas)
-            .where(eq(schema.mesas.status, request.query.status as any))
-            .orderBy(schema.mesas.numero);
-        } else {
-          mesas = await app.db
-            .select({
-              id: schema.mesas.id,
-              numero: schema.mesas.numero,
-              status: schema.mesas.status,
-              capacidade: schema.mesas.capacidade,
-              createdAt: schema.mesas.createdAt,
-            })
-            .from(schema.mesas)
+            .where(and(
+              eq(schema.mesas.restauranteId, tenantId as any),
+              eq(schema.mesas.status, request.query.status as any)
+            ))
             .orderBy(schema.mesas.numero);
         }
 
-        app.logger.info({ count: mesas.length }, "Listed mesas");
+        const mesas = await mesasQuery;
+        app.logger.info({ tenantId, count: mesas.length }, "Mesas listed successfully");
 
-        // Log sample of status values for diagnostics
-        if (mesas.length > 0) {
-          const sampleMesas = mesas.slice(0, 5);
-          const sampleStatuses = sampleMesas.map(m => ({ numero: m.numero, status: m.status }));
-          app.logger.info({ sampleStatuses }, "Sample mesa status values");
-        }
-
-        return reply.code(200).send({
-          mesas: mesas.map((m) => ({
-            id: m.id,
-            numero: m.numero,
-            status: m.status,
-            capacidade: m.capacidade,
-            created_at: m.createdAt.toISOString(),
-          })),
-        });
+        return mesas.map((m) => ({
+          id: m.id,
+          numero: m.numero,
+          status: m.status,
+          capacidade: m.capacidade,
+          created_at: m.createdAt.toISOString(),
+        }));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to list mesas");
         return reply.code(500).send({ error: "Internal server error" });
@@ -113,7 +95,7 @@ export function registerTableRoutes(app: App) {
     "/api/mesas",
     {
       schema: {
-        description: "Create a new mesa (requires authentication)",
+        description: "Create a new mesa (requires admin/gerente role)",
         tags: ["mesas"],
         body: {
           type: "object",
@@ -128,20 +110,16 @@ export function registerTableRoutes(app: App) {
           201: {
             type: "object",
             properties: {
-              mesa: {
-                type: "object",
-                properties: {
-                  id: { type: "string", format: "uuid" },
-                  numero: { type: "number" },
-                  status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
-                  capacidade: { type: "number" },
-                  createdAt: { type: "string", format: "date-time" },
-                },
-              },
+              id: { type: "string", format: "uuid" },
+              numero: { type: "number" },
+              status: { type: "string" },
+              capacidade: { type: "number" },
+              created_at: { type: "string", format: "date-time" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           409: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -150,71 +128,90 @@ export function registerTableRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        if (!request.body.numero) {
-          return reply.code(400).send({ error: "numero is required" });
+        const tenantId = authUser.restauranteId;
+
+        // Check current database role
+        const authUserProfile = await app.db
+          .select()
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to create mesa");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        const restauranteId = requireTenant(authUser);
-        if (!restauranteId) {
-          return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        const { numero, capacidade = 4, status = "disponivel" } = request.body;
+
+        if (!numero) {
+          return reply.code(400).send({ error: "numero é obrigatório" });
         }
 
-        app.logger.info({ numero: request.body.numero, restauranteId }, "Creating mesa");
+        app.logger.info({ tenantId, numero }, "Creating mesa");
 
-        // Check for duplicate numero (per restaurante)
+        // Check for duplicate numero within same tenant
         const existing = await app.db
           .select()
           .from(schema.mesas)
-          .where(and(eq(schema.mesas.numero, request.body.numero), eq(schema.mesas.restauranteId, restauranteId)))
+          .where(and(
+            eq(schema.mesas.restauranteId, tenantId as any),
+            eq(schema.mesas.numero, numero)
+          ))
           .limit(1);
 
         if (existing.length > 0) {
-          return reply.code(409).send({ error: "Número de mesa já existe" });
+          app.logger.warn({ tenantId, numero }, "Mesa numero already exists");
+          return reply.code(409).send({ error: "Mesa com este número já existe" });
         }
 
-        const statusValue = request.body.status || "disponivel";
-        const [mesa] = await app.db
+        const [newMesa] = await app.db
           .insert(schema.mesas)
           .values({
-            numero: request.body.numero,
-            status: statusValue as any,
-            capacidade: request.body.capacidade || 4,
-            restauranteId,
+            numero,
+            capacidade,
+            status: status as any,
+            restauranteId: tenantId as any,
+            createdAt: new Date(),
           })
           .returning();
 
-        app.logger.info({ mesaId: mesa.id }, "Mesa created successfully");
+        app.logger.info({ mesaId: newMesa.id, tenantId }, "Mesa created successfully");
 
         return reply.code(201).send({
-          mesa: {
-            id: mesa.id,
-            numero: mesa.numero,
-            status: mesa.status,
-            capacidade: mesa.capacidade,
-            createdAt: mesa.createdAt.toISOString(),
-          },
+          id: newMesa.id,
+          numero: newMesa.numero,
+          status: newMesa.status,
+          capacidade: newMesa.capacidade,
+          created_at: newMesa.createdAt.toISOString(),
         });
       } catch (error) {
-        app.logger.error({ err: error, body: request.body }, "Failed to create mesa");
+        app.logger.error({ err: error }, "Failed to create mesa");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // GET /api/mesas/:id - Get a mesa
+  // GET /api/mesas/:id - Get a single mesa by ID
   app.fastify.get<{ Params: { id: string } }>(
     "/api/mesas/:id",
     {
       schema: {
-        description: "Get a mesa by ID (requires authentication)",
+        description: "Get a single mesa by ID (requires authentication)",
         tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         response: {
           200: {
@@ -222,9 +219,9 @@ export function registerTableRoutes(app: App) {
             properties: {
               id: { type: "string", format: "uuid" },
               numero: { type: "number" },
-              status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
+              status: { type: "string" },
               capacidade: { type: "number" },
-              createdAt: { type: "string", format: "date-time" },
+              created_at: { type: "string", format: "date-time" },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -233,28 +230,35 @@ export function registerTableRoutes(app: App) {
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        app.logger.info({ mesaId: request.params.id }, "Getting mesa");
+        const tenantId = authUser.restauranteId;
+        const { id } = request.params;
 
-        const mesas = await app.db
+        app.logger.info({ tenantId, mesaId: id }, "Getting mesa");
+
+        const mesa = await app.db
           .select()
           .from(schema.mesas)
-          .where(eq(schema.mesas.id, request.params.id));
+          .where(and(
+            eq(schema.mesas.id, id as any),
+            eq(schema.mesas.restauranteId, tenantId as any)
+          ))
+          .limit(1);
 
-        if (!mesas.length) {
-          return reply.code(404).send({ error: "Mesa not found" });
+        if (mesa.length === 0) {
+          app.logger.warn({ tenantId, mesaId: id }, "Mesa not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
         }
 
-        const mesa = mesas[0];
         return reply.code(200).send({
-          id: mesa.id,
-          numero: mesa.numero,
-          status: mesa.status,
-          capacidade: mesa.capacidade,
-          createdAt: mesa.createdAt.toISOString(),
+          id: mesa[0].id,
+          numero: mesa[0].numero,
+          status: mesa[0].status,
+          capacidade: mesa[0].capacidade,
+          created_at: mesa[0].createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get mesa");
@@ -268,12 +272,14 @@ export function registerTableRoutes(app: App) {
     "/api/mesas/:id",
     {
       schema: {
-        description: "Update a mesa (requires authentication)",
+        description: "Update a mesa (requires admin/gerente role)",
         tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         body: {
           type: "object",
@@ -287,79 +293,101 @@ export function registerTableRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              mesa: {
-                type: "object",
-                properties: {
-                  id: { type: "string", format: "uuid" },
-                  numero: { type: "number" },
-                  status: { type: "string", enum: ["disponivel", "ocupada", "reservada"] },
-                  capacidade: { type: "number" },
-                  createdAt: { type: "string", format: "date-time" },
-                },
-              },
+              id: { type: "string", format: "uuid" },
+              numero: { type: "number" },
+              status: { type: "string" },
+              capacidade: { type: "number" },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
           409: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Params: { id: string }; Body: UpdateMesaBody }>,
-      reply: FastifyReply
-    ) => {
+    async (request: FastifyRequest<{ Params: { id: string }; Body: UpdateMesaBody }>, reply: FastifyReply) => {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        app.logger.info({ mesaId: request.params.id, body: request.body }, "Updating mesa");
+        const tenantId = authUser.restauranteId;
 
-        const existing = await app.db
+        // Check current database role
+        const authUserProfile = await app.db
           .select()
-          .from(schema.mesas)
-          .where(eq(schema.mesas.id, request.params.id));
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
+          .limit(1);
 
-        if (!existing.length) {
-          return reply.code(404).send({ error: "Mesa not found" });
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to update mesa");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        // Check for duplicate numero if being changed
-        if (request.body.numero !== undefined) {
-          const duplicateCheck = await app.db
+        const { id } = request.params;
+        const { numero, status, capacidade } = request.body;
+
+        app.logger.info({ tenantId, mesaId: id }, "Updating mesa");
+
+        // Check mesa belongs to tenant
+        const existingMesa = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(and(
+            eq(schema.mesas.id, id as any),
+            eq(schema.mesas.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        if (existingMesa.length === 0) {
+          app.logger.warn({ tenantId, mesaId: id }, "Mesa not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
+
+        // Check for duplicate numero if changing it
+        if (numero && numero !== existingMesa[0].numero) {
+          const duplicate = await app.db
             .select()
             .from(schema.mesas)
-            .where(and(ne(schema.mesas.id, request.params.id), eq(schema.mesas.numero, request.body.numero)))
+            .where(and(
+              eq(schema.mesas.restauranteId, tenantId as any),
+              eq(schema.mesas.numero, numero),
+              ne(schema.mesas.id, id as any)
+            ))
             .limit(1);
 
-          if (duplicateCheck.length > 0) {
-            return reply.code(409).send({ error: "Número de mesa já existe" });
+          if (duplicate.length > 0) {
+            app.logger.warn({ tenantId, numero }, "Duplicate mesa numero");
+            return reply.code(409).send({ error: "Mesa com este número já existe" });
           }
         }
 
-        const updates: any = {};
-        if (request.body.numero !== undefined) updates.numero = request.body.numero as number;
-        if (request.body.status !== undefined) updates.status = request.body.status as "disponivel" | "ocupada" | "reservada";
-        if (request.body.capacidade !== undefined) updates.capacidade = request.body.capacidade as number;
+        const updateData = {
+          ...(numero !== undefined && { numero }),
+          ...(status && { status: status as any }),
+          ...(capacidade !== undefined && { capacidade }),
+        };
 
         const [updated] = await app.db
           .update(schema.mesas)
-          .set(updates)
-          .where(eq(schema.mesas.id, request.params.id))
+          .set(updateData)
+          .where(eq(schema.mesas.id, id as any))
           .returning();
 
-        app.logger.info({ mesaId: updated.id }, "Mesa updated successfully");
+        app.logger.info({ mesaId: id }, "Mesa updated successfully");
 
         return reply.code(200).send({
-          mesa: {
-            id: updated.id,
-            numero: updated.numero,
-            status: updated.status,
-            capacidade: updated.capacidade,
-            createdAt: updated.createdAt.toISOString(),
-          },
+          id: updated.id,
+          numero: updated.numero,
+          status: updated.status,
+          capacidade: updated.capacidade,
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update mesa");
@@ -368,20 +396,22 @@ export function registerTableRoutes(app: App) {
     }
   );
 
-  // DELETE /api/mesas/:id - Delete a mesa with cascading delete via transaction
+  // DELETE /api/mesas/:id - Delete a mesa with cascading delete
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/mesas/:id",
     {
       schema: {
-        description: "Delete a mesa and all associated comandas and pedidos (requires authentication and admin/gerente role)",
+        description: "Delete a mesa with cascading delete (requires admin/gerente role)",
         tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         response: {
-          204: {},
+          204: { description: "Mesa deleted successfully" },
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -393,72 +423,93 @@ export function registerTableRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        app.logger.info({ mesaId: request.params.id }, "Deleting mesa with cascade");
+        const tenantId = authUser.restauranteId;
 
-        const existing = await app.db
+        // Check current database role
+        const authUserProfile = await app.db
           .select()
-          .from(schema.mesas)
-          .where(eq(schema.mesas.id, request.params.id))
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
           .limit(1);
 
-        if (!existing.length) {
-          return reply.code(404).send({ error: "Mesa not found" });
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to delete mesa");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        // Wrap delete operation in transaction for atomicity
-        await app.db.transaction(async (trx) => {
-          // Get all comandas for this mesa
-          const comandas = await trx
-            .select({ id: schema.comandas.id })
-            .from(schema.comandas)
-            .where(eq(schema.comandas.mesaId, request.params.id));
+        const { id } = request.params;
 
-          const comandaIds = comandas.map((c) => c.id);
+        app.logger.info({ tenantId, mesaId: id }, "Deleting mesa");
 
-          // Delete pedidos associated with these comandas
-          if (comandaIds.length > 0) {
-            await trx
-              .delete(schema.pedidos)
-              .where(inArray(schema.pedidos.comandaId, comandaIds));
-          }
+        // Check mesa belongs to tenant
+        const mesa = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(and(
+            eq(schema.mesas.id, id as any),
+            eq(schema.mesas.restauranteId, tenantId as any)
+          ))
+          .limit(1);
 
-          // Delete comandas
-          await trx.delete(schema.comandas).where(eq(schema.comandas.mesaId, request.params.id));
+        if (mesa.length === 0) {
+          app.logger.warn({ tenantId, mesaId: id }, "Mesa not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
 
-          // Delete mesa
-          await trx.delete(schema.mesas).where(eq(schema.mesas.id, request.params.id));
-        });
+        // Delete pedidos associated with this mesa's comandas
+        const comandasForMesa = await app.db
+          .select()
+          .from(schema.comandas)
+          .where(eq(schema.comandas.mesaId, id as any));
 
-        app.logger.info({ mesaId: request.params.id }, "Mesa and dependencies deleted successfully");
+        for (const comanda of comandasForMesa) {
+          await app.db.delete(schema.pedidos).where(eq(schema.pedidos.comandaId, comanda.id));
+        }
 
+        // Delete comandas
+        await app.db.delete(schema.comandas).where(eq(schema.comandas.mesaId, id as any));
+
+        // Delete mesa
+        await app.db.delete(schema.mesas).where(eq(schema.mesas.id, id as any));
+
+        app.logger.info({ mesaId: id }, "Mesa deleted successfully");
         return reply.code(204).send();
       } catch (error) {
-        app.logger.error({ err: error }, "Failed to delete mesa");
-        if (error instanceof Error && error.message.includes("constraint")) {
-          return reply.code(400).send({ error: "Cannot delete mesa due to data constraints" });
+        const errorStr = JSON.stringify(error).toLowerCase();
+        const isFKError = errorStr.includes('foreign key') || errorStr.includes('restrict');
+        if (isFKError) {
+          app.logger.warn({ err: error }, "Cannot delete mesa - has dependent records");
+          return reply.code(400).send({ error: "Não é possível deletar mesa com registros relacionados" });
         }
+        app.logger.error({ err: error }, "Failed to delete mesa");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // DELETE /api/mesas/:id/force - Force delete a mesa (deletes all associated comandas and pedidos)
+  // DELETE /api/mesas/:id/force - Force delete a mesa and all associated data
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/mesas/:id/force",
     {
       schema: {
-        description: "Force delete a mesa and all associated comandas and pedidos (requires authentication and admin/gerente role)",
+        description: "Force delete a mesa and all associated data (requires admin/gerente role)",
         tags: ["mesas"],
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string", format: "uuid" } },
+          properties: {
+            id: { type: "string", format: "uuid" },
+          },
         },
         response: {
-          204: {},
+          204: { description: "Mesa force deleted successfully" },
           401: { type: "object", properties: { error: { type: "string" } } },
           403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
@@ -469,47 +520,63 @@ export function registerTableRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
-
       try {
-        app.logger.info({ mesaId: request.params.id }, "Force deleting mesa");
+        const tenantId = authUser.restauranteId;
 
-        const existing = await app.db
+        // Check current database role
+        const authUserProfile = await app.db
           .select()
-          .from(schema.mesas)
-          .where(eq(schema.mesas.id, request.params.id))
+          .from(schema.profiles)
+          .where(and(
+            eq(schema.profiles.userId, authUser.id),
+            eq(schema.profiles.restauranteId, tenantId as any)
+          ))
           .limit(1);
 
-        if (!existing.length) {
-          return reply.code(404).send({ error: "Mesa not found" });
+        const dbRole = authUserProfile.length > 0 ? authUserProfile[0].role?.toLowerCase() : authUser.role?.toLowerCase();
+        const isAdmin = ["admin", "administrador", "gerente"].includes(dbRole ?? "");
+
+        if (!isAdmin) {
+          app.logger.warn({ tenantId }, "User lacks permission to force delete mesa");
+          return reply.code(403).send({ error: "Forbidden" });
         }
 
-        // Get all comandas for this mesa
-        const comandas = await app.db
-          .select({ id: schema.comandas.id })
+        const { id } = request.params;
+
+        app.logger.info({ tenantId, mesaId: id }, "Force deleting mesa");
+
+        // Check mesa belongs to tenant
+        const mesa = await app.db
+          .select()
+          .from(schema.mesas)
+          .where(and(
+            eq(schema.mesas.id, id as any),
+            eq(schema.mesas.restauranteId, tenantId as any)
+          ))
+          .limit(1);
+
+        if (mesa.length === 0) {
+          app.logger.warn({ tenantId, mesaId: id }, "Mesa not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
+
+        // Delete pedidos associated with this mesa's comandas
+        const comandasForMesa = await app.db
+          .select()
           .from(schema.comandas)
-          .where(eq(schema.comandas.mesaId, request.params.id));
+          .where(eq(schema.comandas.mesaId, id as any));
 
-        const comandaIds = comandas.map((c) => c.id);
-
-        // Delete pedidos associated with these comandas
-        if (comandaIds.length > 0) {
-          await app.db
-            .delete(schema.pedidos)
-            .where(inArray(schema.pedidos.comandaId, comandaIds));
+        for (const comanda of comandasForMesa) {
+          await app.db.delete(schema.pedidos).where(eq(schema.pedidos.comandaId, comanda.id));
         }
 
         // Delete comandas
-        await app.db.delete(schema.comandas).where(eq(schema.comandas.mesaId, request.params.id));
+        await app.db.delete(schema.comandas).where(eq(schema.comandas.mesaId, id as any));
 
         // Delete mesa
-        await app.db.delete(schema.mesas).where(eq(schema.mesas.id, request.params.id));
+        await app.db.delete(schema.mesas).where(eq(schema.mesas.id, id as any));
 
-        app.logger.info(
-          { mesaId: request.params.id, deletedComandas: comandaIds.length },
-          "Mesa and dependencies force deleted successfully"
-        );
-
+        app.logger.info({ mesaId: id }, "Mesa force deleted successfully");
         return reply.code(204).send();
       } catch (error) {
         app.logger.error({ err: error }, "Failed to force delete mesa");
