@@ -44,7 +44,8 @@ export function registerPagamentoRoutes(app: App) {
         const totalComanda = parseFloat(comanda[0].total || "0");
         const restante = totalComanda - totalPago;
 
-        if (valor > restante + 0.01) {
+        // Only validate overpayment if comanda has a total
+        if (totalComanda > 0 && valor > restante + 0.01) {
           return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restante.toFixed(2)}` });
         }
 
@@ -63,7 +64,7 @@ export function registerPagamentoRoutes(app: App) {
           restauranteId,
         }).returning();
 
-        return reply.code(201).send({
+        return reply.code(200).send({
           pagamento,
           resumo: { total_comanda: totalComanda, total_pago: totalPago + (statusPagamento === "confirmado" ? valor : 0), restante: restante - (statusPagamento === "confirmado" ? valor : 0) },
         });

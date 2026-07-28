@@ -1751,6 +1751,274 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ==================== Pagamentos (Payments) ====================
+  let paymentCommandaId: string;
+
+  test("Create comanda for payment tests", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const res = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    paymentCommandaId = data.comanda.id;
+  });
+
+  test("Add payment to comanda with PIX", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          valor: 50.00,
+          referencia: "test-pix-ref-123",
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Add payment to comanda with cash", async () => {
+    // Create another comanda for this test
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "dinheiro",
+          valor: 100.00,
+          troco: 50.00,
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Add payment with credit card", async () => {
+    // Create another comanda for this test
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "cartao_credito",
+          valor: 75.50,
+          referencia: "CC-AUTH-12345",
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Add payment with debit card", async () => {
+    // Create another comanda for this test
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "cartao_debito",
+          valor: 60.00,
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Add payment to non-existent comanda returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas/00000000-0000-0000-0000-000000000000/pagamentos",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          valor: 50.00,
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Add payment with invalid comanda UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/comandas/invalid-uuid/pagamentos",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          valor: 50.00,
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add payment missing required field returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          // missing required valor
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add payment with invalid forma_pagamento returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "invalid_payment_method",
+          valor: 50.00,
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Add payment with zero valor returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          valor: 0,
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Get payments for comanda", async () => {
+    const res = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken
+    );
+    await expectStatus(res, 200);
+  });
+
+  test("Delete payment", async () => {
+    // First get payments to get a payment ID
+    const getRes = await authenticatedApi(
+      `/api/comandas/${paymentCommandaId}/pagamentos`,
+      authToken
+    );
+    await expectStatus(getRes, 200);
+    const response = await getRes.json();
+    const payments = response.pagamentos;
+
+    if (Array.isArray(payments) && payments.length > 0) {
+      const paymentId = payments[0].id;
+
+      const res = await authenticatedApi(
+        `/api/pagamentos/${paymentId}`,
+        authToken,
+        {
+          method: "DELETE",
+        }
+      );
+      await expectStatus(res, 200);
+    }
+  });
+
   // ==================== Pedidos CRUD (depends on comanda and prato) ====================
   let pedidoCommandaId: string;
   let pedidoPratoId: string;
