@@ -623,6 +623,21 @@ export function registerOrderRoutes(app: App) {
           "Pedidos added successfully"
         );
 
+        // Publish realtime event for each pedido created
+        try {
+          const restauranteId = requireTenant(authUser);
+          for (const pedido of insertedPedidos) {
+            realtimeHub.publish(restauranteId, {
+              type: "pedido.created",
+              entityId: pedido.id,
+              occurredAt: new Date().toISOString(),
+              payload: { comanda_id: comandaId, status: pedido.status },
+            });
+          }
+        } catch (pubErr) {
+          app.logger.debug({ err: pubErr }, "Failed to publish pedido.created event");
+        }
+
         return reply.code(201).send({
           pedidos: insertedPedidos.map((p) => ({
             id: p.id,
