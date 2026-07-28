@@ -51,7 +51,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Auth Endpoints ====================
-  test("Get current authenticated user", async () => {
+  test("Get current authenticated user via /api/auth/me", async () => {
     const res = await authenticatedApi("/api/auth/me", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
@@ -416,6 +416,20 @@ describe("API Integration Tests", () => {
     await expectStatus(dupRes, 409);
   });
 
+  test("Create user as non-admin returns 403", async () => {
+    const res = await authenticatedApi("/api/users", regularUserToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `user-403-${Date.now()}@example.com`,
+        password: "pass123456",
+        name: "Non-Admin Create",
+        role: "garcom",
+      }),
+    });
+    await expectStatus(res, 403);
+  });
+
   test("Update user", async () => {
     // Create a user to update
     const createRes = await authenticatedApi("/api/users", adminToken, {
@@ -511,6 +525,32 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 400);
+  });
+
+  test("Delete user as non-admin returns 403", async () => {
+    // Create a user first
+    const createRes = await authenticatedApi("/api/users", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `user-403-delete-${Date.now()}@example.com`,
+        password: "pass123456",
+        name: "User to 403 Delete",
+        role: "garcom",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const userData = await createRes.json();
+
+    // Try to delete with regular user
+    const res = await authenticatedApi(
+      `/api/users/${userData.id}`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ==================== Categorias CRUD ====================

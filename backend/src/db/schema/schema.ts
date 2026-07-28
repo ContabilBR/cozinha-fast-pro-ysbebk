@@ -7,6 +7,7 @@ import {
   integer,
   numeric,
   pgEnum,
+  unique,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema.js";
 
@@ -24,12 +25,14 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
 // Mesas (Tables)
 export const mesas = pgTable("mesas", {
   id: uuid("id").primaryKey().defaultRandom(),
-  numero: integer("numero").notNull().unique(),
+  numero: integer("numero").notNull(),
   status: mesaStatusEnum("status").default("disponivel").notNull(),
   capacidade: integer("capacidade").default(4).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
-});
+}, (table) => ({
+  unqNumeroRestaurante: unique().on(table.numero, table.restauranteId),
+}));
 
 // Categorias
 export const categorias = pgTable("categorias", {

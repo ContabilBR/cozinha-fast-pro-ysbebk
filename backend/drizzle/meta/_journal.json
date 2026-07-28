@@ -183,6 +183,13 @@
       "when": 1785196792403,
       "tag": "20260727235952_wealthy_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785249601036,
+      "tag": "20260728144001_spotty_thunderbolt",
+      "breakpoints": true
     }
   ]
 }
