@@ -769,6 +769,26 @@ export function registerOrderRoutes(app: App) {
           subtotal_item: p.quantidade * parseFloat(p.precoUnitario || "0"),
         }));
 
+        // Verificar pagamentos
+        const pagamentosComanda = await app.db
+          .select()
+          .from(schema.pagamentos)
+          .where(eq(schema.pagamentos.comandaId, request.params.id));
+
+        const totalPagoConfirmado = pagamentosComanda
+          .filter((p: any) => p.status === "confirmado")
+          .reduce((sum: number, p: any) => sum + parseFloat(p.valor), 0);
+
+        const pagamentosPendentes = pagamentosComanda.filter((p: any) => p.status === "pendente");
+
+        if (pagamentosPendentes.length > 0) {
+          return reply.code(400).send({ error: "Existem pagamentos pendentes (ex: Pix aguardando confirmação). Confirme ou cancele antes de fechar." });
+        }
+
+        if (pagamentosComanda.length > 0 && totalPagoConfirmado < totalFinal - 0.01) {
+          return reply.code(400).send({ error: `Total pago (R$ ${totalPagoConfirmado.toFixed(2)}) é menor que o total da comanda (R$ ${totalFinal.toFixed(2)}).` });
+        }
+
         // STEP 2: Run the archive logic
         await (app.db as any).transaction(async (tx: any) => {
           // Copy comanda to historico with status 'fechada'
@@ -804,6 +824,29 @@ export function registerOrderRoutes(app: App) {
                 restauranteId,
               }))
             );
+          }
+
+          // Copiar pagamentos para histórico
+          if (pagamentosComanda.length > 0) {
+            await tx.insert(schema.pagamentosHistorico).values(
+              pagamentosComanda.filter((p: any) => p.status === "confirmado").map((p: any) => ({
+                id: p.id,
+                comandaId: p.comandaId,
+                formaPagamento: p.formaPagamento,
+                status: p.status,
+                valor: p.valor,
+                troco: p.troco,
+                pixTxId: p.pixTxId,
+                referencia: p.referencia,
+                confirmadoEm: p.confirmadoEm,
+                createdAt: p.createdAt,
+                archivedAt: closedAt,
+                restauranteId,
+              }))
+            );
+
+            // Deletar pagamentos da comanda
+            await tx.delete(schema.pagamentos).where(eq(schema.pagamentos.comandaId, request.params.id));
           }
 
           // Update comanda with subtotal and gorjeta before deleting
@@ -857,6 +900,11 @@ export function registerOrderRoutes(app: App) {
           created_at: createdAt.toISOString(),
           closed_at: closedAt.toISOString(),
           itens,
+          pagamentos: pagamentosComanda.filter((p: any) => p.status === "confirmado").map((p: any) => ({
+            forma_pagamento: p.formaPagamento,
+            valor: parseFloat(p.valor),
+            troco: parseFloat(p.troco || "0"),
+          })),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to close and archive comanda");
