@@ -17,6 +17,7 @@ import { registerHistoricoRoutes } from './routes/historico.js';
 import { registerRestauranteRoutes } from './routes/restaurante.js';
 import { registerRestauranteSignupRoutes } from './routes/restaurante-signup.js';
 import { registerPagamentoRoutes } from './routes/pagamentos.js';
+import { registerRealtimeRoutes } from './routes/realtime.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -95,6 +96,7 @@ registerHistoricoRoutes(app);
 registerRestauranteRoutes(app);
 registerRestauranteSignupRoutes(app);
 registerPagamentoRoutes(app);
+registerRealtimeRoutes(app);
 
 // Seed database on startup (only if not in production and explicitly enabled)
 if (process.env.NODE_ENV !== 'production' && process.env.SEED_ENABLED === 'true') {

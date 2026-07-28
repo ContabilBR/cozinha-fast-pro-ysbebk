@@ -5,6 +5,7 @@ import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 import { resolveGarcomId } from "../utils/garcom.js";
+import { realtimeHub } from "../realtime/hub.js";
 
 interface CreateComandaBody {
   mesaId?: string;
@@ -305,6 +306,18 @@ export function registerOrderRoutes(app: App) {
         });
 
         app.logger.info({ comandaId: comanda.id, mesaId }, "Comanda created successfully");
+
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(authUser);
+          realtimeHub.publish(restauranteId, {
+            type: "comanda.created",
+            entityId: comanda.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.created event");
+        }
 
         return reply.code(201).send({
           comanda: {
@@ -610,6 +623,21 @@ export function registerOrderRoutes(app: App) {
           "Pedidos added successfully"
         );
 
+        // Publish realtime event for each pedido created
+        try {
+          const restauranteId = requireTenant(authUser);
+          for (const pedido of insertedPedidos) {
+            realtimeHub.publish(restauranteId, {
+              type: "pedido.created",
+              entityId: pedido.id,
+              occurredAt: new Date().toISOString(),
+              payload: { comanda_id: comandaId, status: pedido.status },
+            });
+          }
+        } catch (pubErr) {
+          app.logger.debug({ err: pubErr }, "Failed to publish pedido.created event");
+        }
+
         return reply.code(201).send({
           pedidos: insertedPedidos.map((p) => ({
             id: p.id,
@@ -889,6 +917,17 @@ export function registerOrderRoutes(app: App) {
           `[fechar] comanda ${request.params.id}: subtotal=${subtotal}, gorjeta=${gorjetaValue}, total=${totalFinal}`
         );
 
+        // Publish realtime event
+        try {
+          realtimeHub.publish(restauranteId, {
+            type: "comanda.closed",
+            entityId: request.params.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.closed event");
+        }
+
         return reply.code(200).send({
           success: true,
           mesa_numero: comanda.mesaNumero,
@@ -972,6 +1011,18 @@ export function registerOrderRoutes(app: App) {
         }
 
         app.logger.info({ comandaId: updated.id }, "Comanda cancelled successfully");
+
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(session);
+          realtimeHub.publish(restauranteId, {
+            type: "comanda.cancelled",
+            entityId: updated.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish comanda.cancelled event");
+        }
 
         return reply.code(200).send({
           id: updated.id,

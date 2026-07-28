@@ -3,6 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
+import { realtimeHub } from "../realtime/hub.js";
 
 interface CreatePedidoBody {
   comanda_id?: string;
@@ -237,6 +238,17 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ pedidoId: pedido.id }, "Pedido created successfully");
 
+        // Publish realtime event
+        try {
+          realtimeHub.publish(restauranteId, {
+            type: "pedido.created",
+            entityId: pedido.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish pedido.created event");
+        }
+
         return reply.code(201).send({
           pedido: {
             id: pedido.id,
@@ -401,6 +413,18 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ pedidoId: updated.id }, "Pedido status updated successfully");
 
+        // Publish realtime event
+        try {
+          const restauranteId = requireTenant(session);
+          realtimeHub.publish(restauranteId, {
+            type: "pedido.status_changed",
+            entityId: updated.id,
+            occurredAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          app.logger.error({ err }, "Failed to publish pedido.status_changed event");
+        }
+
         return reply.code(200).send({
           id: updated.id,
           comandaId: updated.comandaId,
@@ -518,6 +542,28 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ pedidoId: updated.id }, "Pedido updated successfully");
 
+        // Publish realtime event if status changed
+        try {
+          const restauranteId = requireTenant(session);
+          if (request.body.status !== undefined && request.body.status !== pedido.status) {
+            realtimeHub.publish(restauranteId, {
+              type: "pedido.status_changed",
+              entityId: updated.id,
+              occurredAt: new Date().toISOString(),
+              payload: { new_status: request.body.status, old_status: pedido.status },
+            });
+          } else {
+            realtimeHub.publish(restauranteId, {
+              type: "pedido.updated",
+              entityId: updated.id,
+              occurredAt: new Date().toISOString(),
+              payload: { quantidade: request.body.quantidade, observacao: request.body.observacao },
+            });
+          }
+        } catch (pubErr) {
+          app.logger.debug({ err: pubErr }, "Failed to publish pedido event");
+        }
+
         return reply.code(200).send({
           id: updated.id,
           comanda_id: updated.comandaId,
@@ -593,6 +639,18 @@ export function registerOrderItemRoutes(app: App) {
 
         // Step c: Delete the pedido
         await app.db.delete(schema.pedidos).where(eq(schema.pedidos.id, request.params.id));
+
+        // Publish realtime event for pedido.deleted
+        try {
+          realtimeHub.publish(restauranteId, {
+            type: "pedido.deleted",
+            entityId: request.params.id,
+            occurredAt: new Date().toISOString(),
+            payload: { comanda_id: pedido.comandaId, prato_id: pedido.pratoId },
+          });
+        } catch (pubErr) {
+          app.logger.debug({ err: pubErr }, "Failed to publish pedido.deleted event");
+        }
 
         // Step d: Recalculate and update parent comanda's total
         const result = await app.db
