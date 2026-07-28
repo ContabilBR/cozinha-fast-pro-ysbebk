@@ -3,7 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
-import { realtimeHub } from "../utils/realtime.js";
+import { realtimeHub } from "../realtime/hub.js";
 
 interface CreatePedidoBody {
   comanda_id?: string;
@@ -240,7 +240,7 @@ export function registerOrderItemRoutes(app: App) {
 
         // Publish realtime event
         try {
-          realtimeHub.publishEvent(restauranteId, {
+          realtimeHub.publish(restauranteId, {
             type: "pedido.created",
             entityId: pedido.id,
             occurredAt: new Date().toISOString(),
@@ -416,7 +416,7 @@ export function registerOrderItemRoutes(app: App) {
         // Publish realtime event
         try {
           const restauranteId = requireTenant(session);
-          realtimeHub.publishEvent(restauranteId, {
+          realtimeHub.publish(restauranteId, {
             type: "pedido.status_changed",
             entityId: updated.id,
             occurredAt: new Date().toISOString(),

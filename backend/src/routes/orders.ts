@@ -5,7 +5,7 @@ import { user } from "../db/schema/auth-schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
 import { resolveGarcomId } from "../utils/garcom.js";
-import { realtimeHub } from "../utils/realtime.js";
+import { realtimeHub } from "../realtime/hub.js";
 
 interface CreateComandaBody {
   mesaId?: string;
@@ -310,7 +310,7 @@ export function registerOrderRoutes(app: App) {
         // Publish realtime event
         try {
           const restauranteId = requireTenant(authUser);
-          realtimeHub.publishEvent(restauranteId, {
+          realtimeHub.publish(restauranteId, {
             type: "comanda.created",
             entityId: comanda.id,
             occurredAt: new Date().toISOString(),
@@ -904,7 +904,7 @@ export function registerOrderRoutes(app: App) {
 
         // Publish realtime event
         try {
-          realtimeHub.publishEvent(restauranteId, {
+          realtimeHub.publish(restauranteId, {
             type: "comanda.closed",
             entityId: request.params.id,
             occurredAt: new Date().toISOString(),
@@ -1000,7 +1000,7 @@ export function registerOrderRoutes(app: App) {
         // Publish realtime event
         try {
           const restauranteId = requireTenant(session);
-          realtimeHub.publishEvent(restauranteId, {
+          realtimeHub.publish(restauranteId, {
             type: "comanda.cancelled",
             entityId: updated.id,
             occurredAt: new Date().toISOString(),
