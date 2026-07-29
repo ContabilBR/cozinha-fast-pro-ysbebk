@@ -657,6 +657,28 @@ export function registerOrderRoutes(app: App) {
     }
   );
 
+  // PUT /api/comandas/:id/gorjeta — atualizar gorjeta da comanda
+  app.fastify.put<{ Params: { id: string }; Body: { gorjeta: number } }>(
+    "/api/comandas/:id/gorjeta",
+    async (request: FastifyRequest<{ Params: { id: string }; Body: { gorjeta: number } }>, reply: FastifyReply) => {
+      try {
+        const session = await customRequireAuth(app, request, reply);
+        if (!session) return;
+        const restauranteId = requireTenant(session);
+        const comanda = await app.db.select().from(schema.comandas).where(and(eq(schema.comandas.id, request.params.id), eq(schema.comandas.restauranteId, restauranteId)));
+        if (!comanda.length) return reply.code(404).send({ error: "Comanda não encontrada" });
+        if (comanda[0].status !== "aberta") return reply.code(400).send({ error: "Comanda não está aberta" });
+        const gorjeta = Math.max(0, (request.body as any)?.gorjeta || 0);
+        const subtotal = parseFloat(comanda[0].subtotal || comanda[0].total || "0");
+        const novoTotal = subtotal + gorjeta;
+        await app.db.update(schema.comandas).set({ total: novoTotal.toString(), gorjeta: gorjeta.toString() }).where(eq(schema.comandas.id, request.params.id));
+        return reply.code(200).send({ subtotal, gorjeta, total: novoTotal });
+      } catch (err) {
+        return reply.code(500).send({ error: "Erro interno" });
+      }
+    }
+  );
+
   // POST /api/comandas/:id/fechar - Close and archive a comanda
   app.fastify.post<{ Params: { id: string }; Body: FecharComandaBody }>(
     "/api/comandas/:id/fechar",
