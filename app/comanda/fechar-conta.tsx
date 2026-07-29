@@ -57,8 +57,7 @@ export default function FecharContaScreen() {
   const subtotal = pedidos.reduce((s: number, p: any) => s + parseFloat(p.precoUnitario || p.preco_unitario || "0") * (p.quantidade || 1), 0);
   const gorjetaValue = gorjetaMode === "10" ? subtotal * 0.1 : gorjetaMode === "custom" ? Math.max(0, parseFloat(gorjetaInput.replace(",", ".")) || 0) : 0;
   const totalFinal = subtotal + gorjetaValue;
-  const comandaTotal = parseFloat(comanda?.total || "0");
-  const restante = comandaTotal - totalPago;
+  const restante = totalFinal - totalPago;
   const valorPorPessoa = dividir && numPessoas > 1 ? Math.ceil(restante / numPessoas * 100) / 100 : restante;
   const valorPessoaAtual = dividir && divisaoResult?.divisao ? (divisaoResult.divisao[pessoaAtual]?.total_a_pagar || divisaoResult.divisao[pessoaAtual]?.valor || valorPorPessoa) : restante;
 
@@ -205,7 +204,7 @@ export default function FecharContaScreen() {
             <View><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total com gorjeta</Text>{gorjetaValue > 0 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Gorjeta: {formatCurrency(gorjetaValue)}</Text>}</View>
             <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.primary }}>{formatCurrency(totalFinal)}</Text>
           </View>
-          <Pressable onPress={() => setEtapa("divisao")} style={btnPrimary}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Próximo: Divisão</Text></Pressable>
+          <Pressable onPress={async () => { if (gorjetaValue > 0) { try { await apiPost("/api/comandas/" + id + "/gorjeta", { gorjeta: gorjetaValue }); } catch(e) {} } setEtapa("divisao"); }} style={btnPrimary}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Próximo: Divisão</Text></Pressable>
         </>)}
 
         {etapa === "divisao" && (<>
