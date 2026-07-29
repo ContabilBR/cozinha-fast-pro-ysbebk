@@ -14,6 +14,8 @@ import { user } from "./auth-schema.js";
 // Enums
 export const mesaStatusEnum = pgEnum("mesa_status", ["disponivel", "ocupada", "reservada"]);
 export const comandaStatusEnum = pgEnum("comanda_status", ["aberta", "fechada", "cancelada"]);
+export const tipoComandaEnum = pgEnum("tipo_comanda", ["mesa", "delivery", "balcao"]);
+export const entregaStatusEnum = pgEnum("entrega_status", ["pendente", "preparando", "saiu_entrega", "entregue", "cancelada"]);
 export const pedidoStatusEnum = pgEnum("pedido_status", [
   "pendente",
   "em_preparo",
@@ -71,7 +73,8 @@ export const pratos = pgTable("pratos", {
 // Comandas (Orders/Bills)
 export const comandas = pgTable("comandas", {
   id: uuid("id").primaryKey().defaultRandom(),
-  mesaId: uuid("mesa_id").notNull().references(() => mesas.id, { onDelete: "restrict" }),
+  mesaId: uuid("mesa_id").references(() => mesas.id, { onDelete: "restrict" }),
+  tipo: tipoComandaEnum("tipo").default("mesa").notNull(),
   mesaNumero: integer("mesa_numero"),
   garcomId: text("garcom_id"),
   status: comandaStatusEnum("status").default("aberta").notNull(),
@@ -225,6 +228,28 @@ export const notasFiscais = pgTable("notas_fiscais", {
   protocolo: text("protocolo"),
   mensagemSefaz: text("mensagem_sefaz"),
   motivoCancelamento: text("motivo_cancelamento"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+export const entregas = pgTable("entregas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  comandaId: uuid("comanda_id").notNull().references(() => comandas.id, { onDelete: "cascade" }),
+  status: entregaStatusEnum("status").default("pendente").notNull(),
+  clienteNome: text("cliente_nome").notNull(),
+  clienteTelefone: text("cliente_telefone").notNull(),
+  endereco: text("endereco").notNull(),
+  complemento: text("complemento"),
+  bairro: text("bairro"),
+  cidade: text("cidade"),
+  cep: text("cep"),
+  referencia: text("referencia"),
+  taxaEntrega: numeric("taxa_entrega", { precision: 10, scale: 2 }).default("0").notNull(),
+  tempoEstimado: integer("tempo_estimado"),
+  entregadorNome: text("entregador_nome"),
+  entregadorTelefone: text("entregador_telefone"),
+  observacao: text("observacao"),
+  saiuEm: timestamp("saiu_em", { withTimezone: true }),
+  entregueEm: timestamp("entregue_em", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
