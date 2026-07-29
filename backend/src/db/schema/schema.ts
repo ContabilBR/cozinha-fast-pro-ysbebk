@@ -23,6 +23,7 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
 ]);
 export const formaPagamentoEnum = pgEnum("forma_pagamento", ["pix", "dinheiro", "cartao_credito", "cartao_debito"]);
 export const pagamentoStatusEnum = pgEnum("pagamento_status", ["pendente", "confirmado", "cancelado"]);
+export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
 
 // Mesas (Tables)
 export const mesas = pgTable("mesas", {

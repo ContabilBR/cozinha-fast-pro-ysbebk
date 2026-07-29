@@ -204,6 +204,20 @@
       "when": 1785282168893,
       "tag": "20260728234248_curved_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1785286800000,
+      "tag": "20260729120000_add_subscription_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785283469358,
+      "tag": "20260729000429_broken_eternity",
+      "breakpoints": true
     }
   ]
 }
