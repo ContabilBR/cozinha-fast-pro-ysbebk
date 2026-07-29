@@ -731,26 +731,12 @@ export default function ComandaDetailScreen() {
 
           {canFechar ? (
             <>
-              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
-                <Pressable onPress={() => router.push({ pathname: "/comanda/pagamento", params: { id } })} style={{ flex: 1, backgroundColor: "#22C55E", borderRadius: 10, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <Ionicons name="card-outline" size={18} color="white" />
-                  <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>Pagar</Text>
-                </Pressable>
-                <Pressable onPress={() => router.push({ pathname: "/comanda/divisao", params: { id } })} style={{ flex: 1, backgroundColor: "#3B82F6", borderRadius: 10, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <Ionicons name="people-outline" size={18} color="white" />
-                  <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>Dividir</Text>
+              <View style={{ paddingHorizontal: 0, marginBottom: 8 }}>
+                <Pressable onPress={() => router.push({ pathname: "/comanda/fechar-conta", params: { id } })} style={{ backgroundColor: "#E8521A", borderRadius: 12, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <Ionicons name="receipt-outline" size={20} color="white" />
+                  <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Fechar conta</Text>
                 </Pressable>
               </View>
-              <Pressable
-                onPress={() => {
-                  console.log('[ComandaDetail][Manager] Fechar Comanda pressed', { comandaId: id });
-                  handleFecharComanda();
-                }}
-                style={mgStyles.fecharBtn}
-              >
-                <Ionicons name="checkmark-circle-outline" size={20} color="white" style={{ marginRight: 8 }} />
-                <Text style={mgStyles.fecharBtnText}>Fechar Comanda</Text>
-              </Pressable>
             </>
           ) : null}
         </View>
@@ -1001,23 +987,12 @@ export default function ComandaDetailScreen() {
             {/* Fechar Comanda button inside pedido tab */}
             {canFechar ? (
               <>
-                <View style={{ flexDirection: "row", gap: 8, marginTop: 16, marginBottom: 8 }}>
-                  <Pressable onPress={() => router.push({ pathname: "/comanda/pagamento", params: { id } })} style={{ flex: 1, backgroundColor: "#22C55E", borderRadius: 10, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <Ionicons name="card-outline" size={18} color="white" />
-                    <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>Pagar</Text>
-                  </Pressable>
-                  <Pressable onPress={() => router.push({ pathname: "/comanda/divisao", params: { id } })} style={{ flex: 1, backgroundColor: "#3B82F6", borderRadius: 10, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <Ionicons name="people-outline" size={18} color="white" />
-                    <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>Dividir</Text>
+                <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+                  <Pressable onPress={() => router.push({ pathname: "/comanda/fechar-conta", params: { id } })} style={{ backgroundColor: "#E8521A", borderRadius: 12, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Ionicons name="receipt-outline" size={20} color="white" />
+                    <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Fechar conta</Text>
                   </Pressable>
                 </View>
-                <Pressable
-                  onPress={handleFecharComanda}
-                  style={styles.fecharBtn}
-                >
-                  <Ionicons name="checkmark-circle-outline" size={20} color="white" style={{ marginRight: 8 }} />
-                  <Text style={styles.fecharBtnText}>Fechar Comanda</Text>
-                </Pressable>
               </>
             ) : null}
           </ScrollView>

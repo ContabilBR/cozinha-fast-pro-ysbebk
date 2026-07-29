@@ -268,5 +268,3 @@ export default function FecharContaScreen() {
     </View>
   );
 }
-
-Do not alter any other file.
