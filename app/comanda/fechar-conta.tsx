@@ -240,7 +240,7 @@ export default function FecharContaScreen() {
 
         {etapa === "pagamento" && (<>
           <View style={cardStyle}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total da comanda</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(comandaTotal)}</Text></View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total da comanda</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(totalFinal)}</Text></View>
             {gorjetaValue > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Gorjeta (no fechamento)</Text><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>{formatCurrency(gorjetaValue)}</Text></View>}
             {gorjetaValue > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Gorjeta</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(gorjetaValue)}</Text></View>}
             {totalPago > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: "#22C55E" }}>Já pago</Text><Text style={{ fontSize: 13, color: "#22C55E" }}>{formatCurrency(totalPago)}</Text></View>}
