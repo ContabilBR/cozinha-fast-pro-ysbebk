@@ -86,7 +86,7 @@ export default function FecharContaScreen() {
     setSaving(true);
     try {
       const res = await apiPost("/api/comandas/" + id + "/pagamentos", {
-        forma_pagamento: forma, valor, troco: forma === "dinheiro" ? parseFloat(trocoInput.replace(",", ".")) || 0 : 0,
+        forma_pagamento: forma, valor, troco: forma === "dinheiro" ? parseFloat(trocoInput.replace(",", ".")) || 0 : 0, gorjeta: gorjetaValue,
       });
       if (forma === "pix" && res.pagamento?.pixQrCodeBase64) {
         setPixData(res.pagamento);
