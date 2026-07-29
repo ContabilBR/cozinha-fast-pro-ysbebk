@@ -194,16 +194,22 @@ export const pagamentosHistorico = pgTable("pagamentos_historico", {
 });
 
 // Restaurante (Restaurant information)
+export const planoEnum = pgEnum("plano", ["trial", "basico", "profissional", "enterprise"]);
+export const assinaturaStatusEnum = pgEnum("assinatura_status", ["trial", "ativa", "inadimplente", "cancelada", "expirada"]);
+
 export const restaurante = pgTable("restaurante", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
   filial: text("filial"),
   endereco: text("endereco"),
   cnpj: text("cnpj"),
+  plano: planoEnum("plano").default("trial").notNull(),
+  assinaturaStatus: assinaturaStatusEnum("assinatura_status").default("trial").notNull(),
+  assinaturaAsaasId: text("assinatura_asaas_id"),
+  trialExpiraEm: timestamp("trial_expira_em", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
-export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
 
 export const notasFiscais = pgTable("notas_fiscais", {
   id: uuid("id").primaryKey().defaultRandom(),
