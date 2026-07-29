@@ -159,7 +159,7 @@ export function registerPagamentoRoutes(app: App) {
             pixQrCodeBase64 = qr.encodedImage;
           } catch (err) {
             app.logger.error({ error: (err as any).message }, "Erro ao criar cobrança Pix no Asaas");
-            return reply.code(502).send({ error: "Erro ao gerar QR Code Pix. Verifique se a chave ASAAS_API_KEY está configurada." });
+            return reply.code(502).send({ error: "Erro ao gerar QR Code Pix: " + (err as any).message });
           }
         }
 
