@@ -342,7 +342,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  // ==================== Debug Usuarios ====================
+  // ==================== Debug Endpoints ====================
   test("Get debug usuarios with masked passwords", async () => {
     const res = await api("/api/debug/usuarios");
     await expectStatus(res, 200);
@@ -358,6 +358,16 @@ describe("API Integration Tests", () => {
       expect(usuario.senha_hash).toBeDefined();
       expect(usuario.role).toBeDefined();
     }
+  });
+
+  test("Get debug environment variables", async () => {
+    const res = await api("/api/debug/env");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.env_names).toBeDefined();
+    expect(Array.isArray(data.env_names)).toBe(true);
+    expect(data.asaas_api_key_set).toBeDefined();
+    expect(data.node_env).toBeDefined();
   });
 
   // ==================== Users CRUD ====================
