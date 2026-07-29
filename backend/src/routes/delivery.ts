@@ -145,6 +145,48 @@ export function registerDeliveryRoutes(app: App) {
   // GET /api/delivery/pedidos/:id — detalhes de um pedido delivery
   app.fastify.get<{ Params: { id: string } }>(
     "/api/delivery/pedidos/:id",
+    {
+      schema: {
+        description: "Get delivery order details by ID",
+        tags: ["delivery"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              entrega: { type: "object" },
+              comanda: { type: "object" },
+              itens: { type: "array" },
+              pagamentos: { type: "array" },
+            },
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);
@@ -169,6 +211,60 @@ export function registerDeliveryRoutes(app: App) {
   // PUT /api/delivery/pedidos/:id/status — atualizar status da entrega
   app.fastify.put<{ Params: { id: string }; Body: { status: string; entregador_nome?: string; entregador_telefone?: string } }>(
     "/api/delivery/pedidos/:id/status",
+    {
+      schema: {
+        description: "Update delivery order status",
+        tags: ["delivery"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        body: {
+          type: "object",
+          properties: {
+            status: { type: "string", enum: ["pendente", "preparando", "saiu_entrega", "entregue", "cancelada"] },
+            entregador_nome: { type: "string" },
+            entregador_telefone: { type: "string" },
+          },
+          required: ["status"],
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              entrega: { type: "object" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Params: { id: string }; Body: { status: string; entregador_nome?: string; entregador_telefone?: string } }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);

@@ -19,6 +19,7 @@ import { registerRestauranteSignupRoutes } from './routes/restaurante-signup.js'
 import { registerPagamentoRoutes } from './routes/pagamentos.js';
 import { registerFiscalRoutes } from './routes/fiscal.js';
 import { registerAssinaturaRoutes } from './routes/assinatura.js';
+import { registerAdminRoutes } from './routes/admin.js';
 import { registerLgpdRoutes } from './routes/lgpd.js';
 import { registerDeliveryRoutes } from './routes/delivery.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
@@ -102,6 +103,7 @@ registerRestauranteSignupRoutes(app);
 registerPagamentoRoutes(app);
 registerFiscalRoutes(app);
 registerAssinaturaRoutes(app);
+registerAdminRoutes(app);
 registerLgpdRoutes(app);
 registerDeliveryRoutes(app);
 registerRealtimeRoutes(app);
