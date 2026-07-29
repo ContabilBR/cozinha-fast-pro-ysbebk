@@ -20,6 +20,7 @@ function getTabsForRole(role: string): TabBarItem[] {
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
         { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "list-alt", label: "Pedidos" },
+        { name: "delivery", route: "/(tabs)/(delivery)", icon: "delivery-dining", label: "Delivery" },
         perfilTab,
       ];
     case "cozinheiro":
@@ -36,6 +37,7 @@ function getTabsForRole(role: string): TabBarItem[] {
         { name: "dashboard", route: "/(tabs)/(dashboard)", icon: "bar-chart", label: "Dashboard" },
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
         { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
+        { name: "delivery", route: "/(tabs)/(delivery)", icon: "delivery-dining", label: "Delivery" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         { name: "gestao", route: "/(tabs)/(gestao)", icon: "settings", label: "Gestão" },
         perfilTab,
