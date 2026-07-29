@@ -1,3 +1,4 @@
+// force rebuild v2
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput, Image } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
