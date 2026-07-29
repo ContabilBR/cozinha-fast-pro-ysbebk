@@ -83,9 +83,10 @@ export function registerRestauranteSignupRoutes(app: App) {
 
         const result = await (app.db as any).transaction(async (tx: any) => {
           // 1. Insert restaurante
+          const trialExpiraEm = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
           const [newRestaurante] = await tx
             .insert(schema.restaurante)
-            .values({ nome, cnpj })
+            .values({ nome, cnpj, plano: "trial", assinaturaStatus: "trial", trialExpiraEm })
             .returning();
 
           app.logger.info({ restauranteId: newRestaurante.id }, "Restaurante created");
