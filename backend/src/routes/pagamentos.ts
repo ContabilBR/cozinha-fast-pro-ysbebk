@@ -135,9 +135,18 @@ export function registerPagamentoRoutes(app: App) {
         const totalComanda = parseFloat(comanda[0].total || "0");
         const restante = totalComanda - totalPago;
 
+        // Se veio gorjeta no body, atualizar total da comanda
+        const gorjetaBody = (request.body as any).gorjeta || 0;
+        let totalComandaFinal = totalComanda;
+        if (gorjetaBody > 0 && totalComanda > 0) {
+          totalComandaFinal = totalComanda + gorjetaBody;
+          await db.update(schema.comandas).set({ total: totalComandaFinal.toString() }).where(eq(schema.comandas.id, request.params.id));
+        }
+
         // Only validate overpayment if comanda has a total
-        if (totalComanda > 0 && valor > restante + 0.01) {
-          return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restante.toFixed(2)}` });
+        const restanteFinal = totalComandaFinal - totalPago;
+        if (totalComandaFinal > 0 && valor > restanteFinal + 0.01) {
+          return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restanteFinal.toFixed(2)}` });
         }
 
         // Dinheiro e cartão são confirmados imediatamente. Pix vai para Asaas.
@@ -181,7 +190,7 @@ export function registerPagamentoRoutes(app: App) {
 
         return reply.code(201).send({
           pagamento,
-          resumo: { total_comanda: totalComanda, total_pago: totalPago + (statusPagamento === "confirmado" ? valor : 0), restante: restante - (statusPagamento === "confirmado" ? valor : 0) },
+          resumo: { total_comanda: totalComandaFinal, total_pago: totalPago + (statusPagamento === "confirmado" ? valor : 0), restante: restanteFinal - (statusPagamento === "confirmado" ? valor : 0) },
         });
       } catch (err) {
         app.logger.error({ error: (err as any).message }, "Erro ao registrar pagamento");
@@ -193,6 +202,11 @@ export function registerPagamentoRoutes(app: App) {
   // GET /api/comandas/:id/pagamentos — listar pagamentos de uma comanda
   app.fastify.get<{ Params: { id: string } }>(
     "/api/comandas/:id/pagamentos",
+    {
+      schema: {
+        params: { type: "object", properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+      },
+    },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);
