@@ -113,3 +113,4 @@ if (process.env.NODE_ENV !== 'production' && process.env.SEED_ENABLED === 'true'
 
 await app.run();
 app.logger.info('Application running');
+

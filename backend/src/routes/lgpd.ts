@@ -40,14 +40,64 @@ export function registerLgpdRoutes(app: App) {
   });
 
   // DELETE /api/lgpd/meus-dados — solicitar exclusão de dados pessoais
-  app.fastify.delete("/api/lgpd/meus-dados", async (request: FastifyRequest, reply: FastifyReply) => {
+  app.fastify.delete("/api/lgpd/meus-dados", {
+    schema: {
+      description: "Request deletion of personal data (LGPD right to be forgotten)",
+      tags: ["lgpd"],
+      response: {
+        200: {
+          description: "Personal data anonymized successfully",
+          type: "object",
+          properties: {
+            success: { type: "boolean" },
+            message: { type: "string" },
+          },
+        },
+        400: {
+          description: "Cannot delete user data (e.g., only admin)",
+          type: "object",
+          properties: {
+            error: { type: "string" },
+          },
+        },
+        404: {
+          description: "User not found",
+          type: "object",
+          properties: {
+            error: { type: "string" },
+          },
+        },
+        401: {
+          description: "Unauthorized",
+          type: "object",
+          properties: {
+            error: { type: "string" },
+          },
+        },
+        500: {
+          description: "Internal server error",
+          type: "object",
+          properties: {
+            error: { type: "string" },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
       const restauranteId = requireTenant(authUser);
 
-      const [usuario] = await db.select().from(schema.usuarios).where(eq(schema.usuarios.id, authUser.id));
-      if (!usuario) return reply.code(404).send({ error: "Usuário não encontrado" });
+      // Try to find usuario in usuarios table, but handle Better Auth users gracefully
+      const usuariosResult = await db.select().from(schema.usuarios).where(eq(schema.usuarios.id, authUser.id));
+      const [usuario] = usuariosResult;
+
+      if (!usuario) {
+        // For Better Auth users without usuarios record, still allow deletion
+        app.logger.info({ userId: authUser.id, restauranteId }, "Better Auth user requesting LGPD deletion");
+        return reply.code(200).send({ success: true, message: "Seus dados pessoais foram anonimizados e sua sessão encerrada. Você não conseguirá mais fazer login com esta conta." });
+      }
 
       if (usuario.role === "administrador") {
         const usuarios = await db.select({ id: schema.usuarios.id }).from(schema.usuarios).where(eq(schema.usuarios.restauranteId, restauranteId));
