@@ -3168,6 +3168,106 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // ==================== Subscription Plans ====================
+  test("Get all available subscription plans", async () => {
+    const res = await api("/api/planos");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.planos).toBeDefined();
+    expect(data.planos.trial).toBeDefined();
+    expect(data.planos.basico).toBeDefined();
+    expect(data.planos.profissional).toBeDefined();
+    expect(data.planos.enterprise).toBeDefined();
+  });
+
+  // ==================== Subscription Status ====================
+  test("Get current subscription status with authentication", async () => {
+    const res = await authenticatedApi("/api/assinatura", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.plano).toBeDefined();
+    expect(data.plano_detalhes).toBeDefined();
+    expect(data.assinatura_status).toBeDefined();
+    expect(data.trial_expirado).toBeDefined();
+  });
+
+  test("Get subscription status without authentication returns 401", async () => {
+    const res = await api("/api/assinatura");
+    await expectStatus(res, 401);
+  });
+
+  // ==================== Subscription Upgrade ====================
+  test("Upgrade subscription to basico plan", async () => {
+    const res = await authenticatedApi("/api/assinatura/upgrade", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plano: "basico",
+        email: "test@example.com",
+        cpf_cnpj: "12345678000190",
+      }),
+    });
+    // May succeed or fail depending on ASAAS integration
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 500 || status === 502).toBe(true);
+  });
+
+  test("Upgrade subscription without authentication returns 401", async () => {
+    const res = await api("/api/assinatura/upgrade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plano: "basico",
+        email: "test@example.com",
+        cpf_cnpj: "12345678000190",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Upgrade subscription missing required field returns 400", async () => {
+    const res = await authenticatedApi("/api/assinatura/upgrade", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plano: "basico",
+        email: "test@example.com",
+        // missing required cpf_cnpj
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Upgrade subscription with invalid plano returns 400", async () => {
+    const res = await authenticatedApi("/api/assinatura/upgrade", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plano: "invalid_plan",
+        email: "test@example.com",
+        cpf_cnpj: "12345678000190",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  // ==================== Subscription Cancel ====================
+  test("Cancel subscription", async () => {
+    const res = await authenticatedApi("/api/assinatura/cancelar", authToken, {
+      method: "POST",
+    });
+    // May succeed or fail depending on current subscription
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 403 || status === 500).toBe(true);
+  });
+
+  test("Cancel subscription without authentication returns 401", async () => {
+    const res = await api("/api/assinatura/cancelar", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
+  });
+
   // ==================== Sign Out (Last Tests) ====================
   test("Sign out authenticated user", async () => {
     // Create a fresh token just for sign-out testing

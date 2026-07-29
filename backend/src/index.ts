@@ -18,6 +18,7 @@ import { registerRestauranteRoutes } from './routes/restaurante.js';
 import { registerRestauranteSignupRoutes } from './routes/restaurante-signup.js';
 import { registerPagamentoRoutes } from './routes/pagamentos.js';
 import { registerFiscalRoutes } from './routes/fiscal.js';
+import { registerAssinaturaRoutes } from './routes/assinatura.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { seedDatabase } from './db/seed.js';
 
@@ -98,6 +99,7 @@ registerRestauranteRoutes(app);
 registerRestauranteSignupRoutes(app);
 registerPagamentoRoutes(app);
 registerFiscalRoutes(app);
+registerAssinaturaRoutes(app);
 registerRealtimeRoutes(app);
 
 // Seed database on startup (only if not in production and explicitly enabled)
