@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput, Image } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,7 +79,7 @@ export default function PagamentoScreen() {
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, alignItems: "center" }}>
           <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 24, alignItems: "center", borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, width: "100%" }}>
-            <Ionicons name="qr-code" size={120} color={COLORS.primary} />
+            <Image source={{ uri: "data:image/png;base64," + pixData.pixQrCodeBase64 }} style={{ width: 220, height: 220, borderRadius: 12 }} />
             <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 16, textAlign: "center" }}>Escaneie o QR Code ou copie o código abaixo</Text>
             <View style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 8, padding: 12, marginTop: 12, width: "100%" }}>
               <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: "center" }} numberOfLines={3}>{pixData.pixQrCode || "Código Pix"}</Text>
