@@ -8,7 +8,7 @@ import * as schema from "../db/schema/schema.js";
 const ASAAS_BASE_URL = process.env.ASAAS_ENV === "production" ? "https://api.asaas.com/api/v3" : "https://sandbox.asaas.com/api/v3";
 
 function getAsaasApiKey(): string {
-  const key = process.env.ASAAS_API_KEY;
+  const key = process.env.ASAAS_API_KEY || process.env.SPECULAR_SECRET_ASAAS_API_KEY;
   if (!key) throw new Error("ASAAS_API_KEY não configurada");
   return key;
 }
