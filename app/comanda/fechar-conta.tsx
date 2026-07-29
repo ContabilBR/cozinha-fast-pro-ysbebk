@@ -57,7 +57,8 @@ export default function FecharContaScreen() {
   const subtotal = pedidos.reduce((s: number, p: any) => s + parseFloat(p.precoUnitario || p.preco_unitario || "0") * (p.quantidade || 1), 0);
   const gorjetaValue = gorjetaMode === "10" ? subtotal * 0.1 : gorjetaMode === "custom" ? Math.max(0, parseFloat(gorjetaInput.replace(",", ".")) || 0) : 0;
   const totalFinal = subtotal + gorjetaValue;
-  const restante = totalFinal - totalPago;
+  const comandaTotal = parseFloat(comanda?.total || "0");
+  const restante = comandaTotal - totalPago;
   const valorPorPessoa = dividir && numPessoas > 1 ? Math.ceil(restante / numPessoas * 100) / 100 : restante;
   const valorPessoaAtual = dividir && divisaoResult?.divisao ? (divisaoResult.divisao[pessoaAtual]?.total_a_pagar || divisaoResult.divisao[pessoaAtual]?.valor || valorPorPessoa) : restante;
 
@@ -240,7 +241,8 @@ export default function FecharContaScreen() {
 
         {etapa === "pagamento" && (<>
           <View style={cardStyle}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(totalFinal)}</Text></View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total da comanda</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(comandaTotal)}</Text></View>
+            {gorjetaValue > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Gorjeta (no fechamento)</Text><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>{formatCurrency(gorjetaValue)}</Text></View>}
             {gorjetaValue > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Gorjeta</Text><Text style={{ fontSize: 13, color: COLORS.text }}>{formatCurrency(gorjetaValue)}</Text></View>}
             {totalPago > 0 && <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}><Text style={{ fontSize: 13, color: "#22C55E" }}>Já pago</Text><Text style={{ fontSize: 13, color: "#22C55E" }}>{formatCurrency(totalPago)}</Text></View>}
             <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 0.5, borderTopColor: COLORS.surfaceSecondary }}>
