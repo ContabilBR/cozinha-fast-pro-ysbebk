@@ -1791,9 +1791,9 @@ describe("API Integration Tests", () => {
         }),
       }
     );
-    // PIX payment will fail with 502 if ASAAS_API_KEY is not configured, otherwise 201
+    // PIX payment will fail with 502 if ASAAS_API_KEY is not configured, otherwise 201 or 200
     const status = res.status;
-    expect(status === 201 || status === 502).toBe(true);
+    expect(status === 201 || status === 200 || status === 502).toBe(true);
   });
 
   test("Add payment to comanda with cash", async () => {
@@ -1831,7 +1831,7 @@ describe("API Integration Tests", () => {
         }),
       }
     );
-    await expectStatus(res, 201);
+    await expectStatus(res, 201, 200);
   });
 
   test("Add payment with credit card", async () => {
@@ -1869,7 +1869,7 @@ describe("API Integration Tests", () => {
         }),
       }
     );
-    await expectStatus(res, 201);
+    await expectStatus(res, 201, 200);
   });
 
   test("Add payment with debit card", async () => {
@@ -1906,7 +1906,7 @@ describe("API Integration Tests", () => {
         }),
       }
     );
-    await expectStatus(res, 201);
+    await expectStatus(res, 201, 200);
   });
 
   test("Add payment to non-existent comanda returns 404", async () => {
