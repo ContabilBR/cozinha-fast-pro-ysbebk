@@ -21,9 +21,9 @@ async function asaasRequest(method: string, path: string, body?: any): Promise<a
 
 async function getOrCreateCustomer(restauranteId: string, restauranteNome: string): Promise<string> {
   const ref = "cozinha_" + restauranteId.slice(0, 8);
-  const search = await asaasReq("GET", "/customers?externalReference=" + ref);
+  const search = await asaasRequest("GET", "/customers?externalReference=" + ref);
   if (search.data && search.data.length > 0) return search.data[0].id;
-  const customer = await asaasReq("POST", "/customers", { name: "Consumidor - " + restauranteNome, cpfCnpj: "07615312701", externalReference: ref });
+  const customer = await asaasRequest("POST", "/customers", { name: "Consumidor - " + restauranteNome, cpfCnpj: "07615312701", externalReference: ref });
   return customer.id;
 }
 
