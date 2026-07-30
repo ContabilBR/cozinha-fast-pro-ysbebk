@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { apiGet, apiPost } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
+import { printBluetooth, formatReceipt } from "@/utils/printer";
 
 const ETAPAS = ["resumo", "gorjeta", "divisao", "pagamento"] as const;
 type Etapa = typeof ETAPAS[number];
@@ -212,7 +213,19 @@ export default function FecharContaScreen() {
             <View><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total com gorjeta</Text>{gorjetaValue > 0 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Gorjeta: {formatCurrency(gorjetaValue)}</Text>}</View>
             <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.primary }}>{formatCurrency(totalFinal)}</Text>
           </View>
-          <Pressable onPress={async () => { const linhas = pedidos.filter((p: any) => p.status !== "cancelado").map((p: any) => { const nome = p.pratoNome || p.prato_nome || p.prato?.nome || "Item"; const preco = parseFloat(p.precoUnitario || p.preco_unitario || "0"); return p.quantidade + "x " + nome + " - " + formatCurrency(preco * (p.quantidade || 1)); }); const texto = "CONFERÊNCIA DE CONTA\n" + (comanda?.mesa_numero ? "Mesa " + comanda.mesa_numero + "\n" : "") + "━━━━━━━━━━━━━━━━━━\n" + linhas.join("\n") + "\n━━━━━━━━━━━━━━━━━━\nSubtotal: " + formatCurrency(subtotal) + (gorjetaValue > 0 ? "\nGorjeta: " + formatCurrency(gorjetaValue) : "") + "\nTOTAL: " + formatCurrency(totalFinal) + "\n━━━━━━━━━━━━━━━━━━\nCozinha Fast Pro"; await Share.share({ message: texto }); }} style={{ borderWidth: 1, borderColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 10 }}><Ionicons name="print-outline" size={20} color={COLORS.primary} /><Text style={{ color: COLORS.primary, fontSize: 15, fontWeight: "600" }}>Imprimir conferência</Text></Pressable>
+          <Pressable onPress={async () => {
+            const itensRecibo = pedidos.filter((p: any) => p.status !== "cancelado").map((p: any) => ({
+              quantidade: p.quantidade || 1,
+              nome: p.pratoNome || p.prato_nome || p.prato?.nome || "Item",
+              preco: parseFloat(p.precoUnitario || p.preco_unitario || "0") * (p.quantidade || 1),
+            }));
+            const texto = formatReceipt({ restaurante: comanda?.restaurante_nome, mesa: comanda?.mesa_numero, itens: itensRecibo, subtotal, gorjeta: gorjetaValue, total: totalFinal });
+            const imprimiu = await printBluetooth(texto);
+            if (!imprimiu) { await Share.share({ message: texto }); }
+          }} style={{ borderWidth: 1, borderColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 10 }}>
+            <Ionicons name="print-outline" size={20} color={COLORS.primary} />
+            <Text style={{ color: COLORS.primary, fontSize: 15, fontWeight: "600" }}>Imprimir conferência</Text>
+          </Pressable>
           <Pressable onPress={() => setEtapa("divisao")} style={btnPrimary}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Próximo: Divisão</Text></Pressable>
         </>)}
 
