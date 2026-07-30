@@ -171,12 +171,20 @@ export default function FecharContaScreen() {
         {etapa === "resumo" && (<>
           <View style={cardStyle}>
             <Text style={labelStyle}>Itens do pedido</Text>
-            {pedidos.filter((p: any) => p.status !== "cancelado").map((p: any, i: number) => (
-              <View key={p.id || i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: i < pedidos.length - 1 ? 0.5 : 0, borderBottomColor: COLORS.surfaceSecondary }}>
-                <Text style={{ fontSize: 14, color: COLORS.text, flex: 1 }}>{p.quantidade}x {p.pratoNome || p.prato_nome || "Item"}</Text>
-                <Text style={{ fontSize: 14, fontWeight: "500", color: COLORS.text }}>{formatCurrency(parseFloat(p.precoUnitario || p.preco_unitario || "0") * (p.quantidade || 1))}</Text>
-              </View>
-            ))}
+            {pedidos.filter((p: any) => p.status !== "cancelado").map((p: any, i: number) => {
+              const nome = p.pratoNome || p.prato_nome || p.prato?.nome || "Item";
+              const preco = parseFloat(p.precoUnitario || p.preco_unitario || "0");
+              return (
+                <View key={p.id || i} style={{ paddingVertical: 8, borderBottomWidth: i < pedidos.length - 1 ? 0.5 : 0, borderBottomColor: COLORS.surfaceSecondary }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 15, color: COLORS.text, flex: 1 }}>{p.quantidade}x {nome}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.text }}>{formatCurrency(preco * (p.quantidade || 1))}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: COLORS.textTertiary, marginTop: 2 }}>{formatCurrency(preco)} cada</Text>
+                  {p.observacao && <Text style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic", marginTop: 2 }}>{p.observacao}</Text>}
+                </View>
+              );
+            })}
           </View>
           <View style={{ ...cardStyle, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={{ fontSize: 18, fontWeight: "600", color: COLORS.text }}>Subtotal</Text>
