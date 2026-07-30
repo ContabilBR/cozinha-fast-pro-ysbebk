@@ -11,20 +11,12 @@ export async function loadPrinterModule() {
 }
 
 export async function printBluetooth(payload: string): Promise<boolean> {
-  await loadPrinterModule();
-  if (!ThermalPrinterModule) {
-    Alert.alert("Impressora", "Módulo de impressora não disponível. Use um build de desenvolvimento.");
-    return false;
-  }
   try {
-    await ThermalPrinterModule.printBluetooth({ payload, printerWidthMM: 58 });
+    const mod = require("react-native-thermal-printer")?.default;
+    if (!mod || !mod.printBluetooth) return false;
+    await mod.printBluetooth({ payload, printerWidthMM: 58 });
     return true;
   } catch (err: any) {
-    if (err?.message?.includes("No bluetooth device")) {
-      Alert.alert("Impressora", "Nenhuma impressora Bluetooth pareada. Pareie uma impressora nas configurações do celular.");
-    } else {
-      Alert.alert("Erro de impressão", err?.message || "Erro desconhecido");
-    }
     return false;
   }
 }
