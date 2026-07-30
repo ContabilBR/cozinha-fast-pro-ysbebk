@@ -204,7 +204,7 @@ export default function FecharContaScreen() {
             <View><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>Total com gorjeta</Text>{gorjetaValue > 0 && <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>Gorjeta: {formatCurrency(gorjetaValue)}</Text>}</View>
             <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.primary }}>{formatCurrency(totalFinal)}</Text>
           </View>
-          <Pressable onPress={async () => { if (gorjetaValue > 0) { try { await apiPost("/api/comandas/" + id + "/gorjeta", { gorjeta: gorjetaValue }); } catch(e) {} } setEtapa("divisao"); }} style={btnPrimary}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Próximo: Divisão</Text></Pressable>
+          <Pressable onPress={() => setEtapa("divisao")} style={btnPrimary}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Próximo: Divisão</Text></Pressable>
         </>)}
 
         {etapa === "divisao" && (<>
