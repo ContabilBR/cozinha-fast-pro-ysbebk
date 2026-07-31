@@ -1,10 +1,11 @@
-import { Platform, Alert } from "react-native";
+import { Alert } from "react-native";
 
 let ThermalPrinterModule: any = null;
 
 export async function loadPrinterModule() {
   try {
-    ThermalPrinterModule = require("react-native-thermal-printer").default;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ThermalPrinterModule = (await import("react-native-thermal-printer" as any)).default;
   } catch (e) {
     console.log("Módulo de impressora não disponível");
   }
@@ -12,7 +13,12 @@ export async function loadPrinterModule() {
 
 export async function printBluetooth(payload: string): Promise<boolean> {
   try {
-    const mod = require("react-native-thermal-printer")?.default;
+    let mod: any = null;
+    try {
+      mod = (await import("react-native-thermal-printer" as any)).default;
+    } catch {
+      return false;
+    }
     if (!mod || !mod.printBluetooth) return false;
     await mod.printBluetooth({ payload, printerWidthMM: 58 });
     return true;
@@ -21,7 +27,7 @@ export async function printBluetooth(payload: string): Promise<boolean> {
   }
 }
 
-export function formatReceipt(params: { restaurante?: string; mesa?: number | string; itens: Array<{ quantidade: number; nome: string; preco: number }>; subtotal: number; gorjeta: number; total: number; }): string {
+export function formatReceipt(params: { restaurante?: string; mesa?: number | string; itens: { quantidade: number; nome: string; preco: number }[]; subtotal: number; gorjeta: number; total: number; }): string {
   const lines: string[] = [];
   const w = 32;
   const center = (text: string) => { const pad = Math.max(0, Math.floor((w - text.length) / 2)); return " ".repeat(pad) + text; };
