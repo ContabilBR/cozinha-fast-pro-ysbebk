@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { apiGet, apiDelete } from "@/utils/api";
 import * as FileSystem from "expo-file-system/legacy";
@@ -10,6 +11,7 @@ import * as Sharing from "expo-sharing";
 export default function LgpdScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -42,9 +44,12 @@ export default function LgpdScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Privacidade e Dados</Text>
-        <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>LGPD — seus direitos</Text>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center" }}>
+        <Pressable onPress={() => router.back()} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
+        <View>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Privacidade e Dados</Text>
+          <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>LGPD — seus direitos</Text>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         <View style={cardStyle}>

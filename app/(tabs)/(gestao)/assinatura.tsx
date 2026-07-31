@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput 
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { apiGet, apiPost } from "@/utils/api";
 import { formatCurrency } from "@/utils/helpers";
@@ -13,6 +14,7 @@ const PLANO_COLORS: Record<string, string> = { trial: "#6B7280", basico: "#3B82F
 export default function AssinaturaScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [assinatura, setAssinatura] = useState<any>(null);
   const [planos, setPlanos] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,8 @@ export default function AssinaturaScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center" }}>
+        <Pressable onPress={() => router.back()} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
         <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Assinatura</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>

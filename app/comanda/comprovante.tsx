@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 type ItemRecibo = {
   prato_nome: string;
@@ -119,6 +120,10 @@ export default function ComprovanteScreen() {
 
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom }]}>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center" }}>
+        <Pressable onPress={() => router.back()} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color="#000" /></Pressable>
+        <Text style={{ fontSize: 18, fontWeight: "700" }}>Comprovante</Text>
+      </View>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}

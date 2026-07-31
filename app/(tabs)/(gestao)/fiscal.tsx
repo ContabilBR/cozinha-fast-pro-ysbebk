@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, FlatList, Pressable, RefreshControl, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -22,6 +23,7 @@ export default function FiscalScreen() {
   const [notas, setNotas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
 
   const fetch = useCallback(async () => {
     console.log("[FiscalScreen] Fetching notas fiscais from /api/fiscal/notas");
@@ -38,9 +40,12 @@ export default function FiscalScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Notas Fiscais</Text>
-        <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{notas.length} nota{notas.length !== 1 ? "s" : ""} emitida{notas.length !== 1 ? "s" : ""}</Text>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center" }}>
+        <Pressable onPress={() => router.back()} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
+        <View>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Notas Fiscais</Text>
+          <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{notas.length} nota{notas.length !== 1 ? "s" : ""} emitida{notas.length !== 1 ? "s" : ""}</Text>
+        </View>
       </View>
       {loading ? <View style={{ padding: 16 }}><ActivityIndicator size="large" color={COLORS.primary} /></View> : (
         <FlatList data={notas} keyExtractor={(n) => n.id} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
