@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, FlatList, Pressable, Share, ActivityIndicator } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,17 +6,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { apiGet } from "@/utils/api";
-import { useAuth } from "@/contexts/AuthContext";
 
 export default function QRCodeScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { session } = useAuth();
   const [mesas, setMesas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const restauranteId = (session as any)?.restauranteId || (session as any)?.restaurante_id || "";
+  const [restauranteId, setRestauranteId] = useState("");
+
+  useEffect(() => {
+    apiGet<any>("/api/restaurante").then((d) => {
+      setRestauranteId(d.id || "");
+    }).catch(() => {});
+  }, []);
   const baseUrl = "https://j74mf38wgua3d4qd5mqbjjvza88n2qcp.app.specular.dev";
 
   useFocusEffect(useCallback(() => {
