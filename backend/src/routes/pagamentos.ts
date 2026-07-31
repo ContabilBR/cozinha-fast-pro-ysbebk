@@ -231,6 +231,11 @@ export function registerPagamentoRoutes(app: App) {
   // DELETE /api/pagamentos/:id — cancelar pagamento pendente
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/pagamentos/:id",
+    {
+      schema: {
+        params: { type: "object", properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+      },
+    },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);

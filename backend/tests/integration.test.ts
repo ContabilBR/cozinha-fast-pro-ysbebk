@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile, connectAuthenticatedWebSocket } from "./helpers";
+import { api, authenticatedApi, signUpTestUser, expectStatus, createTestFile, connectAuthenticatedWebSocket, waitForMessage } from "./helpers";
 
 describe("API Integration Tests", () => {
   let authToken: string;
@@ -670,6 +670,14 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("List pratos with categoria_id filter", async () => {
+    const res = await authenticatedApi(
+      "/api/pratos?categoria_id=00000000-0000-0000-0000-000000000000",
+      authToken
+    );
+    await expectStatus(res, 200);
+  });
+
   test("Create prato", async () => {
     const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
@@ -1002,6 +1010,34 @@ describe("API Integration Tests", () => {
     await expectStatus(forceDeleteRes, 204);
   });
 
+  test("Force delete mesa without authentication returns 401", async () => {
+    const res = await api("/api/mesas/00000000-0000-0000-0000-000000000000/force", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Force delete mesa as non-admin returns 403", async () => {
+    const createRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const mesaData = await createRes.json();
+
+    const res = await authenticatedApi(
+      `/api/mesas/${mesaData.id}/force`,
+      regularUserToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   // ==================== Comandas CRUD ====================
   let comandaMesaId: string;
 
@@ -1126,6 +1162,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Add pedidos with missing items returns 400", async () => {
+    const res = await authenticatedApi(`/api/comandas/${testCommandaId}/pedidos`, authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Close comanda", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}/fechar`, authToken, {
       method: "POST",
@@ -1138,6 +1183,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.success).toBeDefined();
+  });
+
+  test("Close comanda without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/fechar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gorjeta: 0 }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Cancel comanda", async () => {
@@ -1171,6 +1225,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Cancel comanda without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/cancelar", {
+      method: "PUT",
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Delete comanda", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
@@ -1202,6 +1263,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 204);
   });
 
+  test("Delete comanda without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Get current comanda for mesa", async () => {
     const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/comanda`, authToken);
     await expectStatus(res, 200);
@@ -1210,6 +1278,16 @@ describe("API Integration Tests", () => {
   test("Get mesa historico with archived comandas", async () => {
     const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/historico`, authToken);
     await expectStatus(res, 200);
+  });
+
+  test("Update comanda tip (gorjeta) via PUT", async () => {
+    const res = await authenticatedApi(`/api/comandas/${testCommandaId}/gorjeta`, authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gorjeta: 10.00 }),
+    });
+    // May return 200 or 404 if comanda is closed/archived
+    expect(res.status === 200 || res.status === 404).toBe(true);
   });
 
   // ==================== Pedidos CRUD ====================
@@ -1312,6 +1390,15 @@ describe("API Integration Tests", () => {
     }
   });
 
+  test("Update pedido without authentication returns 401", async () => {
+    const res = await api("/api/pedidos/00000000-0000-0000-0000-000000000000", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantidade: 5 }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Update pedido status", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
@@ -1326,6 +1413,15 @@ describe("API Integration Tests", () => {
     } else {
       console.log("Skipping: testPedidoId not set");
     }
+  });
+
+  test("Update pedido status without authentication returns 401", async () => {
+    const res = await api("/api/pedidos/00000000-0000-0000-0000-000000000000/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "pronto" }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Update pedido observacao", async () => {
@@ -1344,6 +1440,15 @@ describe("API Integration Tests", () => {
     }
   });
 
+  test("Update pedido observacao without authentication returns 401", async () => {
+    const res = await api("/api/pedidos/00000000-0000-0000-0000-000000000000/observacao", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ observacao: "Note" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Delete pedido", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken, {
@@ -1353,6 +1458,13 @@ describe("API Integration Tests", () => {
     } else {
       console.log("Skipping: testPedidoId not set");
     }
+  });
+
+  test("Delete pedido without authentication returns 401", async () => {
+    const res = await api("/api/pedidos/00000000-0000-0000-0000-000000000000", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
   });
 
   // ==================== Kitchen Display System ====================
@@ -1413,6 +1525,44 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create garcon with duplicate email returns 409", async () => {
+    const dupEmail = `garcon-dup-${Date.now()}@example.com`;
+    const firstRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "First Garcon",
+        email: dupEmail,
+        password: "pass123456",
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    const dupRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Second Garcon",
+        email: dupEmail,
+        password: "pass123456",
+      }),
+    });
+    await expectStatus(dupRes, 409);
+  });
+
+  test("Create garcon as non-admin returns 403", async () => {
+    const res = await authenticatedApi("/api/garcons", regularUserToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Non-Admin Garcon",
+        email: `garcon-403-${Date.now()}@example.com`,
+        password: "pass123456",
+      }),
+    });
+    await expectStatus(res, 403);
+  });
+
   test("Get garcons for authenticated garcom user", async () => {
     const res = await authenticatedApi("/api/garcom/pedidos", authToken);
     const status = res.status;
@@ -1426,6 +1576,11 @@ describe("API Integration Tests", () => {
     );
     const status = res.status;
     expect(status === 200 || status === 400 || status === 401).toBe(true);
+  });
+
+  test("Check email with missing query parameter returns 400", async () => {
+    const res = await authenticatedApi("/api/garcons/check-email", authToken);
+    await expectStatus(res, 400);
   });
 
   test("Update garcon", async () => {
@@ -1451,6 +1606,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Update garcon without authentication returns 401", async () => {
+    const res = await api("/api/garcons/test-id", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Updated" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Delete garcon", async () => {
     const createRes = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
@@ -1468,6 +1632,32 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 204);
+  });
+
+  test("Delete garcon without authentication returns 401", async () => {
+    const res = await api("/api/garcons/test-id", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Delete garcon as non-admin returns 403", async () => {
+    const createRes = await authenticatedApi("/api/garcons", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "403 Delete Garcon",
+        email: `garcon-403-del-${Date.now()}@example.com`,
+        password: "pass123456",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const garconData = await createRes.json();
+
+    const res = await authenticatedApi(`/api/garcons/${garconData.id}`, regularUserToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 403);
   });
 
   // ==================== Usuarios (Legacy) CRUD ====================
@@ -1607,12 +1797,28 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("Update restaurant without authentication returns 401", async () => {
+    const res = await api("/api/restaurante", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: "Test" }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Delete restaurant", async () => {
     const res = await authenticatedApi("/api/restaurante", adminToken, {
       method: "DELETE",
     });
     const status = res.status;
     expect(status === 200 || status === 404 || status === 403 || status === 400).toBe(true);
+  });
+
+  test("Delete restaurant without authentication returns 401", async () => {
+    const res = await api("/api/restaurante", {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
   });
 
   test("Get restaurant without authentication returns 401", async () => {
@@ -1634,6 +1840,20 @@ describe("API Integration Tests", () => {
     });
     const status = res.status;
     expect(status === 201 || status === 400 || status === 409).toBe(true);
+  });
+
+  test("Create restaurant missing required field returns 400", async () => {
+    const res = await api("/api/restaurantes/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cnpj: "12345678901234",
+        adminNome: "Admin",
+        adminEmail: "admin@test.com",
+        adminSenha: "pass",
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
   // ==================== Upload Endpoints ====================
@@ -1705,12 +1925,32 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 400 || status === 403 || status === 500 || status === 502).toBe(true);
   });
 
+  test("Upgrade subscription without authentication returns 401", async () => {
+    const res = await api("/api/assinatura/upgrade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plano: "basico",
+        email: "test@example.com",
+        cpf_cnpj: "12345678901234",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Cancel subscription", async () => {
     const res = await authenticatedApi("/api/assinatura/cancelar", authToken, {
       method: "POST",
     });
     const status = res.status;
     expect(status === 200 || status === 400 || status === 403 || status === 500).toBe(true);
+  });
+
+  test("Cancel subscription without authentication returns 401", async () => {
+    const res = await api("/api/assinatura/cancelar", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
   });
 
   // ==================== LGPD Endpoints ====================
@@ -1822,8 +2062,28 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 201 || status === 400 || status === 404).toBe(true);
   });
 
+  test("Add payment without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/pagamentos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        forma_pagamento: "dinheiro",
+        valor: 50.00,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Get comanda payments", async () => {
     const res = await authenticatedApi("/api/comandas/test-comanda-id/pagamentos", authToken);
+    const status = res.status;
+    expect(status === 200 || status === 404 || status === 400).toBe(true);
+  });
+
+  test("Delete payment", async () => {
+    const res = await authenticatedApi("/api/pagamentos/00000000-0000-0000-0000-000000000000", authToken, {
+      method: "DELETE",
+    });
     const status = res.status;
     expect(status === 200 || status === 404 || status === 400).toBe(true);
   });
@@ -1864,5 +2124,17 @@ describe("API Integration Tests", () => {
     );
     const status = res.status;
     expect(status === 200 || status === 400 || status === 404).toBe(true);
+  });
+
+  test("Split bill without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/divisao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "igual",
+        num_pessoas: 2,
+      }),
+    });
+    await expectStatus(res, 401);
   });
 });
