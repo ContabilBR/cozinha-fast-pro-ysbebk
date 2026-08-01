@@ -23,26 +23,7 @@ export function registerCardapioPublicoRoutes(app: App) {
       }
     }
   );
-  // GET /api/public/restaurantes — lista restaurantes ativos (sem auth)
-  app.fastify.get(
-    "/api/public/restaurantes",
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        const restaurantes = await db
-          .select({
-            id: schema.restaurante.id,
-            nome: schema.restaurante.nome,
-          })
-          .from(schema.restaurante);
-
-        return reply.code(200).send({ restaurantes });
-      } catch (err) {
-        return reply.code(500).send({ error: "Erro interno" });
-      }
-    }
-  );
-
-  // GET /cardapio — página web do cardápio digital
+   // GET /cardapio — página web do cardápio digital
   app.fastify.get("/cardapio", async (request: FastifyRequest, reply: FastifyReply) => {
     const q = request.query as any;
     const r = q.r || "";
