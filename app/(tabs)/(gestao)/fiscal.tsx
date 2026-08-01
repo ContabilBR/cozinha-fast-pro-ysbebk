@@ -93,7 +93,66 @@ export default function FiscalScreen() {
           ListEmptyComponent={<View style={{ alignItems: "center", paddingTop: 60 }}><Ionicons name="document-text-outline" size={48} color={COLORS.textSecondary} /><Text style={{ fontSize: 16, color: COLORS.textSecondary, marginTop: 12 }}>Nenhuma nota fiscal</Text><Pressable onPress={openEmitir} style={{ marginTop: 16, backgroundColor: "#22C55E", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>Emitir primeira NFC-e</Text></Pressable></View>}
         />
       )}
-      {/* MODAL_EMITIR_PLACEHOLDER */}
+      <Modal visible={showEmitir} animationType="slide" transparent>
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "85%" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Emitir NFC-e</Text>
+              <Pressable onPress={() => setShowEmitir(false)}><Ionicons name="close" size={24} color={COLORS.text} /></Pressable>
+            </View>
+            {loadingComandas ? (
+              <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
+            ) : !selectedComanda ? (
+              <>
+                <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginBottom: 12 }}>Selecione uma comanda fechada:</Text>
+                <FlatList data={comandas} keyExtractor={(c) => c.id} style={{ maxHeight: 400 }}
+                  renderItem={({ item }) => (
+                    <Pressable onPress={() => setSelectedComanda(item)} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 0.5, borderColor: COLORS.border }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <View>
+                          <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.text }}>{item.mesa_numero ? "Mesa " + item.mesa_numero : "Comanda"}</Text>
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{item.pedidos?.length || 0} ite{(item.pedidos?.length || 0) !== 1 ? "ns" : "m"} • {item.garcom_nome || ""}</Text>
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: COLORS.primary }}>{fmt(item.total)}</Text>
+                      </View>
+                      {item.closed_at && <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>Fechada em {new Date(item.closed_at).toLocaleString("pt-BR")}</Text>}
+                    </Pressable>
+                  )}
+                  ListEmptyComponent={<View style={{ alignItems: "center", paddingTop: 30 }}><Text style={{ color: COLORS.textSecondary }}>Nenhuma comanda fechada</Text></View>}
+                />
+              </>
+            ) : (
+              <ScrollView>
+                <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 0.5, borderColor: COLORS.border }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.text }}>{selectedComanda.mesa_numero ? "Mesa " + selectedComanda.mesa_numero : "Comanda"}</Text>
+                    <Pressable onPress={() => setSelectedComanda(null)}><Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: "600" }}>Trocar</Text></Pressable>
+                  </View>
+                  {selectedComanda.pedidos?.map((p, i) => (
+                    <View key={p.id || i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, borderTopWidth: i === 0 ? 0.5 : 0, borderTopColor: COLORS.border }}>
+                      <Text style={{ fontSize: 13, color: COLORS.text, flex: 1 }}>{p.quantidade}x {p.prato_nome || "Item"}</Text>
+                      <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>{fmt(parseFloat(p.preco_unitario) * p.quantidade)}</Text>
+                    </View>
+                  ))}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: COLORS.border }}>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: COLORS.text }}>Total</Text>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: COLORS.primary }}>{fmt(selectedComanda.total)}</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>CPF do consumidor (opcional)</Text>
+                <TextInput value={cpfConsumidor} onChangeText={setCpfConsumidor} placeholder="000.000.000-00" placeholderTextColor={COLORS.textSecondary} keyboardType="number-pad" maxLength={14}
+                  style={{ backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 15, marginBottom: 12, borderWidth: 0.5, borderColor: COLORS.border }} />
+                <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 12, color: "#92400E" }}>Dados fiscais padrão: NCM 21069090, CFOP 5102, Simples Nacional.</Text>
+                </View>
+                <Pressable onPress={handleEmitir} disabled={emitindo} style={{ backgroundColor: "#22C55E", borderRadius: 12, padding: 16, alignItems: "center" }}>
+                  {emitindo ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Emitir NFC-e</Text>}
+                </Pressable>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
       {/* MODAL_CANCELAR_PLACEHOLDER */}
     </View>
   );
