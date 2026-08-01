@@ -27,6 +27,10 @@ export const formaPagamentoEnum = pgEnum("forma_pagamento", ["pix", "dinheiro", 
 export const pagamentoStatusEnum = pgEnum("pagamento_status", ["pendente", "confirmado", "cancelado"]);
 export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
 
+// Estoque enums
+export const unidadeMedidaEnum = pgEnum("unidade_medida", ["kg", "g", "l", "ml", "un", "cx", "pct", "dz"]);
+export const movimentacaoTipoEnum = pgEnum("movimentacao_tipo", ["entrada", "saida", "ajuste"]);
+
 // Mesas (Tables)
 export const mesas = pgTable("mesas", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -251,5 +255,43 @@ export const entregas = pgTable("entregas", {
   saiuEm: timestamp("saiu_em", { withTimezone: true }),
   entregueEm: timestamp("entregue_em", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
+// Insumos (Ingredients/Supplies)
+export const insumos = pgTable("insumos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  unidade: unidadeMedidaEnum("unidade").notNull(),
+  estoqueAtual: numeric("estoque_atual", { precision: 10, scale: 3 }).default("0").notNull(),
+  estoqueMínimo: numeric("estoque_minimo", { precision: 10, scale: 3 }).default("0").notNull(),
+  custoUnitario: numeric("custo_unitario", { precision: 10, scale: 2 }).default("0").notNull(),
+  ativo: boolean("ativo").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
+// Movimentacoes Estoque (Stock Movements)
+export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  insumoId: uuid("insumo_id").notNull().references(() => insumos.id, { onDelete: "restrict" }),
+  tipo: movimentacaoTipoEnum("tipo").notNull(),
+  quantidade: numeric("quantidade", { precision: 10, scale: 3 }).notNull(),
+  estoqueAnterior: numeric("estoque_anterior", { precision: 10, scale: 3 }).notNull(),
+  estoqueNovo: numeric("estoque_novo", { precision: 10, scale: 3 }).notNull(),
+  motivo: text("motivo"),
+  usuarioId: text("usuario_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
+// Prato Insumos (Recipe/Dish Ingredients)
+export const pratoInsumos = pgTable("prato_insumos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pratoId: uuid("prato_id").notNull().references(() => pratos.id, { onDelete: "cascade" }),
+  insumoId: uuid("insumo_id").notNull().references(() => insumos.id, { onDelete: "cascade" }),
+  quantidadeUsada: numeric("quantidade_usada", { precision: 10, scale: 3 }).notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
