@@ -59,6 +59,7 @@ export default function GestaoScreen() {
     { icon: <LayoutGrid size={26} color="#0EA5E9" />, title: "Mesas", subtitle: "Gerenciar mesas", route: "/(tabs)/(gestao)/mesas", color: "#0EA5E9" },
     { icon: <Users size={26} color="#22C55E" />, title: "Garçons", subtitle: "Gerenciar garçons", route: "/(tabs)/(gestao)/garcons", color: "#22C55E" },
     { icon: <Store size={26} color="#F59E0B" />, title: "Restaurante", subtitle: "Dados do estabelecimento", route: "/(tabs)/(gestao)/restaurante", color: "#F59E0B" },
+    { icon: <Ionicons name="cube-outline" size={26} color="#F97316" />, title: "Estoque", subtitle: "Controle de insumos", route: "/(tabs)/(gestao)/estoque", color: "#F97316" },
     { icon: <Ionicons name="document-text-outline" size={26} color="#EF4444" />, title: "Notas Fiscais", subtitle: "NFC-e emitidas", route: "/(tabs)/(gestao)/fiscal", color: "#EF4444" },
     { icon: <Ionicons name="card-outline" size={26} color="#8B5CF6" />, title: "Assinatura", subtitle: "Plano e cobrança", route: "/(tabs)/(gestao)/assinatura", color: "#8B5CF6" },
     { icon: <Ionicons name="shield-checkmark-outline" size={26} color="#6B7280" />, title: "Privacidade", subtitle: "LGPD e dados", route: "/(tabs)/(gestao)/lgpd", color: "#6B7280" },
