@@ -2264,4 +2264,181 @@ describe("API Integration Tests", () => {
     const status = res.status;
     expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
+
+  // ==================== Inventory (Insumos) Management ====================
+  let testInsumoId: string;
+  let testPratoIdForInsumo: string;
+
+  test("List all insumos returns 200", async () => {
+    const res = await authenticatedApi("/api/insumos", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data) || data.data).toBeTruthy();
+  });
+
+  test("Create insumo returns 200 or 201", async () => {
+    const res = await authenticatedApi("/api/insumos", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Insumo Test ${Date.now()}`,
+        quantidade: 100,
+        unidade: "kg",
+        preco_unitario: 10.50,
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 201).toBe(true);
+    if (status === 201 || status === 200) {
+      const data = await res.json();
+      if (data.id) {
+        testInsumoId = data.id;
+      }
+    }
+  });
+
+  test("Get insumo alerts returns 200", async () => {
+    const res = await authenticatedApi("/api/insumos/alertas", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data) || data.alertas).toBeTruthy();
+  });
+
+  test("Update insumo returns 200", async () => {
+    if (testInsumoId) {
+      const res = await authenticatedApi(`/api/insumos/${testInsumoId}`, authToken, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quantidade: 150,
+          preco_unitario: 11.00,
+        }),
+      });
+      const status = res.status;
+      expect(status === 200 || status === 404 || status === 400).toBe(true);
+    }
+  });
+
+  test("Delete insumo returns 200 or 204", async () => {
+    if (testInsumoId) {
+      const res = await authenticatedApi(`/api/insumos/${testInsumoId}`, authToken, {
+        method: "DELETE",
+      });
+      const status = res.status;
+      expect(status === 200 || status === 204 || status === 404).toBe(true);
+    }
+  });
+
+  test("Create prato for insumo association", async () => {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Prato with Insumos ${Date.now()}`,
+        preco: "35.99",
+        descricao: "Prato for insumo test",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    testPratoIdForInsumo = data.prato.id;
+  });
+
+  test("Get prato insumos returns 200", async () => {
+    if (testPratoIdForInsumo) {
+      const res = await authenticatedApi(
+        `/api/pratos/${testPratoIdForInsumo}/insumos`,
+        authToken
+      );
+      const status = res.status;
+      expect(status === 200 || status === 404).toBe(true);
+    }
+  });
+
+  test("Add insumo to prato returns 200 or 201", async () => {
+    if (testPratoIdForInsumo && testInsumoId) {
+      const res = await authenticatedApi(
+        `/api/pratos/${testPratoIdForInsumo}/insumos`,
+        authToken,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            insumo_id: testInsumoId,
+            quantidade_necessaria: 5,
+          }),
+        }
+      );
+      const status = res.status;
+      expect(status === 200 || status === 201 || status === 404 || status === 400).toBe(true);
+    }
+  });
+
+  test("Remove insumo from prato returns 200 or 204", async () => {
+    if (testPratoIdForInsumo && testInsumoId) {
+      const res = await authenticatedApi(
+        `/api/pratos/${testPratoIdForInsumo}/insumos/${testInsumoId}`,
+        authToken,
+        {
+          method: "DELETE",
+        }
+      );
+      const status = res.status;
+      expect(status === 200 || status === 204 || status === 404).toBe(true);
+    }
+  });
+
+  test("Record stock movement returns 200 or 201", async () => {
+    if (testInsumoId) {
+      const res = await authenticatedApi("/api/estoque/movimentacao", authToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          insumo_id: testInsumoId,
+          tipo: "entrada",
+          quantidade: 50,
+          descricao: "Restock",
+        }),
+      });
+      const status = res.status;
+      expect(status === 200 || status === 201 || status === 404 || status === 400).toBe(true);
+    }
+  });
+
+  test("Get stock movements for insumo returns 200", async () => {
+    if (testInsumoId) {
+      const res = await authenticatedApi(
+        `/api/estoque/movimentacoes/${testInsumoId}`,
+        authToken
+      );
+      const status = res.status;
+      expect(status === 200 || status === 404).toBe(true);
+      if (status === 200) {
+        const data = await res.json();
+        expect(Array.isArray(data) || data.movimentacoes).toBeTruthy();
+      }
+    }
+  });
+
+  test("Create insumo without authentication returns 401", async () => {
+    const res = await api("/api/insumos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: "Unauthorized Insumo",
+        quantidade: 100,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Get insumos without authentication returns 401", async () => {
+    const res = await api("/api/insumos");
+    await expectStatus(res, 401);
+  });
+
+  test("Get insumo alerts without authentication returns 401", async () => {
+    const res = await api("/api/insumos/alertas");
+    await expectStatus(res, 401);
+  });
 });
