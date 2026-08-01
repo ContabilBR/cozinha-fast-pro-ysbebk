@@ -153,7 +153,29 @@ export default function FiscalScreen() {
           </View>
         </View>
       </Modal>
-      {/* MODAL_CANCELAR_PLACEHOLDER */}
+      <Modal visible={showCancelar} animationType="slide" transparent>
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Cancelar NFC-e</Text>
+              <Pressable onPress={() => setShowCancelar(false)}><Ionicons name="close" size={24} color={COLORS.text} /></Pressable>
+            </View>
+            {notaCancelar && (
+              <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                Nota #{(notaCancelar.referenciaFocus || notaCancelar.referencia_focus || "").slice(-8)}
+                {(notaCancelar.numeroNota || notaCancelar.numero_nota) ? " • nº " + (notaCancelar.numeroNota || notaCancelar.numero_nota) : ""}
+              </Text>
+            )}
+            <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>Justificativa (mínimo 15 caracteres) *</Text>
+            <TextInput value={justificativa} onChangeText={setJustificativa} placeholder="Ex: Erro na emissão, dados incorretos" placeholderTextColor={COLORS.textSecondary} multiline numberOfLines={3}
+              style={{ backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 15, marginBottom: 4, borderWidth: 0.5, borderColor: COLORS.border, minHeight: 80, textAlignVertical: "top" }} />
+            <Text style={{ fontSize: 11, color: justificativa.length >= 15 ? "#22C55E" : COLORS.textSecondary, marginBottom: 16 }}>{justificativa.length}/15 caracteres</Text>
+            <Pressable onPress={handleCancelar} disabled={cancelando || justificativa.length < 15} style={{ backgroundColor: justificativa.length >= 15 ? "#EF4444" : "#ccc", borderRadius: 12, padding: 16, alignItems: "center" }}>
+              {cancelando ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Confirmar Cancelamento</Text>}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
