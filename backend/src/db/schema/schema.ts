@@ -235,28 +235,8 @@ export const notasFiscais = pgTable("notas_fiscais", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
-export const entregas = pgTable("entregas", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  comandaId: uuid("comanda_id").notNull().references(() => comandas.id, { onDelete: "cascade" }),
-  status: entregaStatusEnum("status").default("pendente").notNull(),
-  clienteNome: text("cliente_nome").notNull(),
-  clienteTelefone: text("cliente_telefone").notNull(),
-  endereco: text("endereco").notNull(),
-  complemento: text("complemento"),
-  bairro: text("bairro"),
-  cidade: text("cidade"),
-  cep: text("cep"),
-  referencia: text("referencia"),
-  taxaEntrega: numeric("taxa_entrega", { precision: 10, scale: 2 }).default("0").notNull(),
-  tempoEstimado: integer("tempo_estimado"),
-  entregadorNome: text("entregador_nome"),
-  entregadorTelefone: text("entregador_telefone"),
-  observacao: text("observacao"),
-  saiuEm: timestamp("saiu_em", { withTimezone: true }),
-  entregueEm: timestamp("entregue_em", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
-});
+
+// === ESTOQUE ===
 
 // Insumos (Ingredients/Supplies)
 export const insumos = pgTable("insumos", {
@@ -265,7 +245,7 @@ export const insumos = pgTable("insumos", {
   descricao: text("descricao"),
   unidade: unidadeMedidaEnum("unidade").notNull(),
   estoqueAtual: numeric("estoque_atual", { precision: 10, scale: 3 }).default("0").notNull(),
-  estoqueMínimo: numeric("estoque_minimo", { precision: 10, scale: 3 }).default("0").notNull(),
+  estoqueMinimo: numeric("estoque_minimo", { precision: 10, scale: 3 }).default("0").notNull(),
   custoUnitario: numeric("custo_unitario", { precision: 10, scale: 2 }).default("0").notNull(),
   ativo: boolean("ativo").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -293,5 +273,29 @@ export const pratoInsumos = pgTable("prato_insumos", {
   pratoId: uuid("prato_id").notNull().references(() => pratos.id, { onDelete: "cascade" }),
   insumoId: uuid("insumo_id").notNull().references(() => insumos.id, { onDelete: "cascade" }),
   quantidadeUsada: numeric("quantidade_usada", { precision: 10, scale: 3 }).notNull(),
+  restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
+});
+
+// Entregas
+export const entregas = pgTable("entregas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  comandaId: uuid("comanda_id").notNull().references(() => comandas.id, { onDelete: "cascade" }),
+  status: entregaStatusEnum("status").default("pendente").notNull(),
+  clienteNome: text("cliente_nome").notNull(),
+  clienteTelefone: text("cliente_telefone").notNull(),
+  endereco: text("endereco").notNull(),
+  complemento: text("complemento"),
+  bairro: text("bairro"),
+  cidade: text("cidade"),
+  cep: text("cep"),
+  referencia: text("referencia"),
+  taxaEntrega: numeric("taxa_entrega", { precision: 10, scale: 2 }).default("0").notNull(),
+  tempoEstimado: integer("tempo_estimado"),
+  entregadorNome: text("entregador_nome"),
+  entregadorTelefone: text("entregador_telefone"),
+  observacao: text("observacao"),
+  saiuEm: timestamp("saiu_em", { withTimezone: true }),
+  entregueEm: timestamp("entregue_em", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });

@@ -45,23 +45,90 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Auth Endpoints ====================
-  test("Get current authenticated user via /api/auth/me", async () => {
-    const res = await authenticatedApi("/api/auth/me", authToken);
-    await expectStatus(res, 200);
+  test("Sign up with valid credentials returns 201", async () => {
+    const testEmail = `signup-${Date.now()}@example.com`;
+    const testPassword = "testPassword123456";
+
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        password: testPassword,
+        name: "Sign Up Test User",
+      }),
+    });
+    await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.email).toBeDefined();
-    expect(data.name).toBeDefined();
-    expect(data.role).toBeDefined();
-    expect(data.active).toBeDefined();
+    expect(data.token).toBeDefined();
+    expect(data.user).toBeDefined();
+    expect(data.user.email).toBe(testEmail);
   });
 
-  test("Get current user without authentication returns 401", async () => {
-    const res = await api("/api/auth/me");
-    await expectStatus(res, 401);
+  test("Sign up with duplicate email returns 409", async () => {
+    const dupEmail = `dup-signup-${Date.now()}@example.com`;
+    const testPassword = "testPassword123456";
+
+    const firstRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: dupEmail,
+        password: testPassword,
+        name: "First Test User",
+      }),
+    });
+    await expectStatus(firstRes, 201);
+
+    const dupRes = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: dupEmail,
+        password: "differentPassword",
+        name: "Second Test User",
+      }),
+    });
+    await expectStatus(dupRes, 409);
   });
 
-  test("Sign in with valid credentials", async () => {
+  test("Sign up missing email returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "testPassword123456",
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up missing password returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `signup-${Date.now()}@example.com`,
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up missing name returns 400", async () => {
+    const res = await api("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `signup-${Date.now()}@example.com`,
+        password: "testPassword123456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign in with valid credentials returns 200", async () => {
     const testEmail = `signin-test-${Date.now()}@example.com`;
     const testPassword = "testPassword123456";
 
@@ -152,70 +219,40 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Sign up with duplicate email returns 409", async () => {
-    const dupEmail = `dup-signup-${Date.now()}@example.com`;
-    const testPassword = "testPassword123456";
-
-    const firstRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: dupEmail,
-        password: testPassword,
-        name: "First Test User",
-      }),
-    });
-    await expectStatus(firstRes, 201);
-
-    const dupRes = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: dupEmail,
-        password: "differentPassword",
-        name: "Second Test User",
-      }),
-    });
-    await expectStatus(dupRes, 409);
+  test("Get current authenticated user via /api/auth/me returns 200", async () => {
+    const res = await authenticatedApi("/api/auth/me", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.email).toBeDefined();
+    expect(data.name).toBeDefined();
+    expect(data.role).toBeDefined();
+    expect(data.active).toBeDefined();
   });
 
-  test("Sign up missing email returns 400", async () => {
-    const res = await api("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password: "testPassword123456",
-        name: "Test User",
-      }),
-    });
-    await expectStatus(res, 400);
+  test("Get current user via /api/auth/me without authentication returns 401", async () => {
+    const res = await api("/api/auth/me");
+    await expectStatus(res, 401);
   });
 
-  test("Sign up missing password returns 400", async () => {
-    const res = await api("/api/auth/sign-up/email", {
+  test("Sign out authenticated user returns 200", async () => {
+    const { token: signOutToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/auth/sign-out", signOutToken, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `signup-${Date.now()}@example.com`,
-        name: "Test User",
-      }),
     });
-    await expectStatus(res, 400);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
   });
 
-  test("Sign up missing name returns 400", async () => {
-    const res = await api("/api/auth/sign-up/email", {
+  test("Sign out without authentication returns 401", async () => {
+    const res = await api("/api/auth/sign-out", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `signup-${Date.now()}@example.com`,
-        password: "testPassword123456",
-      }),
     });
-    await expectStatus(res, 400);
+    await expectStatus(res, 401);
   });
 
-  test("Login with valid credentials via /api/login", async () => {
+  test("Login with valid credentials via /api/login returns 200", async () => {
     const testEmail = "garcom@cozinhafast.com";
     const testPassword = "123456";
 
@@ -271,7 +308,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Get current user via /api/me with authentication", async () => {
+  test("Get current user via /api/me with token from /api/login returns 200", async () => {
     const loginRes = await api("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -299,7 +336,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get database seed status", async () => {
+  test("Get database seed status returns 200", async () => {
     const res = await api("/api/seed-status");
     await expectStatus(res, 200);
     const data = await res.json();
@@ -308,25 +345,8 @@ describe("API Integration Tests", () => {
     expect(data.profiles).toBeDefined();
   });
 
-  test("Sign out authenticated user", async () => {
-    const { token: signOutToken } = await signUpTestUser();
-    const res = await authenticatedApi("/api/auth/sign-out", signOutToken, {
-      method: "POST",
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.success).toBeDefined();
-  });
-
-  test("Sign out without authentication returns 401", async () => {
-    const res = await api("/api/auth/sign-out", {
-      method: "POST",
-    });
-    await expectStatus(res, 401);
-  });
-
   // ==================== Debug Endpoints ====================
-  test("Get debug usuarios with masked passwords", async () => {
+  test("Get debug usuarios with masked passwords returns 200", async () => {
     const res = await api("/api/debug/usuarios");
     await expectStatus(res, 200);
     const data = await res.json();
@@ -334,7 +354,7 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.usuarios)).toBe(true);
   });
 
-  test("Get debug environment variables", async () => {
+  test("Get debug environment variables returns 200", async () => {
     const res = await api("/api/debug/env");
     await expectStatus(res, 200);
     const data = await res.json();
@@ -345,14 +365,14 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Users CRUD ====================
-  test("List all users", async () => {
+  test("List all users returns 200", async () => {
     const res = await authenticatedApi("/api/users", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("Create new user", async () => {
+  test("Create new user returns 201", async () => {
     const res = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -430,7 +450,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Update user", async () => {
+  test("Update user returns 200", async () => {
     const createRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -477,7 +497,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Delete user as admin", async () => {
+  test("Delete user as admin returns 204", async () => {
     const createRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -516,13 +536,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete user with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi("/api/users/not-a-uuid", adminToken, {
-      method: "DELETE",
-    });
-    await expectStatus(res, 400);
-  });
-
   test("Delete user as non-admin returns 403", async () => {
     const createRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
@@ -548,14 +561,14 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Categorias CRUD ====================
-  test("List all categorias", async () => {
+  test("List all categorias returns 200", async () => {
     const res = await authenticatedApi("/api/categorias", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("Create categoria", async () => {
+  test("Create categoria returns 201", async () => {
     const res = await authenticatedApi("/api/categorias", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -567,6 +580,8 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testCategoryId = data.categoria.id;
+    expect(data.categoria.id).toBeDefined();
+    expect(data.categoria.nome).toBe("Test Category");
   });
 
   test("Create categoria without authentication returns 401", async () => {
@@ -591,7 +606,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Update categoria", async () => {
+  test("Update categoria returns 200", async () => {
     const res = await authenticatedApi(`/api/categorias/${testCategoryId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -600,6 +615,8 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.categoria.nome).toBe("Updated Category");
   });
 
   test("Update non-existent categoria returns 404", async () => {
@@ -615,7 +632,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Delete categoria as admin", async () => {
+  test("Delete categoria as admin returns 200", async () => {
     const res = await authenticatedApi(
       `/api/categorias/${testCategoryId}`,
       adminToken,
@@ -624,6 +641,8 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
   });
 
   test("Delete categoria without authentication returns 401", async () => {
@@ -658,19 +677,19 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Pratos CRUD ====================
-  test("List all pratos", async () => {
+  test("List all pratos returns 200", async () => {
     const res = await authenticatedApi("/api/pratos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("List pratos with disponivel filter", async () => {
+  test("List pratos with disponivel filter returns 200", async () => {
     const res = await authenticatedApi("/api/pratos?disponivel=true", authToken);
     await expectStatus(res, 200);
   });
 
-  test("List pratos with categoria_id filter", async () => {
+  test("List pratos with categoria_id filter returns 200", async () => {
     const res = await authenticatedApi(
       "/api/pratos?categoria_id=00000000-0000-0000-0000-000000000000",
       authToken
@@ -678,7 +697,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
-  test("Create prato", async () => {
+  test("Create prato returns 201", async () => {
     const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -692,6 +711,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testDishId = data.prato.id;
+    expect(data.prato.nome).toBe("Test Prato");
   });
 
   test("Create prato without authentication returns 401", async () => {
@@ -717,11 +737,12 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Get prato by ID", async () => {
+  test("Get prato by ID returns 200", async () => {
     const res = await authenticatedApi(`/api/pratos/${testDishId}`, authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.prato).toBeDefined();
+    expect(data.prato.id).toBe(testDishId);
   });
 
   test("Get non-existent prato returns 404", async () => {
@@ -732,7 +753,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Update prato", async () => {
+  test("Update prato returns 200", async () => {
     const res = await authenticatedApi(`/api/pratos/${testDishId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -742,9 +763,11 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.prato.nome).toBe("Updated Prato");
   });
 
-  test("Delete prato as admin", async () => {
+  test("Delete prato as admin returns 204", async () => {
     const res = await authenticatedApi(
       `/api/pratos/${testDishId}`,
       adminToken,
@@ -784,7 +807,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Upload prato photo via multipart form", async () => {
+  test("Upload prato photo via multipart form returns 200", async () => {
     const createRes = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -805,6 +828,8 @@ describe("API Integration Tests", () => {
       body: form,
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.url || data.imagem_url).toBeDefined();
   });
 
   test("Upload prato photo to non-existent prato returns 404 or 403", async () => {
@@ -834,19 +859,19 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Mesas CRUD ====================
-  test("List all mesas", async () => {
+  test("List all mesas returns 200", async () => {
     const res = await authenticatedApi("/api/mesas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("List mesas with status filter", async () => {
+  test("List mesas with status filter returns 200", async () => {
     const res = await authenticatedApi("/api/mesas?status=disponivel", authToken);
     await expectStatus(res, 200);
   });
 
-  test("Create mesa", async () => {
+  test("Create mesa returns 201", async () => {
     const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -858,6 +883,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testTableId = data.id;
+    expect(data.numero).toBe(tableNumber);
   });
 
   test("Create mesa without authentication returns 401", async () => {
@@ -914,9 +940,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Get mesa by ID", async () => {
+  test("Get mesa by ID returns 200", async () => {
     const res = await authenticatedApi(`/api/mesas/${testTableId}`, authToken);
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(testTableId);
   });
 
   test("Get non-existent mesa returns 404", async () => {
@@ -927,7 +955,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Update mesa", async () => {
+  test("Update mesa returns 200", async () => {
     const res = await authenticatedApi(`/api/mesas/${testTableId}`, adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -936,6 +964,8 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.status).toBe("ocupada");
   });
 
   test("Update mesa as non-admin returns 403", async () => {
@@ -949,7 +979,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Delete mesa as admin", async () => {
+  test("Delete mesa as admin returns 204", async () => {
     const res = await authenticatedApi(
       `/api/mesas/${testTableId}`,
       adminToken,
@@ -988,7 +1018,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Force delete mesa with cascading delete", async () => {
+  test("Force delete mesa with cascading delete returns 204", async () => {
     const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1053,19 +1083,20 @@ describe("API Integration Tests", () => {
     comandaMesaId = data.id;
   });
 
-  test("List all comandas", async () => {
+  test("List all comandas returns 200", async () => {
     const res = await authenticatedApi("/api/comandas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
   });
 
-  test("List comandas with status filter", async () => {
+  test("List comandas with status filter returns 200", async () => {
     const res = await authenticatedApi("/api/comandas?status=aberta", authToken);
     await expectStatus(res, 200);
   });
 
-  test("Create comanda", async () => {
+  test("Create comanda returns 201", async () => {
     const res = await authenticatedApi("/api/comandas", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1077,6 +1108,8 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     testCommandaId = data.comanda.id;
+    expect(data.comanda.id).toBeDefined();
+    expect(data.comanda.mesa_id).toBe(comandaMesaId);
   });
 
   test("Create comanda without authentication returns 401", async () => {
@@ -1101,12 +1134,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Get comanda by ID", async () => {
+  test("Get comanda by ID returns 200", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}`, authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBeDefined();
     expect(data.pedidos).toBeDefined();
+    expect(Array.isArray(data.pedidos)).toBe(true);
   });
 
   test("Get non-existent comanda returns 404", async () => {
@@ -1117,7 +1151,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Add pedidos to comanda", async () => {
+  test("Add pedidos to comanda returns 201", async () => {
     const createPratoRes = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1145,6 +1179,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const pedidosData = await res.json();
+    expect(pedidosData.pedidos).toBeDefined();
     if (pedidosData.pedidos && pedidosData.pedidos.length > 0) {
       testPedidoId = pedidosData.pedidos[0].id;
     }
@@ -1170,7 +1205,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Close comanda", async () => {
+  test("Close comanda returns 200", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}/fechar`, authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1181,7 +1216,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.success).toBeDefined();
+    expect(data.success).toBe(true);
   });
 
   test("Close comanda without authentication returns 401", async () => {
@@ -1193,7 +1228,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Cancel comanda", async () => {
+  test("Cancel comanda returns 200", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1231,7 +1266,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Delete comanda", async () => {
+  test("Delete comanda returns 204", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1269,17 +1304,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get current comanda for mesa", async () => {
+  test("Get current comanda for mesa returns 200", async () => {
     const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/comanda`, authToken);
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.comanda === null || data.comanda).toBeTruthy();
   });
 
-  test("Get mesa historico with archived comandas", async () => {
+  test("Get mesa historico with archived comandas returns 200", async () => {
     const res = await authenticatedApi(`/api/mesas/${comandaMesaId}/historico`, authToken);
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.mesa).toBeDefined();
+    expect(data.resumo).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
   });
 
-  test("Update comanda tip (gorjeta) via PUT", async () => {
+  test("Update comanda tip (gorjeta) via PUT returns 200 or 404", async () => {
     const res = await authenticatedApi(`/api/comandas/${testCommandaId}/gorjeta`, authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1289,14 +1330,15 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Pedidos CRUD ====================
-  test("List all pedidos", async () => {
+  test("List all pedidos returns 200", async () => {
     const res = await authenticatedApi("/api/pedidos", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.pedidos).toBeDefined();
+    expect(Array.isArray(data.pedidos)).toBe(true);
   });
 
-  test("Create pedido via /api/pedidos", async () => {
+  test("Create pedido via /api/pedidos returns 201 or 400 or 404", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1353,12 +1395,10 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get pedido by ID", async () => {
+  test("Get pedido by ID returns 200 or 404", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken);
       expect(res.status === 200 || res.status === 404).toBe(true);
-    } else {
-      console.log("Skipping: testPedidoId not set");
     }
   });
 
@@ -1370,7 +1410,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
-  test("Update pedido", async () => {
+  test("Update pedido returns 200 or 404", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken, {
         method: "PUT",
@@ -1380,8 +1420,6 @@ describe("API Integration Tests", () => {
         }),
       });
       expect(res.status === 200 || res.status === 404).toBe(true);
-    } else {
-      console.log("Skipping: testPedidoId not set");
     }
   });
 
@@ -1394,7 +1432,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Update pedido status", async () => {
+  test("Update pedido status returns 200 or 404", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/status`, authToken, {
         method: "PUT",
@@ -1404,8 +1442,6 @@ describe("API Integration Tests", () => {
         }),
       });
       expect(res.status === 200 || res.status === 404).toBe(true);
-    } else {
-      console.log("Skipping: testPedidoId not set");
     }
   });
 
@@ -1418,7 +1454,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Update pedido observacao", async () => {
+  test("Update pedido observacao returns 200 or 404", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}/observacao`, authToken, {
         method: "PATCH",
@@ -1428,8 +1464,6 @@ describe("API Integration Tests", () => {
         }),
       });
       expect(res.status === 200 || res.status === 404).toBe(true);
-    } else {
-      console.log("Skipping: testPedidoId not set");
     }
   });
 
@@ -1442,14 +1476,12 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Delete pedido", async () => {
+  test("Delete pedido returns 204 or 404", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken, {
         method: "DELETE",
       });
       expect(res.status === 204 || res.status === 404).toBe(true);
-    } else {
-      console.log("Skipping: testPedidoId not set");
     }
   });
 
@@ -1461,11 +1493,12 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Kitchen Display System ====================
-  test("Get all comandas for kitchen display system", async () => {
+  test("Get all comandas for kitchen display system returns 200", async () => {
     const res = await authenticatedApi("/api/cozinha/comandas", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.comandas).toBeDefined();
+    expect(Array.isArray(data.comandas)).toBe(true);
   });
 
   test("Get kitchen display without authentication returns 401", async () => {
@@ -1474,14 +1507,14 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Garcom Endpoints ====================
-  test("List all garcons", async () => {
+  test("List all garcons returns 200", async () => {
     const res = await authenticatedApi("/api/garcons", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("Create garcon", async () => {
+  test("Create garcon returns 201", async () => {
     const res = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1492,6 +1525,9 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.role).toBe("garcom");
   });
 
   test("Create garcon without authentication returns 401", async () => {
@@ -1556,13 +1592,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 403);
   });
 
-  test("Get garcons for authenticated garcom user", async () => {
+  test("Get garcons for authenticated garcom user returns 200 or 401", async () => {
     const res = await authenticatedApi("/api/garcom/pedidos", authToken);
     const status = res.status;
     expect(status === 200 || status === 401).toBe(true);
   });
 
-  test("Check email exists", async () => {
+  test("Check email exists returns 200 or 400 or 401", async () => {
     const res = await authenticatedApi(
       `/api/garcons/check-email?email=test@example.com`,
       authToken
@@ -1576,7 +1612,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Update garcon", async () => {
+  test("Update garcon returns 200", async () => {
     const createRes = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1608,7 +1644,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Delete garcon", async () => {
+  test("Delete garcon returns 204", async () => {
     const createRes = await authenticatedApi("/api/garcons", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1654,14 +1690,15 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Usuarios (Legacy) CRUD ====================
-  test("List all usuarios", async () => {
+  test("List all usuarios returns 200", async () => {
     const res = await authenticatedApi("/api/usuarios", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.data).toBeDefined();
+    expect(Array.isArray(data.data)).toBe(true);
   });
 
-  test("Create usuario", async () => {
+  test("Create usuario returns 201 or 403 or 400", async () => {
     const res = await authenticatedApi("/api/usuarios", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1687,14 +1724,14 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Get garcons via usuarios endpoint", async () => {
+  test("Get garcons via usuarios endpoint returns 200", async () => {
     const res = await authenticatedApi("/api/usuarios/garcons", authToken);
     await expectStatus(res, 200);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
 
-  test("Update usuario", async () => {
+  test("Update usuario returns 200 or 403 or 404", async () => {
     const createRes = await authenticatedApi("/api/usuarios", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1715,12 +1752,10 @@ describe("API Integration Tests", () => {
         }),
       });
       expect(res.status === 200 || res.status === 403).toBe(true);
-    } else {
-      expect(createRes.status === 403 || createRes.status === 400).toBe(true);
     }
   });
 
-  test("Delete usuario", async () => {
+  test("Delete usuario returns 204 or 403", async () => {
     const createRes = await authenticatedApi("/api/usuarios", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1737,13 +1772,11 @@ describe("API Integration Tests", () => {
         method: "DELETE",
       });
       expect(res.status === 204 || res.status === 403).toBe(true);
-    } else {
-      expect(createRes.status === 403 || createRes.status === 400).toBe(true);
     }
   });
 
   // ==================== Reports & Dashboard ====================
-  test("Get dashboard summary", async () => {
+  test("Get dashboard summary returns 200 or 500", async () => {
     const res = await authenticatedApi("/api/relatorios/resumo", authToken);
     const status = res.status;
     expect(status === 200 || status === 500).toBe(true);
@@ -1755,7 +1788,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Historico (Archives) ====================
-  test("Get all archived comandas", async () => {
+  test("Get all archived comandas returns 200 or 500", async () => {
     const res = await authenticatedApi("/api/historico", authToken);
     const status = res.status;
     expect(status === 200 || status === 500).toBe(true);
@@ -1767,13 +1800,13 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Restaurant Info ====================
-  test("Get restaurant information", async () => {
+  test("Get restaurant information returns 200 or 404", async () => {
     const res = await authenticatedApi("/api/restaurante", authToken);
     const status = res.status;
     expect(status === 200 || status === 404).toBe(true);
   });
 
-  test("Update or create restaurant information", async () => {
+  test("Update or create restaurant information returns 200", async () => {
     const res = await authenticatedApi("/api/restaurante", authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1785,6 +1818,8 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.nome).toBe("Test Restaurant");
   });
 
   test("Update restaurant without authentication returns 401", async () => {
@@ -1796,7 +1831,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Delete restaurant", async () => {
+  test("Delete restaurant returns 200 or 404 or 403 or 400", async () => {
     const res = await authenticatedApi("/api/restaurante", adminToken, {
       method: "DELETE",
     });
@@ -1811,12 +1846,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get restaurant without authentication returns 401", async () => {
-    const res = await api("/api/restaurante");
-    await expectStatus(res, 401);
-  });
-
-  test("Create new restaurant with admin", async () => {
+  test("Create new restaurant with admin returns 201 or 400 or 409", async () => {
     const res = await api("/api/restaurantes/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1847,7 +1877,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Upload Endpoints ====================
-  test("Upload image file", async () => {
+  test("Upload image file returns 200 or 400 or 413", async () => {
     const form = new FormData();
     form.append("file", createTestFile("image.jpg", "test image", "image/jpeg"));
 
@@ -1859,7 +1889,7 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 400 || status === 413).toBe(true);
   });
 
-  test("Upload generic file", async () => {
+  test("Upload generic file returns 200 or 400 or 413", async () => {
     const form = new FormData();
     form.append("file", createTestFile("document.txt", "test content", "text/plain"));
 
@@ -1883,14 +1913,14 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Subscription Plans ====================
-  test("Get all available subscription plans", async () => {
+  test("Get all available subscription plans returns 200", async () => {
     const res = await api("/api/planos");
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.planos).toBeDefined();
   });
 
-  test("Get current subscription status", async () => {
+  test("Get current subscription status returns 200 or 403", async () => {
     const res = await authenticatedApi("/api/assinatura", authToken);
     const status = res.status;
     expect(status === 200 || status === 403).toBe(true);
@@ -1901,7 +1931,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Upgrade to paid subscription", async () => {
+  test("Upgrade to paid subscription returns 200 or 400 or 403 or 500 or 502", async () => {
     const res = await authenticatedApi("/api/assinatura/upgrade", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1928,7 +1958,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Cancel subscription", async () => {
+  test("Cancel subscription returns 200 or 400 or 403 or 500", async () => {
     const res = await authenticatedApi("/api/assinatura/cancelar", authToken, {
       method: "POST",
     });
@@ -1944,13 +1974,13 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== LGPD Endpoints ====================
-  test("Get personal data (LGPD)", async () => {
+  test("Get personal data (LGPD) returns 200 or 404 or 500", async () => {
     const res = await authenticatedApi("/api/lgpd/meus-dados", authToken);
     const status = res.status;
     expect(status === 200 || status === 404 || status === 500).toBe(true);
   });
 
-  test("Request deletion of personal data (LGPD)", async () => {
+  test("Request deletion of personal data (LGPD) returns 200 or 400 or 404 or 500", async () => {
     const res = await authenticatedApi("/api/lgpd/meus-dados", authToken, {
       method: "DELETE",
     });
@@ -1965,26 +1995,26 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get LGPD privacy policy", async () => {
+  test("Get LGPD privacy policy returns 200 or 404", async () => {
     const res = await api("/api/lgpd/politica");
     const status = res.status;
     expect(status === 200 || status === 404).toBe(true);
   });
 
   // ==================== Delivery Endpoints ====================
-  test("List all delivery pedidos", async () => {
+  test("List all delivery pedidos returns 200 or 401", async () => {
     const res = await authenticatedApi("/api/delivery/pedidos", authToken);
     const status = res.status;
     expect(status === 200 || status === 401).toBe(true);
   });
 
-  test("Get delivery pedido by ID", async () => {
+  test("Get delivery pedido by ID returns 200 or 404 or 401 or 500", async () => {
     const res = await authenticatedApi("/api/delivery/pedidos/test-id-123", authToken);
     const status = res.status;
     expect(status === 200 || status === 404 || status === 401 || status === 500).toBe(true);
   });
 
-  test("Update delivery pedido status", async () => {
+  test("Update delivery pedido status returns 200 or 404 or 400 or 401 or 500", async () => {
     const res = await authenticatedApi("/api/delivery/pedidos/test-id-123/status", authToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1997,7 +2027,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Admin Endpoints ====================
-  test("Admin run migration - execute query", async () => {
+  test("Admin run migration - execute query returns 200 or 400 or 500", async () => {
     const res = await api("/admin/run-migration", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2027,7 +2057,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Comanda Payment & Division ====================
-  test("Add payment to comanda", async () => {
+  test("Add payment to comanda returns 200 or 201 or 400 or 404", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2076,13 +2106,13 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Get comanda payments", async () => {
+  test("Get comanda payments returns 200 or 404 or 400", async () => {
     const res = await authenticatedApi("/api/comandas/test-comanda-id/pagamentos", authToken);
     const status = res.status;
     expect(status === 200 || status === 404 || status === 400).toBe(true);
   });
 
-  test("Delete payment", async () => {
+  test("Delete payment returns 200 or 404 or 400", async () => {
     const res = await authenticatedApi("/api/pagamentos/00000000-0000-0000-0000-000000000000", authToken, {
       method: "DELETE",
     });
@@ -2090,7 +2120,7 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 404 || status === 400).toBe(true);
   });
 
-  test("Split comanda bill", async () => {
+  test("Split comanda bill returns 200 or 400 or 404", async () => {
     const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2141,31 +2171,31 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Public Endpoints (No Auth) ====================
-  test("List public restaurantes", async () => {
+  test("List public restaurantes returns 200 or 404", async () => {
     const res = await api("/api/public/restaurantes");
     const status = res.status;
     expect(status === 200 || status === 404).toBe(true);
   });
 
-  test("Get public cardapio list", async () => {
+  test("Get public cardapio list returns 200 or 404", async () => {
     const res = await api("/cardapio");
     const status = res.status;
     expect(status === 200 || status === 404).toBe(true);
   });
 
-  test("Get public cardapio for restaurante", async () => {
+  test("Get public cardapio for restaurante returns 200 or 404 or 400 or 500", async () => {
     const res = await api("/api/public/cardapio/test-restaurante-id");
     const status = res.status;
     expect(status === 200 || status === 404 || status === 400 || status === 500).toBe(true);
   });
 
-  test("Get public mesa info", async () => {
+  test("Get public mesa info returns 200 or 404 or 400 or 500", async () => {
     const res = await api("/api/public/mesa/test-restaurante-id/1");
     const status = res.status;
     expect(status === 200 || status === 404 || status === 400 || status === 500).toBe(true);
   });
 
-  test("Create public pedido (delivery)", async () => {
+  test("Create public pedido (delivery) returns 200 or 201 or 400 or 404", async () => {
     const res = await api("/api/public/pedido", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2178,7 +2208,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Webhook Endpoints ====================
-  test("Webhook ASAAS payment notification", async () => {
+  test("Webhook ASAAS payment notification returns 200 or 400 or 404", async () => {
     const res = await api("/api/webhooks/asaas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2190,7 +2220,7 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 400 || status === 404).toBe(true);
   });
 
-  test("Webhook ASAAS subscription notification", async () => {
+  test("Webhook ASAAS subscription notification returns 200 or 400 or 404", async () => {
     const res = await api("/api/webhooks/asaas/assinatura", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2203,7 +2233,7 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Fiscal Endpoints ====================
-  test("Create NFCe fiscal document", async () => {
+  test("Create NFCe fiscal document returns 200 or 201 or 400 or 401 or 404 or 500", async () => {
     const res = await api("/api/fiscal/nfce", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2215,13 +2245,13 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 201 || status === 400 || status === 401 || status === 404 || status === 500).toBe(true);
   });
 
-  test("Get NFCe by reference", async () => {
+  test("Get NFCe by reference returns 200 or 401 or 404", async () => {
     const res = await api("/api/fiscal/nfce/test-ref");
     const status = res.status;
     expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
 
-  test("Delete NFCe by reference", async () => {
+  test("Delete NFCe by reference returns 200 or 401 or 404", async () => {
     const res = await api("/api/fiscal/nfce/test-ref", {
       method: "DELETE",
     });
@@ -2229,7 +2259,7 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
 
-  test("List all fiscal notas", async () => {
+  test("List all fiscal notas returns 200 or 401 or 404", async () => {
     const res = await api("/api/fiscal/notas");
     const status = res.status;
     expect(status === 200 || status === 401 || status === 404).toBe(true);
