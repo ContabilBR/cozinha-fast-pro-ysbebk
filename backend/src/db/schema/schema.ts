@@ -26,8 +26,6 @@ export const pedidoStatusEnum = pgEnum("pedido_status", [
 export const formaPagamentoEnum = pgEnum("forma_pagamento", ["pix", "dinheiro", "cartao_credito", "cartao_debito"]);
 export const pagamentoStatusEnum = pgEnum("pagamento_status", ["pendente", "confirmado", "cancelado"]);
 export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
-
-// Estoque enums
 export const unidadeMedidaEnum = pgEnum("unidade_medida", ["kg", "g", "l", "ml", "un", "cx", "pct", "dz"]);
 export const movimentacaoTipoEnum = pgEnum("movimentacao_tipo", ["entrada", "saida", "ajuste"]);
 
@@ -237,8 +235,6 @@ export const notasFiscais = pgTable("notas_fiscais", {
 });
 
 // === ESTOQUE ===
-
-// Insumos (Ingredients/Supplies)
 export const insumos = pgTable("insumos", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
@@ -253,7 +249,6 @@ export const insumos = pgTable("insumos", {
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
-// Movimentacoes Estoque (Stock Movements)
 export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   id: uuid("id").primaryKey().defaultRandom(),
   insumoId: uuid("insumo_id").notNull().references(() => insumos.id, { onDelete: "restrict" }),
@@ -267,7 +262,6 @@ export const movimentacoesEstoque = pgTable("movimentacoes_estoque", {
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
-// Prato Insumos (Recipe/Dish Ingredients)
 export const pratoInsumos = pgTable("prato_insumos", {
   id: uuid("id").primaryKey().defaultRandom(),
   pratoId: uuid("prato_id").notNull().references(() => pratos.id, { onDelete: "cascade" }),
@@ -276,7 +270,6 @@ export const pratoInsumos = pgTable("prato_insumos", {
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
-// Entregas
 export const entregas = pgTable("entregas", {
   id: uuid("id").primaryKey().defaultRandom(),
   comandaId: uuid("comanda_id").notNull().references(() => comandas.id, { onDelete: "cascade" }),
