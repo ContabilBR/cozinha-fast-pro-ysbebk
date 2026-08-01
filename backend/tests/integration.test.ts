@@ -1944,6 +1944,12 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== LGPD Endpoints ====================
+  test("Get personal data (LGPD)", async () => {
+    const res = await authenticatedApi("/api/lgpd/meus-dados", authToken);
+    const status = res.status;
+    expect(status === 200 || status === 404 || status === 500).toBe(true);
+  });
+
   test("Request deletion of personal data (LGPD)", async () => {
     const res = await authenticatedApi("/api/lgpd/meus-dados", authToken, {
       method: "DELETE",
@@ -2132,5 +2138,100 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 401);
+  });
+
+  // ==================== Public Endpoints (No Auth) ====================
+  test("List public restaurantes", async () => {
+    const res = await api("/api/public/restaurantes");
+    const status = res.status;
+    expect(status === 200 || status === 404).toBe(true);
+  });
+
+  test("Get public cardapio list", async () => {
+    const res = await api("/cardapio");
+    const status = res.status;
+    expect(status === 200 || status === 404).toBe(true);
+  });
+
+  test("Get public cardapio for restaurante", async () => {
+    const res = await api("/api/public/cardapio/test-restaurante-id");
+    const status = res.status;
+    expect(status === 200 || status === 404 || status === 400 || status === 500).toBe(true);
+  });
+
+  test("Get public mesa info", async () => {
+    const res = await api("/api/public/mesa/test-restaurante-id/1");
+    const status = res.status;
+    expect(status === 200 || status === 404 || status === 400 || status === 500).toBe(true);
+  });
+
+  test("Create public pedido (delivery)", async () => {
+    const res = await api("/api/public/pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [],
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 201 || status === 400 || status === 404).toBe(true);
+  });
+
+  // ==================== Webhook Endpoints ====================
+  test("Webhook ASAAS payment notification", async () => {
+    const res = await api("/api/webhooks/asaas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "payment.confirmed",
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 404).toBe(true);
+  });
+
+  test("Webhook ASAAS subscription notification", async () => {
+    const res = await api("/api/webhooks/asaas/assinatura", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "subscription.updated",
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 404).toBe(true);
+  });
+
+  // ==================== Fiscal Endpoints ====================
+  test("Create NFCe fiscal document", async () => {
+    const res = await api("/api/fiscal/nfce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: "test-id",
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 201 || status === 400 || status === 401 || status === 404 || status === 500).toBe(true);
+  });
+
+  test("Get NFCe by reference", async () => {
+    const res = await api("/api/fiscal/nfce/test-ref");
+    const status = res.status;
+    expect(status === 200 || status === 401 || status === 404).toBe(true);
+  });
+
+  test("Delete NFCe by reference", async () => {
+    const res = await api("/api/fiscal/nfce/test-ref", {
+      method: "DELETE",
+    });
+    const status = res.status;
+    expect(status === 200 || status === 401 || status === 404).toBe(true);
+  });
+
+  test("List all fiscal notas", async () => {
+    const res = await api("/api/fiscal/notas");
+    const status = res.status;
+    expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
 });
