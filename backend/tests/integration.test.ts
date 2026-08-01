@@ -807,7 +807,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
-  test("Upload prato photo to non-existent prato returns 404", async () => {
+  test("Upload prato photo to non-existent prato returns 404 or 403", async () => {
     const form = new FormData();
     form.append("file", createTestFile());
 
@@ -819,7 +819,6 @@ describe("API Integration Tests", () => {
         body: form,
       }
     );
-    // May return 403 (Forbidden - no tenant) or 404 (not found)
     expect(res.status === 403 || res.status === 404).toBe(true);
   });
 
@@ -1286,7 +1285,6 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ gorjeta: 10.00 }),
     });
-    // May return 200 or 404 if comanda is closed/archived
     expect(res.status === 200 || res.status === 404).toBe(true);
   });
 
@@ -1339,7 +1337,6 @@ describe("API Integration Tests", () => {
         quantidade: 1,
       }),
     });
-    // May return 201 or 400/404 if validation fails
     expect(res.status === 201 || res.status === 400 || res.status === 404).toBe(true);
   });
 
@@ -1359,7 +1356,6 @@ describe("API Integration Tests", () => {
   test("Get pedido by ID", async () => {
     if (testPedidoId) {
       const res = await authenticatedApi(`/api/pedidos/${testPedidoId}`, authToken);
-      // Pedido may not be found if creation setup failed
       expect(res.status === 200 || res.status === 404).toBe(true);
     } else {
       console.log("Skipping: testPedidoId not set");
@@ -1383,7 +1379,6 @@ describe("API Integration Tests", () => {
           quantidade: 3,
         }),
       });
-      // May return 404 if pedido setup failed
       expect(res.status === 200 || res.status === 404).toBe(true);
     } else {
       console.log("Skipping: testPedidoId not set");
@@ -1408,7 +1403,6 @@ describe("API Integration Tests", () => {
           status: "em_preparo",
         }),
       });
-      // May return 404 if pedido setup failed
       expect(res.status === 200 || res.status === 404).toBe(true);
     } else {
       console.log("Skipping: testPedidoId not set");
@@ -1433,7 +1427,6 @@ describe("API Integration Tests", () => {
           observacao: "Extra sauce",
         }),
       });
-      // May return 404 if pedido setup failed
       expect(res.status === 200 || res.status === 404).toBe(true);
     } else {
       console.log("Skipping: testPedidoId not set");
@@ -1679,7 +1672,6 @@ describe("API Integration Tests", () => {
         role: "garcom",
       }),
     });
-    // May return 201, 403 (Forbidden), or 400 depending on permissions
     expect(res.status === 201 || res.status === 403 || res.status === 400).toBe(true);
   });
 
@@ -1712,7 +1704,6 @@ describe("API Integration Tests", () => {
         senha: "pass123456",
       }),
     });
-    // May return 201 or 403 (Forbidden) depending on permissions
     if (createRes.status === 201) {
       const usuarioData = await createRes.json();
 
@@ -1739,7 +1730,6 @@ describe("API Integration Tests", () => {
         senha: "pass123456",
       }),
     });
-    // May return 201 or 403 (Forbidden) depending on permissions
     if (createRes.status === 201) {
       const usuarioData = await createRes.json();
 
@@ -1967,6 +1957,12 @@ describe("API Integration Tests", () => {
       method: "DELETE",
     });
     await expectStatus(res, 401);
+  });
+
+  test("Get LGPD privacy policy", async () => {
+    const res = await api("/api/lgpd/politica");
+    const status = res.status;
+    expect(status === 200 || status === 404).toBe(true);
   });
 
   // ==================== Delivery Endpoints ====================
