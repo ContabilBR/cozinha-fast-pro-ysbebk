@@ -1,5 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
+import { count } from "drizzle-orm";
+import * as schema from "../db/schema/schema.js";
 
 export function registerAdminRoutes(app: App) {
   const db = app.db as any;
@@ -296,20 +298,21 @@ export function registerAdminRoutes(app: App) {
         app.logger.info({ deleted: deletedCount }, "Restaurantes deleted");
 
         // Step 2: Get verification counts
-        const countsResult = await db.execute(
-          `SELECT 'restaurante' as tabela, count(*)::int as total FROM restaurante
-           UNION ALL SELECT 'mesas', count(*)::int FROM mesas
-           UNION ALL SELECT 'categorias', count(*)::int FROM categorias
-           UNION ALL SELECT 'pratos', count(*)::int FROM pratos
-           UNION ALL SELECT 'comandas', count(*)::int FROM comandas
-           UNION ALL SELECT 'pedidos', count(*)::int FROM pedidos
-           ORDER BY tabela`
-        );
+        const [r1] = await db.select({ total: count() }).from(schema.restaurante);
+        const [r2] = await db.select({ total: count() }).from(schema.mesas);
+        const [r3] = await db.select({ total: count() }).from(schema.categorias);
+        const [r4] = await db.select({ total: count() }).from(schema.pratos);
+        const [r5] = await db.select({ total: count() }).from(schema.comandas);
+        const [r6] = await db.select({ total: count() }).from(schema.pedidos);
 
-        const counts = (countsResult.rows || []).map((row: any) => ({
-          tabela: row.tabela,
-          total: row.total,
-        }));
+        const counts = [
+          { tabela: "categorias", total: r3.total },
+          { tabela: "comandas", total: r5.total },
+          { tabela: "mesas", total: r2.total },
+          { tabela: "pedidos", total: r6.total },
+          { tabela: "pratos", total: r4.total },
+          { tabela: "restaurante", total: r1.total },
+        ];
 
         app.logger.info({ counts }, "Final counts retrieved");
 
