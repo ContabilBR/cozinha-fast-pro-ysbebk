@@ -159,4 +159,87 @@ export function registerAdminRoutes(app: App) {
       }
     }
   );
+
+  // POST /admin/cleanup-non-default-restaurante-2 — cleanup non-default restaurants tables (one-time operation)
+  app.fastify.post(
+    "/admin/cleanup-non-default-restaurante-2",
+    {
+      schema: {
+        description: "Clean up additional tables for non-default restaurants (one-time internal operation)",
+        tags: ["admin"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    table: { type: "string" },
+                    rows_deleted: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info({}, "Starting cleanup of non-default restaurants (phase 2)");
+
+        const DEFAULT_RESTAURANTE_ID = "00000000-0000-0000-0000-000000000001";
+        const tables = [
+          "insumos",
+          "comandas",
+          "pratos",
+          "categoria_pratos",
+          "categorias",
+          "mesas",
+          "profiles",
+          "usuarios",
+        ];
+
+        const results = [];
+
+        for (const table of tables) {
+          try {
+            const query = `DELETE FROM ${table} WHERE restaurante_id != '${DEFAULT_RESTAURANTE_ID}'`;
+            const result = await db.execute(query);
+            const rowCount = result.rowCount || 0;
+
+            results.push({
+              table,
+              rows_deleted: rowCount,
+            });
+
+            app.logger.info({ table, rows_deleted: rowCount }, "Cleanup executed for phase 2");
+          } catch (err) {
+            app.logger.error({ table, err }, "Error during cleanup phase 2 for table");
+            results.push({
+              table,
+              rows_deleted: 0,
+            });
+          }
+        }
+
+        app.logger.info({ results }, "Cleanup phase 2 completed");
+
+        return reply.code(200).send({
+          results,
+        });
+      } catch (err) {
+        app.logger.error({ err }, "Cleanup phase 2 operation failed");
+        return reply.code(500).send({ error: "Cleanup phase 2 failed: " + (err as any).message });
+      }
+    }
+  );
 }
