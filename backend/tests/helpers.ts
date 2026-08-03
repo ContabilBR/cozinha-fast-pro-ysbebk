@@ -102,6 +102,16 @@ export async function signUpTestUser(): Promise<TestUser> {
     },
   };
 
+  // Create a profile with the default restaurante so user has a tenant
+  const restauranteId = "00000000-0000-0000-0000-000000000001";
+  await authenticatedApi("/api/auth/update-user", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      restaurante_id: restauranteId,
+    }),
+  });
+
   // Auto-register cleanup so the test file doesn't need to
   afterAll(async () => {
     await deleteTestUser(testUser.token);

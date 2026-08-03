@@ -242,4 +242,85 @@ export function registerAdminRoutes(app: App) {
       }
     }
   );
+
+  // POST /admin/cleanup-restaurante-final — final restaurante cleanup (one-time operation)
+  app.fastify.post(
+    "/admin/cleanup-restaurante-final",
+    {
+      schema: {
+        description: "Final cleanup of non-default restaurants (one-time internal operation)",
+        tags: ["admin"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              deleted: {
+                type: "object",
+                properties: {
+                  restaurante: { type: "number" },
+                },
+              },
+              counts: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    tabela: { type: "string" },
+                    total: { type: "number" },
+                  },
+                },
+              },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info({}, "Starting final restaurante cleanup");
+
+        const DEFAULT_RESTAURANTE_ID = "00000000-0000-0000-0000-000000000001";
+
+        // Step 1: Delete non-default restaurantes
+        const deleteResult = await db.execute(
+          `DELETE FROM restaurante WHERE id != '${DEFAULT_RESTAURANTE_ID}'`
+        );
+        const deletedCount = deleteResult.rowCount || 0;
+
+        app.logger.info({ deleted: deletedCount }, "Restaurantes deleted");
+
+        // Step 2: Get verification counts
+        const countsResult = await db.execute(
+          `SELECT 'restaurante' as tabela, count(*) as total FROM restaurante
+           UNION ALL SELECT 'mesas', count(*) FROM mesas
+           UNION ALL SELECT 'categorias', count(*) FROM categorias
+           UNION ALL SELECT 'pratos', count(*) FROM pratos
+           UNION ALL SELECT 'comandas', count(*) FROM comandas
+           UNION ALL SELECT 'pedidos', count(*) FROM pedidos
+           ORDER BY tabela`
+        );
+
+        const counts = (countsResult.rows || []).map((row: any) => ({
+          tabela: row.tabela,
+          total: parseInt(row.total, 10),
+        }));
+
+        app.logger.info({ counts }, "Final counts retrieved");
+
+        return reply.code(200).send({
+          deleted: { restaurante: deletedCount },
+          counts,
+        });
+      } catch (err) {
+        app.logger.error({ err }, "Final cleanup operation failed");
+        return reply.code(500).send({ error: "Final cleanup failed: " + (err as any).message });
+      }
+    }
+  );
 }
