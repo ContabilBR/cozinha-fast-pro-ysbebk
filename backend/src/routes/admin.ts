@@ -297,18 +297,18 @@ export function registerAdminRoutes(app: App) {
 
         // Step 2: Get verification counts
         const countsResult = await db.execute(
-          `SELECT 'restaurante' as tabela, count(*) as total FROM restaurante
-           UNION ALL SELECT 'mesas', count(*) FROM mesas
-           UNION ALL SELECT 'categorias', count(*) FROM categorias
-           UNION ALL SELECT 'pratos', count(*) FROM pratos
-           UNION ALL SELECT 'comandas', count(*) FROM comandas
-           UNION ALL SELECT 'pedidos', count(*) FROM pedidos
+          `SELECT 'restaurante' as tabela, count(*)::int as total FROM restaurante
+           UNION ALL SELECT 'mesas', count(*)::int FROM mesas
+           UNION ALL SELECT 'categorias', count(*)::int FROM categorias
+           UNION ALL SELECT 'pratos', count(*)::int FROM pratos
+           UNION ALL SELECT 'comandas', count(*)::int FROM comandas
+           UNION ALL SELECT 'pedidos', count(*)::int FROM pedidos
            ORDER BY tabela`
         );
 
         const counts = (countsResult.rows || []).map((row: any) => ({
           tabela: row.tabela,
-          total: parseInt(row.total, 10),
+          total: row.total,
         }));
 
         app.logger.info({ counts }, "Final counts retrieved");
