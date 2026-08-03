@@ -326,4 +326,57 @@ export function registerAdminRoutes(app: App) {
       }
     }
   );
+
+  // GET /admin/query-comandas-historico — diagnostic query (no auth)
+  app.fastify.get(
+    "/admin/query-comandas-historico",
+    {
+      schema: {
+        description: "Diagnostic query for comandas_historico (no authentication required)",
+        tags: ["admin"],
+        response: {
+          200: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                mesa_numero: { type: ["number", "null"] },
+                garcom_id: { type: ["string", "null"] },
+                total: { type: ["string", "null"] },
+                status: { type: ["string", "null"] },
+                closed_at: { type: ["string", "null"] },
+              },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info({}, "Query comandas_historico diagnostics");
+
+        const result = await db.execute(
+          `SELECT id, mesa_numero, garcom_id, total, status, closed_at
+           FROM comandas_historico
+           WHERE restaurante_id = '00000000-0000-0000-0000-000000000001'
+           ORDER BY closed_at DESC
+           LIMIT 5`
+        );
+
+        app.logger.info({ rowCount: result.rows?.length || 0 }, "Comandas historico query executed");
+
+        return reply.code(200).send(result.rows || []);
+      } catch (err) {
+        app.logger.error({ err }, "Comandas historico query failed");
+        return reply.code(500).send({ error: "Query failed: " + (err as any).message });
+      }
+    }
+  );
 }
