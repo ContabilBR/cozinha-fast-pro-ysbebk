@@ -25,6 +25,185 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
 export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
 
+  // GET /api/fiscal/diagnostico — diagnostic endpoint for Focus NFE connection (no auth required)
+  app.fastify.get(
+    "/api/fiscal/diagnostico",
+    {
+      schema: {
+        description: "Diagnostic endpoint for Focus NFE tax invoice API connection testing",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              timestamp: { type: "string", format: "date-time" },
+              ref: { type: "string" },
+              cnpj: { type: "string" },
+              tokenSource: { type: "string" },
+              tokenLength: { type: "number", nullable: true },
+              first3Chars: { type: "string", nullable: true },
+              last3Chars: { type: "string", nullable: true },
+              focusNfeEnv: { type: "string" },
+              baseUrl: { type: "string" },
+              testRequestStatus: { type: "number", nullable: true },
+              testRequestBody: { type: "string", nullable: true },
+              testRequestError: { type: "string", nullable: true },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const timestamp = new Date().toISOString();
+      app.logger.info({}, "Fiscal diagnostico endpoint called");
+
+      try {
+        // Read token from environment variables
+        let tokenSource = "NONE";
+        let token: string | undefined;
+        const varNames = [
+          "FOCUS_NFE_TOKEN",
+          "SPECULAR_SECRET_FOCUS_NFE_TOKEN",
+          "SECRET_FOCUS_NFE_TOKEN",
+        ];
+        for (const varName of varNames) {
+          const val = process.env[varName];
+          if (val) {
+            tokenSource = varName;
+            token = val;
+            break;
+          }
+        }
+
+        const tokenLength = token ? token.length : null;
+        const first3Chars = token ? token.slice(0, 3) : null;
+        const last3Chars = token ? token.slice(-3) : null;
+
+        // Determine base URL based on FOCUS_NFE_ENV
+        const focusNfeEnv = process.env.FOCUS_NFE_ENV || "undefined";
+        const baseUrl =
+          process.env.FOCUS_NFE_ENV === "production"
+            ? "https://api.focusnfe.com.br/v2"
+            : "https://homologacao.focusnfe.com.br/v2";
+
+        // Generate unique reference ID
+        const ref = "diag-" + Date.now();
+        const cnpj = "52893314000164";
+
+        // Prepare test payload
+        const testPayload = {
+          natureza_operacao: "VENDA AO CONSUMIDOR",
+          forma_pagamento: "0",
+          tipo_documento: "1",
+          finalidade_emissao: "1",
+          consumidor_final: "1",
+          presenca_comprador: "1",
+          modalidade_frete: "9",
+          cnpj_emitente: cnpj,
+          items: [
+            {
+              numero_item: 1,
+              codigo_produto: "1",
+              descricao:
+                "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL",
+              codigo_ncm: "21069090",
+              cfop: "5102",
+              unidade_comercial: "UN",
+              quantidade_comercial: "1.0000",
+              valor_unitario_comercial: "10.0000000000",
+              valor_bruto: "10.00",
+              unidade_tributavel: "UN",
+              quantidade_tributavel: "1.0000",
+              valor_unitario_tributavel: "10.0000000000",
+              icms_situacao_tributaria: "102",
+              icms_origem: "0",
+              pis_situacao_tributaria: "49",
+              cofins_situacao_tributaria: "49",
+            },
+          ],
+          formas_pagamento: [
+            {
+              forma_pagamento: "01",
+              valor_pagamento: "10.00",
+            },
+          ],
+        };
+
+        let testRequestStatus: number | null = null;
+        let testRequestBody: string | null = null;
+        let testRequestError: string | null = null;
+
+        // Try to send test request if token exists
+        if (token) {
+          try {
+            const auth = Buffer.from(token + ":").toString("base64");
+            const response = await fetch(`${baseUrl}/nfce?ref=${ref}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Basic " + auth,
+              },
+              body: JSON.stringify(testPayload),
+            });
+
+            testRequestStatus = response.status;
+            testRequestBody = await response.text();
+            if (testRequestBody.length > 500) {
+              testRequestBody = testRequestBody.slice(0, 500) + "...";
+            }
+
+            app.logger.info(
+              { ref, status: testRequestStatus },
+              "Fiscal diagnostico test request completed"
+            );
+          } catch (err) {
+            testRequestError = (err as any).message || String(err);
+            app.logger.error(
+              { err, ref },
+              "Fiscal diagnostico test request failed"
+            );
+          }
+        }
+
+        const diagnostic = {
+          timestamp,
+          ref,
+          cnpj,
+          tokenSource,
+          tokenLength,
+          first3Chars,
+          last3Chars,
+          focusNfeEnv,
+          baseUrl,
+          testRequestStatus,
+          testRequestBody,
+          testRequestError,
+        };
+
+        return reply.code(200).send(diagnostic);
+      } catch (err) {
+        app.logger.error({ err }, "Fiscal diagnostico failed");
+        return reply.code(200).send({
+          timestamp: new Date().toISOString(),
+          ref: "",
+          cnpj: "52893314000164",
+          tokenSource: "ERROR",
+          tokenLength: null,
+          first3Chars: null,
+          last3Chars: null,
+          focusNfeEnv: process.env.FOCUS_NFE_ENV || "undefined",
+          baseUrl:
+            process.env.FOCUS_NFE_ENV === "production"
+              ? "https://api.focusnfe.com.br/v2"
+              : "https://homologacao.focusnfe.com.br/v2",
+          testRequestStatus: null,
+          testRequestBody: null,
+          testRequestError: (err as any).message || "Unknown error",
+        });
+      }
+    }
+  );
+
   // POST /api/fiscal/nfce — emitir NFC-e para uma comanda fechada
   app.fastify.post<{ Body: { comanda_historico_id?: string; itens: Array<{ descricao: string; ncm: string; cfop: string; quantidade: number; valor_unitario: number; icms_situacao_tributaria: string; pis_situacao_tributaria: string; cofins_situacao_tributaria: string }>; cpf_consumidor?: string } }>(
     "/api/fiscal/nfce",
