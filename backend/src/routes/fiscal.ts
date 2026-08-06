@@ -24,6 +24,134 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
 
 export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
+  const requireAuth = app.requireAuth();
+
+  // GET /api/fiscal/diagnostico — diagnostic endpoint (protected)
+  app.fastify.get(
+    "/api/fiscal/diagnostico",
+    {
+      schema: {
+        description: "Diagnostic endpoint for Focus NFE integration configuration",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              focusNfeEnv: { type: "string" },
+              baseUrl: { type: "string" },
+              tokenSource: { type: "string" },
+              tokenLength: { type: "number", nullable: true },
+              first3Chars: { type: "string", nullable: true },
+              last3Chars: { type: "string", nullable: true },
+              testFetchStatus: { type: ["number", "null"] },
+              testFetchBodyPreview: { type: ["string", "null"] },
+              testFetchError: { type: ["string", "null"] },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const session = await requireAuth(request, reply);
+        if (!session) return;
+
+        app.logger.info({}, "Fiscal diagnostico endpoint called");
+
+        // Get environment configuration
+        const focusNfeEnv = process.env.FOCUS_NFE_ENV || "undefined";
+        const baseUrl =
+          process.env.FOCUS_NFE_ENV === "production"
+            ? "https://api.focusnfe.com.br/v2"
+            : "https://homologacao.focusnfe.com.br/v2";
+
+        // Determine token source
+        let tokenSource = "NONE";
+        let token: string | undefined;
+        const varNames = [
+          "FOCUS_NFE_TOKEN",
+          "SPECULAR_SECRET_FOCUS_NFE_TOKEN",
+          "SECRET_FOCUS_NFE_TOKEN",
+        ];
+        for (const varName of varNames) {
+          const val = process.env[varName];
+          if (val) {
+            tokenSource = varName;
+            token = val;
+            break;
+          }
+        }
+
+        const tokenLength = token ? token.length : null;
+        const first3Chars = token ? token.slice(0, 3) : null;
+        const last3Chars = token ? token.slice(-3) : null;
+
+        // Try test fetch if token exists
+        let testFetchStatus: number | null = null;
+        let testFetchBodyPreview: string | null = null;
+        let testFetchError: string | null = null;
+
+        if (token) {
+          try {
+            const timestamp = Date.now();
+            const auth = Buffer.from(token + ":").toString("base64");
+            const testRes = await fetch(
+              `${baseUrl}/nfce?ref=teste-diagnostico-${timestamp}`,
+              {
+                method: "GET",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Basic " + auth,
+                },
+              }
+            );
+
+            testFetchStatus = testRes.status;
+            const body = await testRes.text();
+            testFetchBodyPreview = body.slice(0, 500);
+          } catch (err) {
+            testFetchError = (err as any).message || String(err);
+          }
+        }
+
+        const diagnostic = {
+          focusNfeEnv,
+          baseUrl,
+          tokenSource,
+          tokenLength,
+          first3Chars,
+          last3Chars,
+          testFetchStatus,
+          testFetchBodyPreview,
+          testFetchError,
+        };
+
+        app.logger.info(
+          { tokenSource, testFetchStatus },
+          "Fiscal diagnostico completed"
+        );
+
+        return reply.code(200).send(diagnostic);
+      } catch (err) {
+        app.logger.error({ err }, "Fiscal diagnostico failed");
+        return reply
+          .code(500)
+          .send({ error: "Diagnostico failed: " + (err as any).message });
+      }
+    }
+  );
 
   // POST /api/fiscal/nfce — emitir NFC-e para uma comanda fechada
   app.fastify.post<{ Body: { comanda_historico_id?: string; itens: Array<{ descricao: string; ncm: string; cfop: string; quantidade: number; valor_unitario: number; icms_situacao_tributaria: string; pis_situacao_tributaria: string; cofins_situacao_tributaria: string }>; cpf_consumidor?: string } }>(

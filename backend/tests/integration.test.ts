@@ -2263,6 +2263,22 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Fiscal Endpoints ====================
+  test("Get fiscal diagnostico returns 200 or 401 or 500", async () => {
+    const res = await authenticatedApi("/api/fiscal/diagnostico", authToken);
+    const status = res.status;
+    expect(status === 200 || status === 401 || status === 500).toBe(true);
+    if (status === 200) {
+      const data = await res.json();
+      expect(data.focusNfeEnv !== undefined).toBe(true);
+      expect(data.baseUrl !== undefined).toBe(true);
+    }
+  });
+
+  test("Get fiscal diagnostico without authentication returns 401", async () => {
+    const res = await api("/api/fiscal/diagnostico");
+    await expectStatus(res, 401);
+  });
+
   test("Create NFCe fiscal document returns 200 or 201 or 400 or 401 or 404 or 500", async () => {
     const res = await api("/api/fiscal/nfce", {
       method: "POST",
