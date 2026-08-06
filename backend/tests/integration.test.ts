@@ -2072,6 +2072,12 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 500).toBe(true);
   });
 
+  test("Admin query comandas historico returns 200 or 500", async () => {
+    const res = await api("/admin/query-comandas-historico");
+    const status = res.status;
+    expect(status === 200 || status === 500).toBe(true);
+  });
+
   // ==================== Realtime WebSocket ====================
   test("Connect to realtime WebSocket with authentication", async () => {
     const ws = await connectAuthenticatedWebSocket("/api/realtime", authToken);
