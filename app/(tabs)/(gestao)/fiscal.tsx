@@ -16,11 +16,6 @@ const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon
   erro: { label: "Erro", bg: "#FEE2E2", text: "#991B1B", icon: "alert-circle-outline" },
 };
 
-const DEFAULTS_FISCAIS = {
-  ncm: "21069090", cfop: "5102",
-  icms_situacao_tributaria: "102", pis_situacao_tributaria: "49", cofins_situacao_tributaria: "49",
-};
-
 interface Nota { id: string; referenciaFocus?: string; referencia_focus?: string; status: string; chaveAcesso?: string; chave_acesso?: string; numeroNota?: number; numero_nota?: number; serie?: number; mensagemSefaz?: string; mensagem_sefaz?: string; createdAt?: string; created_at?: string; }
 interface ComandaHistorico { id: string; mesa_numero?: number; garcom_nome?: string; total: string; closed_at?: string; pedidos: Array<{ id: string; prato_nome?: string; quantidade: number; preco_unitario: string }>; }
 
@@ -35,7 +30,6 @@ export default function FiscalScreen() {
   const [comandas, setComandas] = useState<ComandaHistorico[]>([]);
   const [loadingComandas, setLoadingComandas] = useState(false);
   const [selectedComanda, setSelectedComanda] = useState<ComandaHistorico | null>(null);
-  const [cpfConsumidor, setCpfConsumidor] = useState("");
   const [emitindo, setEmitindo] = useState(false);
   const [showCancelar, setShowCancelar] = useState(false);
   const [notaCancelar, setNotaCancelar] = useState<Nota | null>(null);
@@ -54,18 +48,18 @@ export default function FiscalScreen() {
   const getDate = (n: Nota) => n.createdAt || n.created_at || "";
   const fmt = (v: string | number) => "R$ " + parseFloat(String(v)).toFixed(2).replace(".", ",");
 
-  const openEmitir = async () => { setShowEmitir(true); setSelectedComanda(null); setCpfConsumidor(""); setLoadingComandas(true); try { const res = await apiGet<any>("/api/historico"); setComandas(Array.isArray(res) ? res : (res.historico || [])); } catch (e) { Alert.alert("Erro", "Não foi possível carregar comandas"); setShowEmitir(false); } finally { setLoadingComandas(false); } };
-  const handleEmitir = async () => { if (!selectedComanda || !selectedComanda.pedidos?.length) { Alert.alert("Erro", "Comanda sem itens"); return; } setEmitindo(true); try { const itens = selectedComanda.pedidos.map((p) => ({ descricao: p.prato_nome || "Item", quantidade: p.quantidade, valor_unitario: parseFloat(p.preco_unitario), ...DEFAULTS_FISCAIS })); const body: any = { comanda_historico_id: selectedComanda.id, itens }; if (cpfConsumidor.trim().length >= 11) body.cpf_consumidor = cpfConsumidor.replace(/\D/g, ""); const res = await apiPost<any>("/api/fiscal/nfce", body); setShowEmitir(false); fetchNotas(); const status = res.nota_fiscal?.status || "processando"; if (status === "autorizada") Alert.alert("Sucesso", "NFC-e autorizada!"); else if (status === "rejeitada" || status === "erro") Alert.alert("Atenção", "NFC-e " + status); else Alert.alert("Enviado", "NFC-e em processamento."); } catch (e: any) { Alert.alert("Erro", e.message || "Erro ao emitir"); } finally { setEmitindo(false); } };
-  const atualizarStatus = async (nota: Nota) => { try { await apiGet<any>("/api/fiscal/nfce/" + getRef(nota)); fetchNotas(); Alert.alert("Atualizado", "Status atualizado"); } catch (e: any) { Alert.alert("Erro", e.message || "Erro"); } };
-  const openCancelar = (nota: Nota) => { setNotaCancelar(nota); setJustificativa(""); setShowCancelar(true); };
-  const handleCancelar = async () => { if (!notaCancelar || justificativa.length < 15) { Alert.alert("Atenção", "Justificativa mínima: 15 caracteres"); return; } setCancelando(true); try { await apiDelete<any>("/api/fiscal/nfce/" + getRef(notaCancelar), { justificativa }); setShowCancelar(false); fetchNotas(); Alert.alert("Sucesso", "NFC-e cancelada"); } catch (e: any) { Alert.alert("Erro", e.message || "Erro"); } finally { setCancelando(false); } };
+  const openEmitir = async () => { setShowEmitir(true); setSelectedComanda(null); setLoadingComandas(true); console.log("[FiscalScreen] openEmitir: abrindo modal de emissão"); try { const res = await apiGet<any>("/api/historico"); console.log("[FiscalScreen] openEmitir: comandas carregadas"); setComandas(Array.isArray(res) ? res : (res.historico || [])); } catch (e) { Alert.alert("Erro", "Não foi possível carregar comandas"); setShowEmitir(false); } finally { setLoadingComandas(false); } };
+  const handleEmitir = async () => { if (!selectedComanda) { Alert.alert("Erro", "Comanda sem itens"); return; } console.log("[FiscalScreen] handleEmitir: emitindo NFS-e para comanda", selectedComanda.id); setEmitindo(true); try { const body = { comanda_historico_id: selectedComanda.id, descricao_servico: "Fornecimento de alimentação - Mesa " + (selectedComanda.mesa_numero || ""), valor_servico: parseFloat(selectedComanda.total) }; console.log("[FiscalScreen] handleEmitir: POST /api/fiscal/nfsen", body); const res = await apiPost<any>("/api/fiscal/nfsen", body); setShowEmitir(false); fetchNotas(); const status = res.nota_fiscal?.status || "processando"; if (status === "autorizada") Alert.alert("Sucesso", "NFS-e autorizada!"); else if (status === "rejeitada" || status === "erro") Alert.alert("Atenção", "NFS-e " + status); else Alert.alert("Enviado", "NFS-e em processamento."); } catch (e: any) { Alert.alert("Erro", e.message || "Erro ao emitir"); } finally { setEmitindo(false); } };
+  const atualizarStatus = async (nota: Nota) => { console.log("[FiscalScreen] atualizarStatus: GET /api/fiscal/nfsen/", getRef(nota)); try { await apiGet<any>("/api/fiscal/nfsen/" + getRef(nota)); fetchNotas(); Alert.alert("Atualizado", "Status atualizado"); } catch (e: any) { Alert.alert("Erro", e.message || "Erro"); } };
+  const openCancelar = (nota: Nota) => { console.log("[FiscalScreen] openCancelar: abrindo modal de cancelamento para nota", nota.id); setNotaCancelar(nota); setJustificativa(""); setShowCancelar(true); };
+  const handleCancelar = async () => { if (!notaCancelar || justificativa.length < 15) { Alert.alert("Atenção", "Justificativa mínima: 15 caracteres"); return; } console.log("[FiscalScreen] handleCancelar: DELETE /api/fiscal/nfsen/", getRef(notaCancelar)); setCancelando(true); try { await apiDelete<any>("/api/fiscal/nfsen/" + getRef(notaCancelar), { justificativa }); setShowCancelar(false); fetchNotas(); Alert.alert("Sucesso", "NFS-e cancelada"); } catch (e: any) { Alert.alert("Erro", e.message || "Erro"); } finally { setCancelando(false); } };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center" }}>
-        <Pressable onPress={() => router.back()} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
+        <Pressable onPress={() => { console.log("[FiscalScreen] back pressed"); router.back(); }} style={{ marginRight: 10 }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Notas Fiscais</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: COLORS.text }}>Notas Fiscais de Serviço</Text>
           <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{notas.length} nota{notas.length !== 1 ? "s" : ""}</Text>
         </View>
         <Pressable onPress={openEmitir} style={{ backgroundColor: "#22C55E", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -90,14 +84,14 @@ export default function FiscalScreen() {
                 {item.status === "autorizada" && <Pressable onPress={() => openCancelar(item)} style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="close-circle-outline" size={14} color="#991B1B" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#991B1B" }}>Cancelar</Text></Pressable>}
               </View>
             </View>); }}
-          ListEmptyComponent={<View style={{ alignItems: "center", paddingTop: 60 }}><Ionicons name="document-text-outline" size={48} color={COLORS.textSecondary} /><Text style={{ fontSize: 16, color: COLORS.textSecondary, marginTop: 12 }}>Nenhuma nota fiscal</Text><Pressable onPress={openEmitir} style={{ marginTop: 16, backgroundColor: "#22C55E", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>Emitir primeira NFC-e</Text></Pressable></View>}
+          ListEmptyComponent={<View style={{ alignItems: "center", paddingTop: 60 }}><Ionicons name="document-text-outline" size={48} color={COLORS.textSecondary} /><Text style={{ fontSize: 16, color: COLORS.textSecondary, marginTop: 12 }}>Nenhuma nota fiscal</Text><Pressable onPress={openEmitir} style={{ marginTop: 16, backgroundColor: "#22C55E", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}><Text style={{ color: "white", fontWeight: "700" }}>Emitir primeira NFS-e</Text></Pressable></View>}
         />
       )}
       <Modal visible={showEmitir} animationType="slide" transparent>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
           <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "85%" }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Emitir NFC-e</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Emitir NFS-e</Text>
               <Pressable onPress={() => setShowEmitir(false)}><Ionicons name="close" size={24} color={COLORS.text} /></Pressable>
             </View>
             {loadingComandas ? (
@@ -107,7 +101,7 @@ export default function FiscalScreen() {
                 <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginBottom: 12 }}>Selecione uma comanda fechada:</Text>
                 <FlatList data={comandas} keyExtractor={(c) => c.id} style={{ maxHeight: 400 }}
                   renderItem={({ item }) => (
-                    <Pressable onPress={() => setSelectedComanda(item)} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 0.5, borderColor: COLORS.border }}>
+                    <Pressable onPress={() => { console.log("[FiscalScreen] comanda selecionada:", item.id); setSelectedComanda(item); }} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 0.5, borderColor: COLORS.border }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                         <View>
                           <Text style={{ fontSize: 15, fontWeight: "600", color: COLORS.text }}>{item.mesa_numero ? "Mesa " + item.mesa_numero : "Comanda"}</Text>
@@ -139,14 +133,8 @@ export default function FiscalScreen() {
                     <Text style={{ fontSize: 15, fontWeight: "700", color: COLORS.primary }}>{fmt(selectedComanda.total)}</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>CPF do consumidor (opcional)</Text>
-                <TextInput value={cpfConsumidor} onChangeText={setCpfConsumidor} placeholder="000.000.000-00" placeholderTextColor={COLORS.textSecondary} keyboardType="number-pad" maxLength={14}
-                  style={{ backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, color: COLORS.text, fontSize: 15, marginBottom: 12, borderWidth: 0.5, borderColor: COLORS.border }} />
-                <View style={{ backgroundColor: "#FEF3C7", borderRadius: 10, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 12, color: "#92400E" }}>Dados fiscais padrão: NCM 21069090, CFOP 5102, Simples Nacional.</Text>
-                </View>
                 <Pressable onPress={handleEmitir} disabled={emitindo} style={{ backgroundColor: "#22C55E", borderRadius: 12, padding: 16, alignItems: "center" }}>
-                  {emitindo ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Emitir NFC-e</Text>}
+                  {emitindo ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Emitir NFS-e</Text>}
                 </Pressable>
               </ScrollView>
             )}
@@ -157,7 +145,7 @@ export default function FiscalScreen() {
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
           <View style={{ backgroundColor: COLORS.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Cancelar NFC-e</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: COLORS.text }}>Cancelar NFS-e</Text>
               <Pressable onPress={() => setShowCancelar(false)}><Ionicons name="close" size={24} color={COLORS.text} /></Pressable>
             </View>
             {notaCancelar && (
