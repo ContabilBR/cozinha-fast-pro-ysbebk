@@ -31,115 +31,136 @@ export function registerFiscalRoutes(app: App) {
     "/api/fiscal/diagnostico",
     {
       schema: {
-        description: "Diagnostic endpoint for Focus NFE integration configuration",
+        description: "Diagnostic endpoint for Focus NFE integration - sends test NFC-e payload",
         tags: ["fiscal"],
         response: {
           200: {
             type: "object",
             properties: {
-              focusNfeEnv: { type: "string" },
-              baseUrl: { type: "string" },
-              tokenSource: { type: "string" },
-              tokenLength: { type: "number", nullable: true },
-              first3Chars: { type: "string", nullable: true },
-              last3Chars: { type: "string", nullable: true },
-              testFetchStatus: { type: "number", nullable: true },
-              testFetchBodyPreview: { type: "string", nullable: true },
-              testFetchError: { type: "string", nullable: true },
-            },
-          },
-          500: {
-            type: "object",
-            properties: {
-              error: { type: "string" },
+              timestamp: { type: "string", format: "date-time" },
+              ref: { type: "string" },
+              url: { type: "string" },
+              statusCode: { type: "number", nullable: true },
+              responseBody: { type: "object", nullable: true },
+              error: { type: "string", nullable: true },
             },
           },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        app.logger.info({}, "Fiscal diagnostico endpoint called");
+      const timestamp = new Date().toISOString();
+      app.logger.info({}, "Fiscal diagnostico endpoint called");
 
-        // Get environment configuration
-        const focusNfeEnv = process.env.FOCUS_NFE_ENV || "undefined";
+      try {
+        // Read token from environment variables
+        const token =
+          process.env.FOCUS_NFE_TOKEN ||
+          process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN ||
+          process.env.SECRET_FOCUS_NFE_TOKEN;
+
+        // Determine base URL based on FOCUS_NFE_ENV
         const baseUrl =
           process.env.FOCUS_NFE_ENV === "production"
             ? "https://api.focusnfe.com.br/v2"
             : "https://homologacao.focusnfe.com.br/v2";
 
-        // Determine token source
-        let tokenSource = "NONE";
-        let token: string | undefined;
-        const varNames = [
-          "FOCUS_NFE_TOKEN",
-          "SPECULAR_SECRET_FOCUS_NFE_TOKEN",
-          "SECRET_FOCUS_NFE_TOKEN",
-        ];
-        for (const varName of varNames) {
-          const val = process.env[varName];
-          if (val) {
-            tokenSource = varName;
-            token = val;
-            break;
-          }
-        }
+        // Generate unique reference ID with "diag-" prefix + timestamp
+        const ref = "diag-" + new Date().getTime();
+        const url = `${baseUrl}/nfce?ref=${ref}`;
 
-        const tokenLength = token ? token.length : null;
-        const first3Chars = token ? token.slice(0, 3) : null;
-        const last3Chars = token ? token.slice(-3) : null;
+        // Prepare test payload
+        const testPayload = {
+          natureza_operacao: "VENDA AO CONSUMIDOR",
+          forma_pagamento: "0",
+          tipo_documento: "1",
+          finalidade_emissao: "1",
+          consumidor_final: "1",
+          presenca_comprador: "1",
+          modalidade_frete: "9",
+          items: [
+            {
+              numero_item: 1,
+              codigo_produto: "1",
+              descricao: "Produto teste para homologação",
+              codigo_ncm: "21069090",
+              cfop: "5102",
+              unidade_comercial: "UN",
+              quantidade_comercial: "1.0000",
+              valor_unitario_comercial: "10.0000000000",
+              valor_bruto: "10.00",
+              unidade_tributavel: "UN",
+              quantidade_tributavel: "1.0000",
+              valor_unitario_tributavel: "10.0000000000",
+              icms_situacao_tributaria: "102",
+              icms_origem: "0",
+              pis_situacao_tributaria: "49",
+              cofins_situacao_tributaria: "49",
+            },
+          ],
+          formas_pagamento: [
+            {
+              forma_pagamento: "01",
+              valor_pagamento: "10.00",
+            },
+          ],
+        };
 
-        // Try test fetch if token exists
-        let testFetchStatus: number | null = null;
-        let testFetchBodyPreview: string | null = null;
-        let testFetchError: string | null = null;
+        let statusCode: number | null = null;
+        let responseBody: any = null;
+        let error: string | null = null;
 
         if (token) {
           try {
-            const timestamp = Date.now();
+            // Send POST request with Basic auth
             const auth = Buffer.from(token + ":").toString("base64");
-            const testRes = await fetch(
-              `${baseUrl}/nfce?ref=teste-diagnostico-${timestamp}`,
-              {
-                method: "GET",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: "Basic " + auth,
-                },
-              }
-            );
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Basic " + auth,
+              },
+              body: JSON.stringify(testPayload),
+            });
 
-            testFetchStatus = testRes.status;
-            const body = await testRes.text();
-            testFetchBodyPreview = body.slice(0, 500);
+            statusCode = response.status;
+            responseBody = await response.json();
+            app.logger.info(
+              { ref, statusCode, responseBody },
+              "Fiscal diagnostico test request completed"
+            );
           } catch (err) {
-            testFetchError = (err as any).message || String(err);
+            error = (err as any).message || String(err);
+            app.logger.error(
+              { err, ref },
+              "Fiscal diagnostico test request failed"
+            );
           }
+        } else {
+          error = "No Focus NFE token configured";
+          app.logger.warn({}, "Fiscal diagnostico: no token configured");
         }
 
         const diagnostic = {
-          focusNfeEnv,
-          baseUrl,
-          tokenSource,
-          tokenLength,
-          first3Chars,
-          last3Chars,
-          testFetchStatus,
-          testFetchBodyPreview,
-          testFetchError,
+          timestamp,
+          ref,
+          url,
+          statusCode,
+          responseBody,
+          error,
         };
-
-        app.logger.info(
-          { tokenSource, testFetchStatus },
-          "Fiscal diagnostico completed"
-        );
 
         return reply.code(200).send(diagnostic);
       } catch (err) {
         app.logger.error({ err }, "Fiscal diagnostico failed");
-        return reply
-          .code(500)
-          .send({ error: "Diagnostico failed: " + (err as any).message });
+        return reply.code(200).send({
+          timestamp,
+          ref: "",
+          url: "",
+          statusCode: null,
+          responseBody: null,
+          error: (err as any).message || "Unknown error",
+        });
       }
     }
   );

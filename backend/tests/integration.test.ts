@@ -2269,8 +2269,9 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 401 || status === 500).toBe(true);
     if (status === 200) {
       const data = await res.json();
-      expect(data.focusNfeEnv !== undefined).toBe(true);
-      expect(data.baseUrl !== undefined).toBe(true);
+      expect(data.timestamp !== undefined).toBe(true);
+      expect(data.ref !== undefined).toBe(true);
+      expect(data.url !== undefined).toBe(true);
     }
   });
 
