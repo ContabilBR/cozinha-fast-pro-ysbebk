@@ -2078,6 +2078,14 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 500).toBe(true);
   });
 
+  test("Admin check FOCUS_NFE_TOKEN returns 200", async () => {
+    const res = await api("/admin/check-focus-token");
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.exists).toBeDefined();
+    expect(typeof data.exists === "boolean").toBe(true);
+  });
+
   // ==================== Realtime WebSocket ====================
   test("Connect to realtime WebSocket with authentication", async () => {
     const ws = await connectAuthenticatedWebSocket("/api/realtime", authToken);
