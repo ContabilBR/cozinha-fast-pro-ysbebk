@@ -2268,11 +2268,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.timestamp).toBeDefined();
+    expect(data.tipo).toBeDefined();
     expect(data.ref).toBeDefined();
     expect(data.cnpj).toBeDefined();
-    expect(data.tokenSource).toBeDefined();
-    expect(data.focusNfeEnv).toBeDefined();
-    expect(data.baseUrl).toBeDefined();
+    expect(data.tokenLength === null || typeof data.tokenLength === 'number').toBe(true);
+    expect(data.first3Chars === null || typeof data.first3Chars === 'string').toBe(true);
+    expect(data.last3Chars === null || typeof data.last3Chars === 'string').toBe(true);
+    expect(data.firstAttemptUrl).toBeDefined();
+    expect(data.firstAttemptStatus === null || typeof data.firstAttemptStatus === 'number').toBe(true);
+    expect(data.firstAttemptBody === null || typeof data.firstAttemptBody === 'string').toBe(true);
   });
 
   test("Create NFCe fiscal document returns 200 or 201 or 400 or 401 or 404 or 500", async () => {

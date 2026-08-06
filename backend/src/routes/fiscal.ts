@@ -25,29 +25,31 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
 export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
 
-  // GET /api/fiscal/diagnostico — diagnostic endpoint for Focus NFE connection (no auth required)
+  // GET /api/fiscal/diagnostico — NFSe Nacional diagnostic endpoint (no auth required)
   app.fastify.get(
     "/api/fiscal/diagnostico",
     {
       schema: {
-        description: "Diagnostic endpoint for Focus NFE tax invoice API connection testing",
+        description: "Diagnostic endpoint for NFSe Nacional tax invoice API connection testing",
         tags: ["fiscal"],
         response: {
           200: {
             type: "object",
             properties: {
               timestamp: { type: "string", format: "date-time" },
+              tipo: { type: "string" },
               ref: { type: "string" },
               cnpj: { type: "string" },
-              tokenSource: { type: "string" },
               tokenLength: { type: "number", nullable: true },
               first3Chars: { type: "string", nullable: true },
               last3Chars: { type: "string", nullable: true },
-              focusNfeEnv: { type: "string" },
-              baseUrl: { type: "string" },
-              testRequestStatus: { type: "number", nullable: true },
-              testRequestBody: { type: "string", nullable: true },
-              testRequestError: { type: "string", nullable: true },
+              firstAttemptUrl: { type: "string" },
+              firstAttemptStatus: { type: "number", nullable: true },
+              firstAttemptBody: { type: "string", nullable: true },
+              secondAttemptUrl: { type: "string", nullable: true },
+              secondAttemptStatus: { type: "number", nullable: true },
+              secondAttemptBody: { type: "string", nullable: true },
+              error: { type: "string", nullable: true },
             },
           },
         },
@@ -55,11 +57,10 @@ export function registerFiscalRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const timestamp = new Date().toISOString();
-      app.logger.info({}, "Fiscal diagnostico endpoint called");
+      app.logger.info({}, "Fiscal diagnostico NFSe Nacional endpoint called");
 
       try {
         // Read token from environment variables
-        let tokenSource = "NONE";
         let token: string | undefined;
         const varNames = [
           "FOCUS_NFE_TOKEN",
@@ -69,7 +70,6 @@ export function registerFiscalRoutes(app: App) {
         for (const varName of varNames) {
           const val = process.env[varName];
           if (val) {
-            tokenSource = varName;
             token = val;
             break;
           }
@@ -79,126 +79,141 @@ export function registerFiscalRoutes(app: App) {
         const first3Chars = token ? token.slice(0, 3) : null;
         const last3Chars = token ? token.slice(-3) : null;
 
-        // Determine base URL based on FOCUS_NFE_ENV
-        const focusNfeEnv = process.env.FOCUS_NFE_ENV || "undefined";
-        const baseUrl =
-          process.env.FOCUS_NFE_ENV === "production"
-            ? "https://api.focusnfe.com.br/v2"
-            : "https://homologacao.focusnfe.com.br/v2";
-
-        // Generate unique reference ID
-        const ref = "diag-" + Date.now();
+        // Generate unique references
+        const ref1 = "diag-nfsen-" + Date.now();
+        const ref2 = "diag-nfsen2-" + Date.now();
         const cnpj = "52893314000164";
 
-        // Prepare test payload
-        const testPayload = {
-          natureza_operacao: "VENDA AO CONSUMIDOR",
-          forma_pagamento: "0",
-          tipo_documento: "1",
-          finalidade_emissao: "1",
-          consumidor_final: "1",
-          presenca_comprador: "1",
-          modalidade_frete: "9",
-          cnpj_emitente: cnpj,
-          items: [
-            {
-              numero_item: 1,
-              codigo_produto: "1",
-              descricao:
-                "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL",
-              codigo_ncm: "21069090",
-              cfop: "5102",
-              unidade_comercial: "UN",
-              quantidade_comercial: "1.0000",
-              valor_unitario_comercial: "10.0000000000",
-              valor_bruto: "10.00",
-              unidade_tributavel: "UN",
-              quantidade_tributavel: "1.0000",
-              valor_unitario_tributavel: "10.0000000000",
-              icms_situacao_tributaria: "102",
-              icms_origem: "0",
-              pis_situacao_tributaria: "49",
-              cofins_situacao_tributaria: "49",
-            },
-          ],
-          formas_pagamento: [
-            {
-              forma_pagamento: "01",
-              valor_pagamento: "10.00",
-            },
-          ],
+        // Get current date
+        const now = new Date();
+        const currentDate = now.toISOString().split("T")[0];
+
+        // Prepare NFSe payload
+        const nfsePayload = {
+          data_emissao: currentDate,
+          data_competencia: currentDate,
+          codigo_municipio_emissora: 3304557,
+          cnpj_prestador: "52893314000164",
+          codigo_opcao_simples_nacional: 1,
+          regime_especial_tributacao: 0,
+          cnpj_tomador: "52893314000164",
+          razao_social_tomador: "CONSUMIDOR TESTE HOMOLOGACAO",
+          codigo_municipio_tomador: 3304557,
+          cep_tomador: "20040020",
+          logradouro_tomador: "RUA TESTE",
+          numero_tomador: "100",
+          bairro_tomador: "CENTRO",
+          codigo_municipio_prestacao: 3304557,
+          codigo_tributacao_nacional_iss: "070101",
+          codigo_nbs: "109019900",
+          descricao_servico:
+            "FORNECIMENTO DE ALIMENTACAO - NOTA EMITIDA EM AMBIENTE DE HOMOLOGACAO SEM VALOR FISCAL",
+          valor_servico: 10.0,
+          tributacao_iss: 1,
+          tipo_retencao_iss: 1,
+          situacao_tributaria_pis_cofins: "00",
+          percentual_total_tributos_federais: "3.25",
+          percentual_total_tributos_estaduais: "0.00",
+          percentual_total_tributos_municipais: "5.00",
+          indicador_total_tributacao: null,
         };
 
-        let testRequestStatus: number | null = null;
-        let testRequestBody: string | null = null;
-        let testRequestError: string | null = null;
+        const firstAttemptUrl = `https://api.focusnfe.com.br/v2/nfsen?ref=${ref1}`;
+        let firstAttemptStatus: number | null = null;
+        let firstAttemptBody: string | null = null;
+        let error: string | null = null;
 
-        // Try to send test request if token exists
+        let secondAttemptUrl: string | null = null;
+        let secondAttemptStatus: number | null = null;
+        let secondAttemptBody: string | null = null;
+
+        // First attempt: production API
         if (token) {
           try {
             const auth = Buffer.from(token + ":").toString("base64");
-            const response = await fetch(`${baseUrl}/nfce?ref=${ref}`, {
+            const response = await fetch(firstAttemptUrl, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: "Basic " + auth,
               },
-              body: JSON.stringify(testPayload),
+              body: JSON.stringify(nfsePayload),
             });
 
-            testRequestStatus = response.status;
-            testRequestBody = await response.text();
-            if (testRequestBody.length > 500) {
-              testRequestBody = testRequestBody.slice(0, 500) + "...";
+            firstAttemptStatus = response.status;
+            firstAttemptBody = await response.text();
+            if (firstAttemptBody.length > 500) {
+              firstAttemptBody = firstAttemptBody.slice(0, 500) + "...";
+            }
+
+            // If 401 or 403, make second attempt to homologacao
+            if (response.status === 401 || response.status === 403) {
+              secondAttemptUrl = `https://homologacao.focusnfe.com.br/v2/nfsen?ref=${ref2}`;
+              try {
+                const response2 = await fetch(secondAttemptUrl, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: "Basic " + auth,
+                  },
+                  body: JSON.stringify(nfsePayload),
+                });
+
+                secondAttemptStatus = response2.status;
+                secondAttemptBody = await response2.text();
+                if (secondAttemptBody.length > 500) {
+                  secondAttemptBody = secondAttemptBody.slice(0, 500) + "...";
+                }
+              } catch (err2) {
+                error = (err2 as any).message || String(err2);
+              }
             }
 
             app.logger.info(
-              { ref, status: testRequestStatus },
-              "Fiscal diagnostico test request completed"
+              { ref: ref1, status: firstAttemptStatus, secondAttempt: secondAttemptStatus },
+              "Fiscal diagnostico NFSe Nacional completed"
             );
           } catch (err) {
-            testRequestError = (err as any).message || String(err);
-            app.logger.error(
-              { err, ref },
-              "Fiscal diagnostico test request failed"
-            );
+            error = (err as any).message || String(err);
+            app.logger.error({ err }, "Fiscal diagnostico NFSe Nacional failed");
           }
         }
 
         const diagnostic = {
           timestamp,
-          ref,
+          tipo: "NFSe Nacional",
+          ref: ref1,
           cnpj,
-          tokenSource,
           tokenLength,
           first3Chars,
           last3Chars,
-          focusNfeEnv,
-          baseUrl,
-          testRequestStatus,
-          testRequestBody,
-          testRequestError,
+          firstAttemptUrl,
+          firstAttemptStatus,
+          firstAttemptBody,
+          secondAttemptUrl,
+          secondAttemptStatus,
+          secondAttemptBody,
+          error,
         };
 
         return reply.code(200).send(diagnostic);
       } catch (err) {
-        app.logger.error({ err }, "Fiscal diagnostico failed");
+        app.logger.error({ err }, "Fiscal diagnostico NFSe Nacional failed");
         return reply.code(200).send({
           timestamp: new Date().toISOString(),
+          tipo: "NFSe Nacional",
           ref: "",
           cnpj: "52893314000164",
-          tokenSource: "ERROR",
           tokenLength: null,
           first3Chars: null,
           last3Chars: null,
-          focusNfeEnv: process.env.FOCUS_NFE_ENV || "undefined",
-          baseUrl:
-            process.env.FOCUS_NFE_ENV === "production"
-              ? "https://api.focusnfe.com.br/v2"
-              : "https://homologacao.focusnfe.com.br/v2",
-          testRequestStatus: null,
-          testRequestBody: null,
-          testRequestError: (err as any).message || "Unknown error",
+          firstAttemptUrl: "https://api.focusnfe.com.br/v2/nfsen?ref=",
+          firstAttemptStatus: null,
+          firstAttemptBody: null,
+          secondAttemptUrl: null,
+          secondAttemptStatus: null,
+          secondAttemptBody: null,
+          error: (err as any).message || "Unknown error",
         });
       }
     }
