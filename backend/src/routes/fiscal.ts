@@ -24,151 +24,6 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
 
 export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
-  const requireAuth = app.requireAuth();
-
-  // GET /api/fiscal/diagnostico — diagnostic endpoint (public)
-  app.fastify.get(
-    "/api/fiscal/diagnostico",
-    {
-      schema: {
-        description: "Diagnostic endpoint for Focus NFE integration - sends test NFC-e payload",
-        tags: ["fiscal"],
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              timestamp: { type: "string", format: "date-time" },
-              ref: { type: "string" },
-              url: { type: "string" },
-              cnpj: { type: "string" },
-              statusCode: { type: "number", nullable: true },
-              responseText: { type: "string", nullable: true },
-              error: { type: "string", nullable: true },
-            },
-          },
-        },
-      },
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const timestamp = new Date().toISOString();
-      app.logger.info({}, "Fiscal diagnostico endpoint called");
-
-      try {
-        // Read token from environment variables
-        const token =
-          process.env.FOCUS_NFE_TOKEN ||
-          process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN ||
-          process.env.SECRET_FOCUS_NFE_TOKEN;
-
-        // Determine base URL based on FOCUS_NFE_ENV
-        const baseUrl =
-          process.env.FOCUS_NFE_ENV === "production"
-            ? "https://api.focusnfe.com.br/v2"
-            : "https://homologacao.focusnfe.com.br/v2";
-
-        // Generate unique reference ID with "diag-" prefix + timestamp
-        const ref = "diag-" + new Date().getTime();
-        const url = `${baseUrl}/nfce?ref=${ref}`;
-        const cnpj = "18644775000165";
-
-        // Prepare test payload
-        const testPayload = {
-          natureza_operacao: "VENDA AO CONSUMIDOR",
-          forma_pagamento: "0",
-          tipo_documento: "1",
-          finalidade_emissao: "1",
-          consumidor_final: "1",
-          presenca_comprador: "1",
-          modalidade_frete: "9",
-          cnpj_emitente: cnpj,
-          items: [
-            {
-              numero_item: 1,
-              codigo_produto: "1",
-              descricao: "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL",
-              codigo_ncm: "21069090",
-              cfop: "5102",
-              unidade_comercial: "UN",
-              quantidade_comercial: "1.0000",
-              valor_unitario_comercial: "10.0000000000",
-              valor_bruto: "10.00",
-              unidade_tributavel: "UN",
-              quantidade_tributavel: "1.0000",
-              valor_unitario_tributavel: "10.0000000000",
-              icms_situacao_tributaria: "102",
-              icms_origem: "0",
-              pis_situacao_tributaria: "49",
-              cofins_situacao_tributaria: "49",
-            },
-          ],
-          formas_pagamento: [
-            {
-              forma_pagamento: "01",
-              valor_pagamento: "10.00",
-            },
-          ],
-        };
-
-        let statusCode: number | null = null;
-        let responseText: string | null = null;
-        let error: string | null = null;
-
-        if (token) {
-          try {
-            // Send POST request with Basic auth
-            const auth = Buffer.from(token + ":").toString("base64");
-            const response = await fetch(url, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: "Basic " + auth,
-              },
-              body: JSON.stringify(testPayload),
-            });
-
-            statusCode = response.status;
-            responseText = await response.text();
-            app.logger.info(
-              { ref, statusCode, responseText },
-              "Fiscal diagnostico test request completed"
-            );
-          } catch (err) {
-            error = (err as any).message || String(err);
-            app.logger.error(
-              { err, ref },
-              "Fiscal diagnostico test request failed"
-            );
-          }
-        } else {
-          error = "No Focus NFE token configured";
-          app.logger.warn({}, "Fiscal diagnostico: no token configured");
-        }
-
-        const diagnostic = {
-          timestamp,
-          ref,
-          url,
-          cnpj,
-          statusCode,
-          responseText,
-          error,
-        };
-
-        return reply.code(200).send(diagnostic);
-      } catch (err) {
-        app.logger.error({ err }, "Fiscal diagnostico failed");
-        return reply.code(200).send({
-          timestamp,
-          ref: "",
-          url: "",
-          cnpj: "18644775000165",
-          statusCode: null,
-          responseText: null,
-          error: (err as any).message || "Unknown error",
-        });
-      }
-    }
-  );
 
   // POST /api/fiscal/nfce — emitir NFC-e para uma comanda fechada
   app.fastify.post<{ Body: { comanda_historico_id?: string; itens: Array<{ descricao: string; ncm: string; cfop: string; quantidade: number; valor_unitario: number; icms_situacao_tributaria: string; pis_situacao_tributaria: string; cofins_situacao_tributaria: string }>; cpf_consumidor?: string } }>(
@@ -202,6 +57,7 @@ export function registerFiscalRoutes(app: App) {
           consumidor_final: "1",
           presenca_comprador: "1",
           modalidade_frete: "9",
+          cnpj_emitente: restaurante.cnpj.replace(/[.\-\/]/g, ""),
           items: itens.map((item: any, index: number) => ({
             numero_item: index + 1,
             codigo_produto: (index + 1).toString(),
@@ -227,7 +83,12 @@ export function registerFiscalRoutes(app: App) {
         };
 
         if (cpf_consumidor) {
-          nfcePayload.cnpj_destinatario = cpf_consumidor;
+          const cpfLimpo = cpf_consumidor.replace(/[.\-\/]/g, "");
+          if (cpfLimpo.length <= 11) {
+            nfcePayload.cpf_destinatario = cpfLimpo;
+          } else {
+            nfcePayload.cnpj_destinatario = cpfLimpo;
+          }
         }
 
         // Salvar registro local
