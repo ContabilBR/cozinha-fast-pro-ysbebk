@@ -2274,9 +2274,9 @@ describe("API Integration Tests", () => {
     }
   });
 
-  test("Get fiscal diagnostico without authentication returns 401", async () => {
+  test("Get fiscal diagnostico without authentication returns 200", async () => {
     const res = await api("/api/fiscal/diagnostico");
-    await expectStatus(res, 401);
+    await expectStatus(res, 200);
   });
 
   test("Create NFCe fiscal document returns 200 or 201 or 400 or 401 or 404 or 500", async () => {

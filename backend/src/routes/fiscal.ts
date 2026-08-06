@@ -26,7 +26,7 @@ export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
   const requireAuth = app.requireAuth();
 
-  // GET /api/fiscal/diagnostico — diagnostic endpoint (protected)
+  // GET /api/fiscal/diagnostico — diagnostic endpoint (public)
   app.fastify.get(
     "/api/fiscal/diagnostico",
     {
@@ -40,18 +40,12 @@ export function registerFiscalRoutes(app: App) {
               focusNfeEnv: { type: "string" },
               baseUrl: { type: "string" },
               tokenSource: { type: "string" },
-              tokenLength: { type: "number", nullable: true },
-              first3Chars: { type: "string", nullable: true },
-              last3Chars: { type: "string", nullable: true },
+              tokenLength: { type: ["number", "null"] },
+              first3Chars: { type: ["string", "null"] },
+              last3Chars: { type: ["string", "null"] },
               testFetchStatus: { type: ["number", "null"] },
               testFetchBodyPreview: { type: ["string", "null"] },
               testFetchError: { type: ["string", "null"] },
-            },
-          },
-          401: {
-            type: "object",
-            properties: {
-              error: { type: "string" },
             },
           },
           500: {
@@ -65,9 +59,6 @@ export function registerFiscalRoutes(app: App) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const session = await requireAuth(request, reply);
-        if (!session) return;
-
         app.logger.info({}, "Fiscal diagnostico endpoint called");
 
         // Get environment configuration
