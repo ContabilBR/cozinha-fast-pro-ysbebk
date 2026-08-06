@@ -2263,48 +2263,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Fiscal Endpoints ====================
-  test("Get fiscal diagnostico returns 200", async () => {
-    const res = await api("/api/fiscal/diagnostico");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.timestamp).toBeDefined();
-    expect(data.tipo).toBeDefined();
-    expect(data.ref).toBeDefined();
-    expect(data.cnpj).toBeDefined();
-    expect(data.tokenLength === null || typeof data.tokenLength === 'number').toBe(true);
-    expect(data.first3Chars === null || typeof data.first3Chars === 'string').toBe(true);
-    expect(data.last3Chars === null || typeof data.last3Chars === 'string').toBe(true);
-    expect(data.firstAttemptUrl).toBeDefined();
-    expect(data.firstAttemptStatus === null || typeof data.firstAttemptStatus === 'number').toBe(true);
-    expect(data.firstAttemptBody === null || typeof data.firstAttemptBody === 'string').toBe(true);
-  });
-
-  test("Create NFCe fiscal document returns 200 or 201 or 400 or 401 or 404 or 500", async () => {
-    const res = await api("/api/fiscal/nfce", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        comanda_id: "test-id",
-      }),
-    });
-    const status = res.status;
-    expect(status === 200 || status === 201 || status === 400 || status === 401 || status === 404 || status === 500).toBe(true);
-  });
-
-  test("Get NFCe by reference returns 200 or 401 or 404", async () => {
-    const res = await api("/api/fiscal/nfce/test-ref");
-    const status = res.status;
-    expect(status === 200 || status === 401 || status === 404).toBe(true);
-  });
-
-  test("Delete NFCe by reference returns 200 or 401 or 404", async () => {
-    const res = await api("/api/fiscal/nfce/test-ref", {
-      method: "DELETE",
-    });
-    const status = res.status;
-    expect(status === 200 || status === 401 || status === 404).toBe(true);
-  });
-
   test("Create NFSe fiscal document returns 201 or 400 or 403 or 502", async () => {
     const res = await authenticatedApi("/api/fiscal/nfsen", authToken, {
       method: "POST",
