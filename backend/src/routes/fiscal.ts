@@ -8,8 +8,8 @@ import * as schema from "../db/schema/schema.js";
 const FOCUS_BASE_URL = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
 
 function getFocusToken(): string {
-  const token = process.env.FOCUS_NFE_TOKEN;
-  if (!token) throw new Error("FOCUS_NFE_TOKEN não configurado");
+  const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN;
+  if (!token) throw new Error("FOCUS_NFE_TOKEN não configurada - nenhuma variável encontrada");
   return token;
 }
 
