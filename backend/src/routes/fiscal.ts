@@ -420,10 +420,368 @@ export function registerFiscalRoutes(app: App) {
     }
   );
 
+  // POST /api/fiscal/nfsen — emitir NFSe Nacional
+  app.fastify.post<{ Body: { comanda_historico_id?: string; descricao_servico: string; valor_servico: number; cnpj_tomador?: string; cpf_tomador?: string; razao_social_tomador?: string; email_tomador?: string; telefone_tomador?: string; codigo_tributacao_municipal_iss?: string } }>(
+    "/api/fiscal/nfsen",
+    {
+      schema: {
+        description: "Emit NFSe Nacional (Brazilian service invoice)",
+        tags: ["fiscal"],
+        body: {
+          type: "object",
+          required: ["descricao_servico", "valor_servico"],
+          properties: {
+            comanda_historico_id: { type: "string", format: "uuid" },
+            descricao_servico: { type: "string", minLength: 1 },
+            valor_servico: { type: "number", minimum: 0 },
+            cnpj_tomador: { type: "string" },
+            cpf_tomador: { type: "string" },
+            razao_social_tomador: { type: "string" },
+            email_tomador: { type: "string", format: "email" },
+            telefone_tomador: { type: "string" },
+            codigo_tributacao_municipal_iss: { type: "string" },
+          },
+        },
+        response: {
+          201: {
+            description: "NFSe created successfully",
+            type: "object",
+            properties: {
+              nota_fiscal: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  referenciaFocus: { type: "string" },
+                  status: { type: "string" },
+                  createdAt: { type: "string", format: "date-time" },
+                },
+              },
+              focus_response: { type: "object" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: { error: { type: "string" } },
+          },
+          403: {
+            type: "object",
+            properties: { error: { type: "string" } },
+          },
+          502: {
+            type: "object",
+            properties: { error: { type: "string" }, detalhe: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: { comanda_historico_id?: string; descricao_servico: string; valor_servico: number; cnpj_tomador?: string; cpf_tomador?: string; razao_social_tomador?: string; email_tomador?: string; telefone_tomador?: string; codigo_tributacao_municipal_iss?: string } }>, reply: FastifyReply) => {
+      app.logger.info({ body: request.body }, "Emitting NFSe Nacional");
+      try {
+        const authUser = await customRequireAuth(app, request, reply);
+        if (!authUser) return;
+        const restauranteId = requireTenant(authUser);
+
+        // Validar dados do restaurante
+        const restData = await db.select().from(schema.restaurante).where(eq(schema.restaurante.id, restauranteId));
+        if (!restData.length) {
+          return reply.code(404).send({ error: "Restaurante não encontrado" });
+        }
+        const restaurante = restData[0];
+        if (!restaurante.cnpj) {
+          return reply.code(400).send({ error: "CNPJ do restaurante não cadastrado. Configure antes de emitir NFSe." });
+        }
+
+        const { comanda_historico_id, descricao_servico, valor_servico, cnpj_tomador, cpf_tomador, razao_social_tomador, email_tomador, telefone_tomador, codigo_tributacao_municipal_iss } = request.body;
+
+        // Validar campos obrigatórios
+        if (!descricao_servico || descricao_servico.trim().length === 0) {
+          return reply.code(400).send({ error: "descricao_servico é obrigatório" });
+        }
+        if (typeof valor_servico !== "number" || valor_servico <= 0) {
+          return reply.code(400).send({ error: "valor_servico deve ser um número positivo" });
+        }
+
+        // Gerar referência única
+        const ref = `nfsen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        // Obter data atual
+        const currentDate = new Date().toISOString().split("T")[0];
+
+        // Montar payload NFSe
+        const nfsenPayload: any = {
+          data_emissao: currentDate,
+          data_competencia: currentDate,
+          codigo_municipio_emissora: 3304557,
+          cnpj_prestador: restaurante.cnpj.replace(/[.\-\/]/g, ""),
+          codigo_opcao_simples_nacional: 1,
+          regime_especial_tributacao: 0,
+          codigo_municipio_prestacao: 3304557,
+          codigo_tributacao_nacional_iss: codigo_tributacao_municipal_iss || "070101",
+          codigo_nbs: "109019900",
+          descricao_servico: descricao_servico,
+          valor_servico: valor_servico.toFixed(2),
+          tributacao_iss: 1,
+          tipo_retencao_iss: 1,
+          situacao_tributaria_pis_cofins: "00",
+          percentual_total_tributos_federais: "3.25",
+          percentual_total_tributos_estaduais: "0.00",
+          percentual_total_tributos_municipais: "5.00",
+          indicador_total_tributacao: null,
+        };
+
+        // Adicionar dados do tomador (recipient) se fornecidos
+        if (cnpj_tomador) {
+          nfsenPayload.cnpj_tomador = cnpj_tomador.replace(/[.\-\/]/g, "");
+        }
+        if (cpf_tomador) {
+          nfsenPayload.cpf_tomador = cpf_tomador.replace(/[.\-\/]/g, "");
+        }
+        if (razao_social_tomador) {
+          nfsenPayload.razao_social_tomador = razao_social_tomador;
+        }
+        if (email_tomador) {
+          nfsenPayload.email_tomador = email_tomador;
+        }
+        if (telefone_tomador) {
+          nfsenPayload.telefone_tomador = telefone_tomador;
+        }
+
+        // Salvar registro local
+        const [notaFiscal] = await db.insert(schema.notasFiscais).values({
+          comandaHistoricoId: comanda_historico_id || null,
+          referenciaFocus: ref,
+          status: "processando",
+          restauranteId,
+        }).returning();
+
+        app.logger.info({ notaId: notaFiscal.id, ref }, "NFSe record created");
+
+        // Enviar para Focus NFe
+        try {
+          const resultado = await focusRequest("POST", `/nfsen?ref=${ref}`, nfsenPayload);
+
+          // Atualizar com resposta
+          const updateData: any = { mensagemSefaz: resultado.mensagem_sefaz || resultado.mensagem || null };
+
+          if (resultado.status === "autorizado" || resultado.status_sefaz === "100") {
+            updateData.status = "autorizada";
+            updateData.chaveAcesso = resultado.chave_nfse || null;
+            updateData.numeroNota = resultado.numero ? parseInt(resultado.numero) : null;
+            updateData.serie = resultado.serie ? parseInt(resultado.serie) : null;
+            updateData.protocolo = resultado.protocolo || null;
+          } else if (resultado.status === "processando_autorizacao" || resultado.status_code === 202) {
+            updateData.status = "processando";
+          } else if (resultado.status === "erro_autorizacao" || resultado.erros) {
+            updateData.status = "rejeitada";
+            updateData.mensagemSefaz = JSON.stringify(resultado.erros || resultado.mensagem_sefaz);
+          }
+
+          await db.update(schema.notasFiscais).set(updateData).where(eq(schema.notasFiscais.id, notaFiscal.id));
+
+          app.logger.info({ notaId: notaFiscal.id, status: updateData.status }, "NFSe status updated from Focus response");
+
+          // Buscar registro atualizado
+          const [notaAtualizada] = await db.select().from(schema.notasFiscais).where(eq(schema.notasFiscais.id, notaFiscal.id));
+          return reply.code(201).send({ nota_fiscal: notaAtualizada, focus_response: resultado });
+
+        } catch (err) {
+          await db.update(schema.notasFiscais).set({ status: "erro", mensagemSefaz: (err as any).message }).where(eq(schema.notasFiscais.id, notaFiscal.id));
+          app.logger.error({ err, notaId: notaFiscal.id }, "Focus API error when emitting NFSe");
+          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detalhe: (err as any).message });
+        }
+
+      } catch (err) {
+        app.logger.error({ err }, "Erro ao emitir NFSe Nacional");
+        return reply.code(500).send({ error: "Erro interno do servidor" });
+      }
+    }
+  );
+
+  // GET /api/fiscal/nfsen/:ref — consultar status de uma NFSe Nacional
+  app.fastify.get<{ Params: { ref: string } }>(
+    "/api/fiscal/nfsen/:ref",
+    {
+      schema: {
+        description: "Get NFSe Nacional status by reference",
+        tags: ["fiscal"],
+        params: {
+          type: "object",
+          required: ["ref"],
+          properties: {
+            ref: { type: "string", description: "NFSe reference (Focus)" },
+          },
+        },
+        response: {
+          200: {
+            description: "NFSe status retrieved",
+            type: "object",
+            properties: {
+              nota_fiscal: { type: "object" },
+            },
+          },
+          404: {
+            type: "object",
+            properties: { error: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { ref: string } }>, reply: FastifyReply) => {
+      app.logger.info({ ref: request.params.ref }, "Querying NFSe Nacional status");
+      try {
+        const authUser = await customRequireAuth(app, request, reply);
+        if (!authUser) return;
+        const restauranteId = requireTenant(authUser);
+
+        // Buscar nota local
+        const notas = await db.select().from(schema.notasFiscais).where(and(eq(schema.notasFiscais.referenciaFocus, request.params.ref), eq(schema.notasFiscais.restauranteId, restauranteId)));
+        if (!notas.length) {
+          return reply.code(404).send({ error: "Nota fiscal não encontrada" });
+        }
+
+        const nota = notas[0];
+
+        // Se ainda processando, consultar Focus NFe
+        if (nota.status === "processando") {
+          try {
+            const consulta = await focusRequest("GET", `/nfsen/${request.params.ref}`);
+            const updateData: any = {};
+
+            if (consulta.status === "autorizado") {
+              updateData.status = "autorizada";
+              updateData.chaveAcesso = consulta.chave_nfse || null;
+              updateData.protocolo = consulta.protocolo || null;
+              updateData.xmlUrl = consulta.caminho_xml_nota_fiscal || null;
+              updateData.danfeUrl = consulta.caminho_danfe || null;
+            } else if (consulta.status === "cancelado") {
+              updateData.status = "cancelada";
+              updateData.motivoCancelamento = consulta.justificativa_cancelamento || null;
+            } else if (consulta.status === "erro_autorizacao") {
+              updateData.status = "rejeitada";
+              updateData.mensagemSefaz = consulta.mensagem_sefaz || null;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              await db.update(schema.notasFiscais).set(updateData).where(eq(schema.notasFiscais.id, nota.id));
+              app.logger.info({ notaId: nota.id, newStatus: updateData.status }, "NFSe status updated from Focus query");
+            }
+
+            const [notaAtualizada] = await db.select().from(schema.notasFiscais).where(eq(schema.notasFiscais.id, nota.id));
+            return reply.code(200).send({ nota_fiscal: notaAtualizada });
+          } catch (e) {
+            app.logger.warn({ err: e, ref: request.params.ref }, "Could not update NFSe status from Focus");
+            return reply.code(200).send({ nota_fiscal: nota, aviso: "Não foi possível atualizar status junto ao Focus NFe" });
+          }
+        }
+
+        return reply.code(200).send({ nota_fiscal: nota });
+      } catch (err) {
+        app.logger.error({ err }, "Erro ao consultar NFSe Nacional");
+        return reply.code(500).send({ error: "Erro interno do servidor" });
+      }
+    }
+  );
+
+  // DELETE /api/fiscal/nfsen/:ref — cancelar NFSe Nacional
+  app.fastify.delete<{ Params: { ref: string }; Body: { justificativa: string } }>(
+    "/api/fiscal/nfsen/:ref",
+    {
+      schema: {
+        description: "Cancel NFSe Nacional",
+        tags: ["fiscal"],
+        params: {
+          type: "object",
+          required: ["ref"],
+          properties: {
+            ref: { type: "string", description: "NFSe reference (Focus)" },
+          },
+        },
+        body: {
+          type: "object",
+          required: ["justificativa"],
+          properties: {
+            justificativa: { type: "string", minLength: 15, description: "Cancellation reason (min 15 chars)" },
+          },
+        },
+        response: {
+          200: {
+            description: "NFSe cancelled",
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              message: { type: "string" },
+              focus_response: { type: "object" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: { error: { type: "string" } },
+          },
+          404: {
+            type: "object",
+            properties: { error: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { ref: string }; Body: { justificativa: string } }>, reply: FastifyReply) => {
+      app.logger.info({ ref: request.params.ref }, "Cancelling NFSe Nacional");
+      try {
+        const authUser = await customRequireAuth(app, request, reply);
+        if (!authUser) return;
+        const restauranteId = requireTenant(authUser);
+
+        const justificativa = (request.body as any)?.justificativa;
+        if (!justificativa || justificativa.length < 15) {
+          return reply.code(400).send({ error: "Justificativa deve ter pelo menos 15 caracteres" });
+        }
+
+        // Buscar nota
+        const notas = await db.select().from(schema.notasFiscais).where(and(eq(schema.notasFiscais.referenciaFocus, request.params.ref), eq(schema.notasFiscais.restauranteId, restauranteId)));
+        if (!notas.length) {
+          return reply.code(404).send({ error: "Nota fiscal não encontrada" });
+        }
+
+        const nota = notas[0];
+
+        // Chamar Focus NFe para cancelar
+        const resultado = await focusRequest("DELETE", `/nfsen/${request.params.ref}`, { justificativa });
+
+        // Atualizar status local
+        await db.update(schema.notasFiscais).set({ status: "cancelada", motivoCancelamento: justificativa }).where(eq(schema.notasFiscais.id, nota.id));
+
+        app.logger.info({ notaId: nota.id }, "NFSe cancelled successfully");
+
+        return reply.code(200).send({ success: true, message: "NFSe cancelada", focus_response: resultado });
+      } catch (err) {
+        app.logger.error({ err }, "Erro ao cancelar NFSe Nacional");
+        return reply.code(500).send({ error: "Erro interno do servidor" });
+      }
+    }
+  );
+
   // GET /api/fiscal/notas — listar notas fiscais do restaurante
   app.fastify.get(
     "/api/fiscal/notas",
+    {
+      schema: {
+        description: "List all invoices (NFC-e and NFSe) for restaurant",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              notas: {
+                type: "array",
+                items: { type: "object" },
+              },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      app.logger.info({}, "Listing invoices");
       try {
         const authUser = await customRequireAuth(app, request, reply);
         if (!authUser) return;
@@ -431,9 +789,10 @@ export function registerFiscalRoutes(app: App) {
 
         const notas = await db.select().from(schema.notasFiscais).where(eq(schema.notasFiscais.restauranteId, restauranteId)).orderBy(schema.notasFiscais.createdAt);
 
+        app.logger.info({ count: notas.length }, "Invoices listed");
         return reply.code(200).send({ notas });
       } catch (err) {
-        app.logger.error({ error: (err as any).message }, "Erro ao listar notas");
+        app.logger.error({ err }, "Erro ao listar notas");
         return reply.code(500).send({ error: "Erro interno do servidor" });
       }
     }

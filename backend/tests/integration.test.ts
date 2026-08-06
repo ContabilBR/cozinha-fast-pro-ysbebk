@@ -2305,6 +2305,59 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
 
+  test("Create NFSe fiscal document returns 201 or 400 or 403 or 502", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfsen", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        descricao_servico: "Serviço de restaurante",
+        valor_servico: 100.00,
+      }),
+    });
+    const status = res.status;
+    expect(status === 201 || status === 400 || status === 403 || status === 502).toBe(true);
+  });
+
+  test("Create NFSe missing required field returns 400", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfsen", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        descricao_servico: "Serviço",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Get NFSe by reference returns 200 or 404", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfsen/test-ref", authToken);
+    const status = res.status;
+    expect(status === 200 || status === 404).toBe(true);
+  });
+
+  test("Cancel NFSe returns 200 or 400 or 404", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfsen/test-ref", authToken, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        justificativa: "Cancelamento por motivo X - justificativa mínima de 15 caracteres",
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 404).toBe(true);
+  });
+
+  test("Cancel NFSe with short justification returns 400", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfsen/test-ref", authToken, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        justificativa: "Curto",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("List all fiscal notas returns 200 or 401 or 404", async () => {
     const res = await api("/api/fiscal/notas");
     const status = res.status;
