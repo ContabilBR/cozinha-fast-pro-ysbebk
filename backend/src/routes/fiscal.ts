@@ -40,8 +40,9 @@ export function registerFiscalRoutes(app: App) {
               timestamp: { type: "string", format: "date-time" },
               ref: { type: "string" },
               url: { type: "string" },
+              cnpj: { type: "string" },
               statusCode: { type: "number", nullable: true },
-              responseBody: { type: "object", nullable: true },
+              responseText: { type: "string", nullable: true },
               error: { type: "string", nullable: true },
             },
           },
@@ -68,6 +69,7 @@ export function registerFiscalRoutes(app: App) {
         // Generate unique reference ID with "diag-" prefix + timestamp
         const ref = "diag-" + new Date().getTime();
         const url = `${baseUrl}/nfce?ref=${ref}`;
+        const cnpj = "18644775000165";
 
         // Prepare test payload
         const testPayload = {
@@ -78,11 +80,12 @@ export function registerFiscalRoutes(app: App) {
           consumidor_final: "1",
           presenca_comprador: "1",
           modalidade_frete: "9",
+          cnpj_emitente: cnpj,
           items: [
             {
               numero_item: 1,
               codigo_produto: "1",
-              descricao: "Produto teste para homologação",
+              descricao: "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL",
               codigo_ncm: "21069090",
               cfop: "5102",
               unidade_comercial: "UN",
@@ -107,7 +110,7 @@ export function registerFiscalRoutes(app: App) {
         };
 
         let statusCode: number | null = null;
-        let responseBody: any = null;
+        let responseText: string | null = null;
         let error: string | null = null;
 
         if (token) {
@@ -124,9 +127,9 @@ export function registerFiscalRoutes(app: App) {
             });
 
             statusCode = response.status;
-            responseBody = await response.json();
+            responseText = await response.text();
             app.logger.info(
-              { ref, statusCode, responseBody },
+              { ref, statusCode, responseText },
               "Fiscal diagnostico test request completed"
             );
           } catch (err) {
@@ -145,8 +148,9 @@ export function registerFiscalRoutes(app: App) {
           timestamp,
           ref,
           url,
+          cnpj,
           statusCode,
-          responseBody,
+          responseText,
           error,
         };
 
@@ -157,8 +161,9 @@ export function registerFiscalRoutes(app: App) {
           timestamp,
           ref: "",
           url: "",
+          cnpj: "18644775000165",
           statusCode: null,
-          responseBody: null,
+          responseText: null,
           error: (err as any).message || "Unknown error",
         });
       }
