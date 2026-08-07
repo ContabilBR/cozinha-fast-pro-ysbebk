@@ -269,4 +269,110 @@ export function registerFiscalRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/fiscal/diagnostico — Diagnostic endpoint for Focus NFE API integration
+  app.fastify.get(
+    "/api/fiscal/diagnostico",
+    {
+      schema: {
+        description: "Diagnostic endpoint for Focus NFE API integration",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              timestamp: { type: "string", format: "date-time" },
+              ref: { type: "string" },
+              baseUrl: { type: "string" },
+              tokenLength: { type: "number" },
+              responseStatus: { type: "number" },
+              responseBody: { type: "object" },
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      app.logger.info("Diagnostic endpoint called");
+      try {
+        const timestamp = new Date().toISOString();
+        const token = getFocusToken();
+        const ref = "diagnostico-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+        const baseUrl = FOCUS_BASE_URL;
+
+        const nfsenPayload = {
+          data_emissao: timestamp,
+          data_competencia: timestamp.slice(0, 10),
+          codigo_municipio_emissora: 3304557,
+          cnpj_prestador: "52893314000164",
+          codigo_opcao_simples_nacional: 1,
+          regime_especial_tributacao: 0,
+          codigo_municipio_prestacao: 3304557,
+          codigo_tributacao_nacional_iss: "070101",
+          codigo_nbs: "109019900",
+          descricao_servico: "NOTA EMITIDA EM AMBIENTE DE HOMOLOGACAO SEM VALOR FISCAL",
+          valor_servico: 10.00,
+          tributacao_iss: 1,
+          tipo_retencao_iss: 1,
+          situacao_tributaria_pis_cofins: "00",
+          percentual_total_tributos_federais: "3.25",
+          percentual_total_tributos_estaduais: "0.00",
+          percentual_total_tributos_municipais: "5.00",
+          indicador_total_tributacao: null,
+        };
+
+        app.logger.info({ ref, baseUrl }, "Sending diagnostic request to Focus NFE");
+
+        let responseStatus = 0;
+        let responseBody: any = {};
+        let error: string | undefined;
+
+        try {
+          const auth = Buffer.from(token + ":").toString("base64");
+          const res = await fetch(baseUrl + "/nfsen?ref=" + ref, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Basic " + auth,
+            },
+            body: JSON.stringify(nfsenPayload),
+          });
+
+          responseStatus = res.status;
+          const text = await res.text();
+
+          try {
+            responseBody = JSON.parse(text);
+          } catch {
+            responseBody = { raw: text };
+          }
+
+          app.logger.info({ responseStatus, responseBody }, "Diagnostic response received");
+        } catch (fetchErr: any) {
+          error = fetchErr.message;
+          app.logger.error({ err: fetchErr, ref }, "Fetch error during diagnostic");
+        }
+
+        const result = {
+          timestamp,
+          ref,
+          baseUrl,
+          tokenLength: token.length,
+          responseStatus,
+          responseBody,
+          ...(error && { error }),
+        };
+
+        app.logger.info({ result }, "Diagnostic endpoint returning result");
+        return reply.code(200).send(result);
+      } catch (err: any) {
+        app.logger.error({ err }, "Error in diagnostic endpoint");
+        return reply.code(200).send({
+          timestamp: new Date().toISOString(),
+          error: err.message,
+        });
+      }
+    }
+  );
 }
