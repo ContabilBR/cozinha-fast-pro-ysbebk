@@ -148,6 +148,7 @@ export function registerFiscalRoutes(app: App) {
 
         const ref = "nfsen-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
         const cnpjLimpo = restaurante.cnpj.replace(/[.\-\/]/g, "");
+        app.logger.info({ restauranteId, cnpjLimpo, cnpjRaw: restaurante.cnpj, restauranteNome: restaurante.nome }, "DEBUG nfsen cnpj check");
 
         const nfsenPayload: any = {
           data_emissao: new Date().toISOString(),

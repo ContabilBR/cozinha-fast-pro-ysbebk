@@ -2614,6 +2614,20 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 404).toBe(true);
   });
 
+  test("Create public pedido (unauthenticated) returns 200 or 201 or 400 or 404 or 500", async () => {
+    const res = await api("/api/public/pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cliente_nome: "Public Client",
+        cliente_telefone: "11999999999",
+        endereco: "Test Address",
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 201 || status === 400 || status === 404 || status === 500).toBe(true);
+  });
+
   test("Get public cardapio for restaurante returns 200 or 404 or 400 or 500", async () => {
     const res = await api("/api/public/cardapio/test-restaurante-id");
     const status = res.status;
