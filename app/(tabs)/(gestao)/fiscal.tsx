@@ -16,7 +16,12 @@ const STATUS_CFG: Record<string, { label: string; bg: string; text: string; icon
   erro: { label: "Erro", bg: "#FEE2E2", text: "#991B1B", icon: "alert-circle-outline" },
 };
 
-interface Nota { id: string; referenciaFocus?: string; referencia_focus?: string; status: string; chaveAcesso?: string; chave_acesso?: string; numeroNota?: number; numero_nota?: number; serie?: number; mensagemSefaz?: string; mensagem_sefaz?: string; createdAt?: string; created_at?: string; }
+interface Nota { id: string; referenciaFocus?: string; referencia_focus?: string; status: string; chaveAcesso?: string; chave_acesso?: string; numeroNota?: number; numero_nota?: number; serie?: number; mensagemSefaz?: string; mensagem_sefaz?: string; createdAt?: string; created_at?: string;
+  danfeUrl?: string;
+  danfe_url?: string;
+  xmlUrl?: string;
+  xml_url?: string;
+}
 interface ComandaHistorico { id: string; mesa_numero?: number; garcom_nome?: string; total: string; closed_at?: string; pedidos: Array<{ id: string; prato_nome?: string; quantidade: number; preco_unitario: string }>; }
 
 export default function FiscalScreen() {
@@ -46,6 +51,8 @@ export default function FiscalScreen() {
   const getNumero = (n: Nota) => n.numeroNota || n.numero_nota;
   const getMsg = (n: Nota) => n.mensagemSefaz || n.mensagem_sefaz;
   const getDate = (n: Nota) => n.createdAt || n.created_at || "";
+  const getDanfe = (n: Nota) => n.danfeUrl || n.danfe_url || "";
+  const getXml = (n: Nota) => n.xmlUrl || n.xml_url || "";
   const fmt = (v: string | number) => "R$ " + parseFloat(String(v)).toFixed(2).replace(".", ",");
 
   const openEmitir = async () => { setShowEmitir(true); setSelectedComanda(null); setLoadingComandas(true); console.log("[FiscalScreen] openEmitir: abrindo modal de emissão"); try { const res = await apiGet<any>("/api/historico"); console.log("[FiscalScreen] openEmitir: comandas carregadas"); setComandas(Array.isArray(res) ? res : (res.historico || [])); } catch (e) { Alert.alert("Erro", "Não foi possível carregar comandas"); setShowEmitir(false); } finally { setLoadingComandas(false); } };
@@ -79,8 +86,14 @@ export default function FiscalScreen() {
               {getChave(item) ? <Text style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={1}>Chave: {getChave(item)}</Text> : null}
               <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>{new Date(getDate(item)).toLocaleString("pt-BR")}</Text>
               {getMsg(item) ? <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{getMsg(item)}</Text> : null}
+              {item.status === "autorizada" && (getDanfe(item) || getXml(item)) && (
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                  {getDanfe(item) ? <Pressable onPress={() => { const Linking = require("react-native").Linking; Linking.openURL(getDanfe(item)); }} style={{ flex: 1, backgroundColor: "#D1FAE5", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="document-text-outline" size={14} color="#065F46" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#065F46" }}>Ver DANFSe</Text></Pressable> : null}
+                  {getXml(item) ? <Pressable onPress={() => { const Linking = require("react-native").Linking; Linking.openURL(getXml(item)); }} style={{ flex: 1, backgroundColor: "#DBEAFE", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="code-download-outline" size={14} color="#1E40AF" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#1E40AF" }}>Baixar XML</Text></Pressable> : null}
+                </View>
+              )}
               <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-                {item.status === "processando" && <Pressable onPress={() => atualizarStatus(item)} style={{ flex: 1, backgroundColor: "#DBEAFE", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="sync-outline" size={14} color="#1E40AF" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#1E40AF" }}>Atualizar</Text></Pressable>}
+                {(item.status === "processando" || item.status === "pendente" || item.status === "erro") && <Pressable onPress={() => atualizarStatus(item)} style={{ flex: 1, backgroundColor: "#DBEAFE", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="sync-outline" size={14} color="#1E40AF" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#1E40AF" }}>Atualizar</Text></Pressable>}
                 {item.status === "autorizada" && <Pressable onPress={() => openCancelar(item)} style={{ flex: 1, backgroundColor: "#FEE2E2", borderRadius: 8, paddingVertical: 8, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 4 }}><Ionicons name="close-circle-outline" size={14} color="#991B1B" /><Text style={{ fontSize: 12, fontWeight: "600", color: "#991B1B" }}>Cancelar</Text></Pressable>}
               </View>
             </View>); }}
