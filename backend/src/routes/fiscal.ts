@@ -448,4 +448,54 @@ export function registerFiscalRoutes(app: App) {
       }
     }
   );
+
+  // GET /api/fiscal/admin-debug — Debug endpoint to query restaurante table
+  app.fastify.get(
+    "/api/fiscal/admin-debug",
+    {
+      schema: {
+        description: "Debug endpoint - query restaurante table (public access)",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            description: "Restaurante data retrieved successfully",
+            type: "object",
+            properties: {
+              restaurantes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    nome: { type: "string" },
+                    cnpj: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          500: {
+            description: "Internal server error",
+            ...errorResponse,
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info("GET /api/fiscal/admin-debug started");
+        const restaurantes = await db.select({
+          id: schema.restaurante.id,
+          nome: schema.restaurante.nome,
+          cnpj: schema.restaurante.cnpj,
+        }).from(schema.restaurante);
+
+        app.logger.info({ count: restaurantes.length }, "Admin debug query completed");
+        return reply.code(200).send({ restaurantes });
+      } catch (err: any) {
+        app.logger.error({ err }, "Failed to query restaurante table");
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
 }
