@@ -6,8 +6,10 @@ import {
   boolean,
   integer,
   numeric,
+  jsonb,
   pgEnum,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema.js";
 
@@ -28,6 +30,8 @@ export const pagamentoStatusEnum = pgEnum("pagamento_status", ["pendente", "conf
 export const nfceStatusEnum = pgEnum("nfce_status", ["pendente", "processando", "autorizada", "rejeitada", "cancelada", "erro"]);
 export const unidadeMedidaEnum = pgEnum("unidade_medida", ["kg", "g", "l", "ml", "un", "cx", "pct", "dz"]);
 export const movimentacaoTipoEnum = pgEnum("movimentacao_tipo", ["entrada", "saida", "ajuste"]);
+export const tipoDocumentoFiscalEnum = pgEnum("tipo_documento_fiscal", ["nfce", "nfe", "nfse"]);
+export const regimeTributarioEnum = pgEnum("regime_tributario", ["simples_nacional", "simples_excesso", "regime_normal", "mei"]);
 
 // Mesas (Tables)
 export const mesas = pgTable("mesas", {
@@ -69,6 +73,15 @@ export const pratos = pgTable("pratos", {
   imagemUrl: text("imagem_url"),
   disponivel: boolean("disponivel").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  // === Campos fiscais (Tier 2B.1) ===
+  ncm: text("ncm"),
+  cfop: text("cfop").default("5102").notNull(),
+  cest: text("cest"),
+  unidadeComercial: text("unidade_comercial").default("UN").notNull(),
+  origemMercadoria: integer("origem_mercadoria").default(0).notNull(),
+  csosn: text("csosn"),
+  cstIcms: text("cst_icms"),
+  aliquotaIcms: numeric("aliquota_icms", { precision: 5, scale: 2 }),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
 });
 
@@ -213,6 +226,25 @@ export const restaurante = pgTable("restaurante", {
   assinaturaStatus: assinaturaStatusEnum("assinatura_status").default("trial").notNull(),
   assinaturaAsaasId: text("assinatura_asaas_id"),
   trialExpiraEm: timestamp("trial_expira_em", { withTimezone: true }),
+  // === Dados fiscais (Tier 2B.1) ===
+  inscricaoEstadual: text("inscricao_estadual"),
+  inscricaoMunicipal: text("inscricao_municipal"),
+  regimeTributario: regimeTributarioEnum("regime_tributario"),
+  cnaePrincipal: text("cnae_principal"),
+  cscToken: text("csc_token"),
+  cscId: text("csc_id"),
+  ambienteFocus: integer("ambiente_focus").default(2).notNull(),
+  ncmPadrao: text("ncm_padrao").default("21069090").notNull(),
+  // === Endereço estruturado (Tier 2B.1) ===
+  cep: text("cep"),
+  logradouro: text("logradouro"),
+  numeroEndereco: text("numero_endereco"),
+  complemento: text("complemento"),
+  bairro: text("bairro"),
+  codigoMunicipioIbge: integer("codigo_municipio_ibge"),
+  uf: text("uf"),
+  telefone: text("telefone"),
+  email: text("email"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -222,6 +254,14 @@ export const notasFiscais = pgTable("notas_fiscais", {
   comandaHistoricoId: uuid("comanda_historico_id"),
   referenciaFocus: text("referencia_focus").notNull(),
   status: nfceStatusEnum("status").default("pendente").notNull(),
+  // === Polimorfismo por tipo de documento (Tier 2B.1) ===
+  tipoDocumento: tipoDocumentoFiscalEnum("tipo_documento").default("nfse").notNull(),
+  modelo: text("modelo"),
+  ambiente: integer("ambiente"),
+  destinatarioSnapshot: jsonb("destinatario_snapshot"),
+  valorTotal: numeric("valor_total", { precision: 10, scale: 2 }),
+  emitidaEm: timestamp("emitida_em", { withTimezone: true }),
+  // === Campos comuns ===
   chaveAcesso: text("chave_acesso"),
   numeroNota: integer("numero_nota"),
   serie: integer("serie"),
@@ -232,7 +272,11 @@ export const notasFiscais = pgTable("notas_fiscais", {
   motivoCancelamento: text("motivo_cancelamento"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   restauranteId: uuid("restaurante_id").notNull().references(() => restaurante.id, { onDelete: "restrict" }),
-});
+}, (table) => ({
+  idxRestauranteTipo: index("idx_notas_fiscais_restaurante_tipo").on(table.restauranteId, table.tipoDocumento),
+  idxReferenciaFocus: index("idx_notas_fiscais_referencia_focus").on(table.referenciaFocus),
+  idxRestauranteStatus: index("idx_notas_fiscais_restaurante_status").on(table.restauranteId, table.status),
+}));
 
 // === ESTOQUE ===
 export const insumos = pgTable("insumos", {
