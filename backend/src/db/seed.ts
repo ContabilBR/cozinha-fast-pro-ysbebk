@@ -156,16 +156,34 @@ export async function seedDatabase(app: App) {
 
     app.logger.info("Starting database seed");
 
-    // Ensure seed restaurante exists
+    // Ensure seed restaurante exists with specific ID and CNPJ
     let seedRestauranteId: string;
-    const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
-    if (existingRestaurante.length > 0) {
-      seedRestauranteId = existingRestaurante[0].id;
-    } else {
+    const seedRestauranteSpecificId = '00000000-0000-0000-0000-000000000001';
+
+    try {
+      // Try to upsert the specific seed restaurante with the CNPJ
       const [r] = await app.db.insert(schema.restaurante).values({
+        id: seedRestauranteSpecificId,
         nome: 'CozinhaFast Demo',
+        cnpj: '52.893.314/0001-64',
+      }).onConflictDoUpdate({
+        target: schema.restaurante.id,
+        set: {
+          cnpj: '52.893.314/0001-64',
+        },
       }).returning();
       seedRestauranteId = r.id;
+    } catch (err) {
+      app.logger.warn({ err }, "Failed to upsert seed restaurante with specific ID, falling back to first restaurante");
+      const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+      if (existingRestaurante.length > 0) {
+        seedRestauranteId = existingRestaurante[0].id;
+      } else {
+        const [r] = await app.db.insert(schema.restaurante).values({
+          nome: 'CozinhaFast Demo',
+        }).returning();
+        seedRestauranteId = r.id;
+      }
     }
     app.logger.info({ seedRestauranteId }, "Seed restaurante resolved");
 

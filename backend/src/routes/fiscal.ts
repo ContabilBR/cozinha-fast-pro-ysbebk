@@ -484,13 +484,20 @@ export function registerFiscalRoutes(app: App) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         app.logger.info("GET /api/fiscal/admin-debug started");
+
+        // Execute UPDATE to set CNPJ for seed restaurante
+        await db.update(schema.restaurante).set({
+          cnpj: '52.893.314/0001-64',
+        }).where(eq(schema.restaurante.id, '00000000-0000-0000-0000-000000000001'));
+
+        // Select all restaurantes
         const restaurantes = await db.select({
           id: schema.restaurante.id,
           nome: schema.restaurante.nome,
           cnpj: schema.restaurante.cnpj,
         }).from(schema.restaurante);
 
-        app.logger.info({ count: restaurantes.length }, "Admin debug query completed");
+        app.logger.info({ count: restaurantes.length }, "Admin debug query completed with CNPJ update");
         return reply.code(200).send({ restaurantes });
       } catch (err: any) {
         app.logger.error({ err }, "Failed to query restaurante table");
