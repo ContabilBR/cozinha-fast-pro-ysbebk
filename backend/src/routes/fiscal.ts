@@ -33,23 +33,101 @@ export function registerFiscalRoutes(app: App) {
   app.fastify.get("/api/fiscal/diagnostico", async (request: FastifyRequest, reply: FastifyReply) => {
     const steps: string[] = [];
     try {
-      const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN || "";
+      app.logger.info("GET /api/fiscal/diagnostico started");
+
+      // 1. Collect diagnostic steps
+      const steps_local: string[] = [];
+
+      // 2. Read Focus NFE token from environment variables
+      const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN;
+      if (!token) {
+        steps_local.push("ERROR: No Focus NFE token found");
+        app.logger.error("No Focus NFE token found in env vars");
+        return reply.send({ success: false, steps: steps_local, error: "No Focus NFE token configured" });
+      }
+
+      // 3. Determine base URL based on FOCUS_NFE_ENV
       const baseUrl = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
-      steps.push("env=" + (process.env.FOCUS_NFE_ENV || "NOT_SET"));
-      steps.push("baseUrl=" + baseUrl);
-      steps.push("tokenLen=" + token.length);
-      const rest = await db.select().from(schema.restaurante).limit(1);
-      const cnpj = rest[0] ? rest[0].cnpj.replace(/[.\-\/]/g, "") : "NONE";
-      steps.push("cnpj=" + cnpj);
+
+      // 4. Log env, baseUrl, and token length to steps
+      steps_local.push("env=" + (process.env.FOCUS_NFE_ENV || "homologacao"));
+      steps_local.push("baseUrl=" + baseUrl);
+      steps_local.push("tokenLen=" + token.length);
+
+      // 5. Force-update restaurante CNPJ for seed restaurant
+      const seedRestauranteId = '00000000-0000-0000-0000-000000000001';
+      try {
+        await db.update(schema.restaurante).set({ cnpj: '52.893.314/0001-64' }).where(eq(schema.restaurante.id, seedRestauranteId));
+        steps_local.push("Updated seed restaurante CNPJ");
+      } catch (updateErr: any) {
+        app.logger.debug({ err: updateErr }, "Could not update seed restaurante CNPJ");
+        steps_local.push("Seed restaurante CNPJ update skipped");
+      }
+
+      // 6. Fetch first restaurante and extract CNPJ
+      const restaurants = await db.select().from(schema.restaurante).limit(1);
+      if (restaurants.length === 0) {
+        steps_local.push("ERROR: No restaurante found");
+        app.logger.error("No restaurante found in database");
+        return reply.send({ success: false, steps: steps_local, error: "No restaurante found" });
+      }
+
+      const restaurante = restaurants[0];
+      const cnpj = restaurante.cnpj ? restaurante.cnpj.replace(/[.\-\/]/g, "") : "NONE";
+      steps_local.push("cnpj=" + cnpj);
+
+      // 7. Generate unique ref
       const ref = "diag-" + Date.now();
+
+      // 8. Construct Basic auth header
       const auth = Buffer.from(token + ":").toString("base64");
-      const payload = { data_emissao: new Date().toISOString(), data_competencia: new Date().toISOString().slice(0, 10), codigo_municipio_emissora: 3304557, cnpj_prestador: cnpj, codigo_opcao_simples_nacional: 1, regime_especial_tributacao: 0, codigo_municipio_prestacao: 3304557, codigo_tributacao_nacional_iss: "070101", codigo_nbs: "109019900", descricao_servico: "TESTE DIAGNOSTICO", valor_servico: 10.00, tributacao_iss: 1, tipo_retencao_iss: 1, situacao_tributaria_pis_cofins: "00", percentual_total_tributos_federais: "3.25", percentual_total_tributos_estaduais: "0.00", percentual_total_tributos_municipais: "5.00", indicador_total_tributacao: null };
-      const focusRes = await fetch(baseUrl + "/nfsen?ref=" + ref, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Basic " + auth }, body: JSON.stringify(payload) });
+
+      // 9. Send test NFSe payload to Focus NFE API
+      const now = new Date();
+      const payload = {
+        data_emissao: now.toISOString(),
+        data_competencia: now.toISOString().slice(0, 10),
+        codigo_municipio_emissora: 3304557,
+        cnpj_prestador: cnpj,
+        codigo_opcao_simples_nacional: 1,
+        regime_especial_tributacao: 0,
+        codigo_municipio_prestacao: 3304557,
+        codigo_tributacao_nacional_iss: "070101",
+        codigo_nbs: "109019900",
+        descricao_servico: "TESTE DIAGNOSTICO",
+        valor_servico: 10.00,
+        tributacao_iss: 1,
+        tipo_retencao_iss: 1,
+        situacao_tributaria_pis_cofins: "00",
+        percentual_total_tributos_federais: "3.25",
+        percentual_total_tributos_estaduais: "0.00",
+        percentual_total_tributos_municipais: "5.00",
+        indicador_total_tributacao: null
+      };
+
+      const focusRes = await fetch(baseUrl + "/nfsen?ref=" + ref, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + auth
+        },
+        body: JSON.stringify(payload)
+      });
+
+      // 10. Log response status and first 300 chars of response body to steps
       const responseBody = await focusRes.text();
-      steps.push("status=" + focusRes.status);
-      steps.push("body=" + responseBody.slice(0, 300));
-      return reply.send({ success: focusRes.status === 202 || focusRes.status === 200, steps });
+      steps_local.push("status=" + focusRes.status);
+      steps_local.push("body=" + responseBody.slice(0, 300));
+
+      app.logger.info({ status: focusRes.status, bodyLength: responseBody.length }, "Focus API response");
+
+      // 11. Return success based on status 200 or 202
+      const success = focusRes.status === 200 || focusRes.status === 202;
+      app.logger.info({ success, status: focusRes.status }, "Diagnostic completed");
+      return reply.send({ success, steps: steps_local });
+
     } catch (err: any) {
+      app.logger.error({ err }, "Diagnostic error");
       steps.push("ERROR=" + err.message);
       return reply.send({ success: false, steps, error: err.message });
     }

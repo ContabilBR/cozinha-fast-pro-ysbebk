@@ -177,10 +177,13 @@ export async function seedDatabase(app: App) {
       app.logger.warn({ err }, "Failed to upsert seed restaurante with specific ID, falling back to first restaurante");
       const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
       if (existingRestaurante.length > 0) {
+        // Update CNPJ in fallback path
+        await app.db.update(schema.restaurante).set({ cnpj: '52.893.314/0001-64' }).where(eq(schema.restaurante.id, existingRestaurante[0].id));
         seedRestauranteId = existingRestaurante[0].id;
       } else {
         const [r] = await app.db.insert(schema.restaurante).values({
           nome: 'CozinhaFast Demo',
+          cnpj: '52.893.314/0001-64',
         }).returning();
         seedRestauranteId = r.id;
       }
