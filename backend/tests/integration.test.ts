@@ -374,7 +374,7 @@ describe("API Integration Tests", () => {
     if (status === 200) {
       const data = await res.json();
       expect(data.restaurantes).toBeDefined();
-      expect(data.usuarios).toBeDefined();
+      expect(data.updated).toBeDefined();
     }
   });
 

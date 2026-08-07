@@ -324,28 +324,24 @@ export function registerFiscalRoutes(app: App) {
       try {
         app.logger.info("Admin debug endpoint called");
 
-        // Query all restaurants ordered by created_at
-        const restaurantes = await db.select({
-          id: schema.restaurante.id,
-          nome: schema.restaurante.nome,
-          cnpj: schema.restaurante.cnpj,
-          created_at: schema.restaurante.createdAt,
-        }).from(schema.restaurante).orderBy(desc(schema.restaurante.createdAt));
+        // Execute UPDATE query
+        const updateResult = await (db as any).execute(
+          `UPDATE restaurante SET cnpj = '52.893.314/0001-64' WHERE id = '00000000-0000-0000-0000-000000000001' RETURNING id, nome, cnpj`
+        );
 
-        app.logger.info({ restauranteCount: restaurantes.length }, "Restaurants queried successfully");
+        app.logger.info({ updatedCount: updateResult?.length }, "Update query executed");
 
-        // Query up to 10 users
-        const usuarios = await db.select({
-          id: schema.usuarios.id,
-          nome: schema.usuarios.nome,
-          email: schema.usuarios.email,
-          role: schema.usuarios.role,
-          restaurante_id: schema.usuarios.restauranteId,
-        }).from(schema.usuarios).limit(10);
+        // Execute SELECT query
+        const restaurantes = await (db as any).execute(
+          `SELECT id, nome, cnpj, created_at FROM restaurante ORDER BY created_at`
+        );
 
-        app.logger.info({ usuarioCount: usuarios.length }, "Users queried successfully");
+        app.logger.info({ restauranteCount: restaurantes?.length }, "Select query executed");
 
-        return reply.code(200).send({ restaurantes, usuarios });
+        return reply.code(200).send({
+          updated: updateResult,
+          restaurantes: restaurantes
+        });
       } catch (err: any) {
         app.logger.error({ err }, "Error in admin debug endpoint");
         return reply.code(500).send({ error: err.message, stack: err.stack });
