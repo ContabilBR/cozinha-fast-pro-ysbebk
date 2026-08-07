@@ -2271,8 +2271,8 @@ describe("API Integration Tests", () => {
     const res = await api("/api/fiscal/diagnostico");
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.timestamp).toBeDefined();
-    expect(data.ref).toBeDefined();
+    expect(data.success).toBeDefined();
+    expect(Array.isArray(data.steps)).toBe(true);
   });
 
   test("Create NFSe nota returns 200 or 201 or 400 or 401 or 403 or 404 or 500 or 502", async () => {

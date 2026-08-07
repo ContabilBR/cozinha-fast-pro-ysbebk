@@ -283,37 +283,69 @@ export function registerFiscalRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              timestamp: { type: "string", format: "date-time" },
-              ref: { type: "string" },
-              baseUrl: { type: "string" },
-              tokenLength: { type: "number" },
-              responseStatus: { type: "number" },
-              responseBody: { type: "object" },
+              success: { type: "boolean" },
+              steps: { type: "array", items: { type: "string" } },
               error: { type: "string" },
+              stack: { type: "string" },
             },
           },
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      app.logger.info("Diagnostic endpoint called");
+      const steps: string[] = [];
       try {
-        const timestamp = new Date().toISOString();
-        const token = getFocusToken();
-        const ref = "diagnostico-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-        const baseUrl = FOCUS_BASE_URL;
+        steps.push("Iniciando diagnóstico");
+        app.logger.info("Diagnostic endpoint called");
 
+        // Step 1: Query first restaurante from database
+        steps.push("Consultando primeiro restaurante do banco de dados");
+        const restaurantes = await db.select().from(schema.restaurante).limit(1);
+        if (!restaurantes.length) {
+          throw new Error("Nenhum restaurante encontrado no banco de dados");
+        }
+        const restaurante = restaurantes[0];
+        steps.push(`Restaurante encontrado: ${restaurante.nome} (ID: ${restaurante.id})`);
+
+        // Step 2: Validate CNPJ
+        if (!restaurante.cnpj) {
+          throw new Error("CNPJ do restaurante não cadastrado");
+        }
+        steps.push(`CNPJ do restaurante: ${restaurante.cnpj}`);
+
+        // Step 3: Clean CNPJ (remove dots, dashes, slashes)
+        const cnpjLimpo = restaurante.cnpj.replace(/[.\-\/]/g, "");
+        steps.push(`CNPJ limpo: ${cnpjLimpo}`);
+
+        // Step 4: Generate unique reference with "diag-" prefix + timestamp
+        const timestamp = new Date().toISOString();
+        const ref = "diag-" + Date.now();
+        steps.push(`Referência gerada: ${ref}`);
+
+        // Step 5: Insert record into notasFiscais table
+        steps.push("Inserindo registro na tabela notasFiscais");
+        const [notaFiscal] = await db.insert(schema.notasFiscais).values({
+          comandaHistoricoId: null,
+          referenciaFocus: ref,
+          status: "processando",
+          restauranteId: restaurante.id,
+        }).returning();
+        steps.push(`Registro criado com ID: ${notaFiscal.id}`);
+
+        // Step 6: Build payload for Focus NFS-e API
+        steps.push("Construindo payload para API Focus NFS-e");
+        const dataCompetencia = timestamp.slice(0, 10);
         const nfsenPayload = {
           data_emissao: timestamp,
-          data_competencia: timestamp.slice(0, 10),
+          data_competencia: dataCompetencia,
           codigo_municipio_emissora: 3304557,
-          cnpj_prestador: "52893314000164",
+          cnpj_prestador: cnpjLimpo,
           codigo_opcao_simples_nacional: 1,
           regime_especial_tributacao: 0,
           codigo_municipio_prestacao: 3304557,
           codigo_tributacao_nacional_iss: "070101",
           codigo_nbs: "109019900",
-          descricao_servico: "NOTA EMITIDA EM AMBIENTE DE HOMOLOGACAO SEM VALOR FISCAL",
+          descricao_servico: "TESTE DIAGNOSTICO COMPLETO",
           valor_servico: 10.00,
           tributacao_iss: 1,
           tipo_retencao_iss: 1,
@@ -323,56 +355,33 @@ export function registerFiscalRoutes(app: App) {
           percentual_total_tributos_municipais: "5.00",
           indicador_total_tributacao: null,
         };
+        steps.push("Payload construído com sucesso");
 
-        app.logger.info({ ref, baseUrl }, "Sending diagnostic request to Focus NFE");
+        // Step 7: Send POST request to Focus API
+        steps.push("Enviando requisição POST para Focus API");
+        const resultado = await focusRequest("POST", "/nfsen?ref=" + ref, nfsenPayload);
+        steps.push(`Resposta recebida com status HTTP: ${resultado._httpStatus}`);
 
-        let responseStatus = 0;
-        let responseBody: any = {};
-        let error: string | undefined;
+        // Step 8: Update notasFiscais record
+        steps.push("Atualizando registro notasFiscais com status");
+        await db.update(schema.notasFiscais).set({
+          status: "processando",
+          mensagemSefaz: "Diagnostico OK",
+        }).where(eq(schema.notasFiscais.id, notaFiscal.id));
+        steps.push("Registro atualizado com sucesso");
 
-        try {
-          const auth = Buffer.from(token + ":").toString("base64");
-          const res = await fetch(baseUrl + "/nfsen?ref=" + ref, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Basic " + auth,
-            },
-            body: JSON.stringify(nfsenPayload),
-          });
+        // Step 9: Return success response
+        app.logger.info({ steps, ref }, "Diagnostic completed successfully");
+        return reply.code(200).send({ success: true, steps });
 
-          responseStatus = res.status;
-          const text = await res.text();
-
-          try {
-            responseBody = JSON.parse(text);
-          } catch {
-            responseBody = { raw: text };
-          }
-
-          app.logger.info({ responseStatus, responseBody }, "Diagnostic response received");
-        } catch (fetchErr: any) {
-          error = fetchErr.message;
-          app.logger.error({ err: fetchErr, ref }, "Fetch error during diagnostic");
-        }
-
-        const result = {
-          timestamp,
-          ref,
-          baseUrl,
-          tokenLength: token.length,
-          responseStatus,
-          responseBody,
-          ...(error && { error }),
-        };
-
-        app.logger.info({ result }, "Diagnostic endpoint returning result");
-        return reply.code(200).send(result);
       } catch (err: any) {
-        app.logger.error({ err }, "Error in diagnostic endpoint");
+        steps.push(`Erro: ${err.message}`);
+        app.logger.error({ err, steps }, "Error in diagnostic endpoint");
         return reply.code(200).send({
-          timestamp: new Date().toISOString(),
+          success: false,
+          steps,
           error: err.message,
+          stack: err.stack,
         });
       }
     }
