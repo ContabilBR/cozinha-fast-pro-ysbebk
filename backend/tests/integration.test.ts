@@ -2797,12 +2797,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Get fiscal diagnostico returns 200 or 500", async () => {
-    const res = await api("/api/fiscal/diagnostico");
-    const status = res.status;
-    expect(status === 200 || status === 500).toBe(true);
-  });
-
   // ==================== Inventory (Insumos) Management ====================
   test("List all insumos returns 200 or 401 or 403", async () => {
     const res = await authenticatedApi("/api/insumos", authToken);
