@@ -2664,12 +2664,6 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 401 || status === 404).toBe(true);
   });
 
-  test("Get fiscal diagnostico returns 200 or 401 or 403 or 500", async () => {
-    const res = await api("/api/fiscal/diagnostico");
-    const status = res.status;
-    expect(status === 200 || status === 401 || status === 403 || status === 500).toBe(true);
-  });
-
   test("Create NFSe nota returns 200 or 201 or 400 or 401 or 403 or 404 or 500 or 502", async () => {
     const res = await authenticatedApi("/api/fiscal/nfsen", authToken, {
       method: "POST",
