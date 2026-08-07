@@ -46,6 +46,7 @@ export function registerFiscalRoutes(app: App) {
       codigo_tributacao_municipal_iss?: string;
     } }>, reply: FastifyReply) => {
       try {
+        app.logger.info("NFSen handler called with body keys: " + Object.keys(request.body || {}).join(", "));
         const authUser = await requireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
@@ -154,12 +155,11 @@ export function registerFiscalRoutes(app: App) {
             status: "erro",
             mensagemSefaz: focusErr.message
           }).where(eq(schema.notasFiscais.id, notaFiscal.id));
-          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message, stack: focusErr.stack });
+          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message, stack: focusErr.stack, type: "focus_catch" });
         }
 
       } catch (err: any) {
-        app.logger.error({ err }, "Erro na emissão de NFSe Nacional");
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: err.message, stack: err.stack, type: "outer_catch" });
       }
     }
   );
