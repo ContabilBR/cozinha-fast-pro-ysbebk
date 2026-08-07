@@ -1,5 +1,7 @@
 import { eq, desc } from "drizzle-orm";
-import { FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
+import type { App } from "../index.js";
+import { requireAuth, requireTenant } from "../utils/auth.js";
 import * as schema from "../db/schema/schema.js";
 
 const FOCUS_BASE_URL = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
@@ -26,28 +28,8 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
   return { ...data, _httpStatus: res.status };
 }
 
-export function registerFiscalRoutes(app: any) {
+export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
-
-  const customRequireAuth = async (app: any, request: any, reply: any) => {
-    const headers = new Headers();
-    Object.entries(request.headers).forEach(([key, value]) => {
-      if (value) {
-        headers.append(key, Array.isArray(value) ? value[0] : value);
-      }
-    });
-    const session = await app.auth.api.getSession({ headers });
-    if (!session?.user) { reply.code(401).send({ error: "Não autenticado" }); return null; }
-    const userId = session.user.id;
-    const [profile] = await db.select().from(schema.profiles).where(eq(schema.profiles.userId, userId));
-    if (!profile) { reply.code(401).send({ error: "Perfil do usuário não encontrado" }); return null; }
-    return { ...session.user, restauranteId: profile.restauranteId };
-  };
-
-  const requireTenant = (authUser: any) => {
-    if (!authUser.restauranteId) throw new Error("Tenant não identificado");
-    return authUser.restauranteId;
-  };
 
   // POST /api/fiscal/nfsen — Emitir NFSe Nacional
   app.fastify.post(
@@ -64,7 +46,7 @@ export function registerFiscalRoutes(app: any) {
       codigo_tributacao_municipal_iss?: string;
     } }>, reply: FastifyReply) => {
       try {
-        const authUser = await customRequireAuth(app, request, reply);
+        const authUser = await requireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
 
@@ -185,7 +167,7 @@ export function registerFiscalRoutes(app: any) {
     "/api/fiscal/nfsen/:ref",
     async (request: FastifyRequest<{ Params: { ref: string } }>, reply: FastifyReply) => {
       try {
-        const authUser = await customRequireAuth(app, request, reply);
+        const authUser = await requireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
         const { ref } = request.params;
@@ -235,7 +217,7 @@ export function registerFiscalRoutes(app: any) {
     "/api/fiscal/nfsen/:ref",
     async (request: FastifyRequest<{ Params: { ref: string }; Body: { justificativa: string } }>, reply: FastifyReply) => {
       try {
-        const authUser = await customRequireAuth(app, request, reply);
+        const authUser = await requireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
         const { ref } = request.params;
@@ -273,7 +255,7 @@ export function registerFiscalRoutes(app: any) {
     "/api/fiscal/notas",
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authUser = await customRequireAuth(app, request, reply);
+        const authUser = await requireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
 
