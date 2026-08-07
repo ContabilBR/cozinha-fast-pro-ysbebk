@@ -116,6 +116,8 @@ export function registerFiscalRoutes(app: App) {
           nfsenPayload.bairro_tomador = "CENTRO";
         }
 
+        app.logger.debug({ nfsenPayload, ref, restauranteCnpj: cnpjLimpo, requestBody: request.body }, "Inserting nota fiscal into database");
+
         const [notaFiscal] = await db.insert(schema.notasFiscais).values({
           comandaHistoricoId: comanda_historico_id || null,
           referenciaFocus: ref,
@@ -152,7 +154,7 @@ export function registerFiscalRoutes(app: App) {
             status: "erro",
             mensagemSefaz: focusErr.message
           }).where(eq(schema.notasFiscais.id, notaFiscal.id));
-          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message });
+          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message, stack: focusErr.stack });
         }
 
       } catch (err: any) {
