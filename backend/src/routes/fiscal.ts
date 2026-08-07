@@ -231,12 +231,12 @@ export function registerFiscalRoutes(app: App) {
             mensagemSefaz: focusErr.message
           }).where(eq(schema.notasFiscais.id, notaFiscal.id));
           app.logger.error({ err: focusErr, notaId: notaFiscal.id }, "Focus API error");
-          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message });
+          return reply.code(502).send({ error: "Erro ao comunicar com Focus NFe", detail: focusErr.message, cnpjUsado: cnpjLimpo, ref, stack: focusErr.stack?.slice(0, 300) });
         }
 
       } catch (err: any) {
         app.logger.error({ err }, "Failed to create NFSe");
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: err.message, type: "outer_catch", stack: err.stack?.slice(0, 300) });
       }
     }
   );
