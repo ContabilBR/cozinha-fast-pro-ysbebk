@@ -1277,6 +1277,17 @@ export function registerOrderRoutes(app: App) {
         const mesaId = request.params.id;
         app.logger.info({ mesaId }, "Fetching current open comanda for mesa");
 
+        // Validate that mesa exists
+        const mesaExists = await app.db
+          .select({ id: schema.mesas.id })
+          .from(schema.mesas)
+          .where(eq(schema.mesas.id, mesaId as any));
+
+        if (!mesaExists.length) {
+          app.logger.warn({ mesaId }, "Mesa not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
+
         // Query to find the most recent open comanda with dynamic total calculation
         const comandaQuery = sql`
           SELECT
