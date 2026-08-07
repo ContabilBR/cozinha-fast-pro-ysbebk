@@ -1,8 +1,34 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth, requireTenant } from "../utils/auth.js";
 import * as schema from "../db/schema/schema.js";
+
+function formatBrazilTime(date: Date): { iso: string; ymd: string } {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: 'America/Sao_Paulo'
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  const hour = parts.find(p => p.type === 'hour')?.value;
+  const minute = parts.find(p => p.type === 'minute')?.value;
+  const second = parts.find(p => p.type === 'second')?.value;
+
+  const ymd = `${year}-${month}-${day}`;
+  const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}-03:00`;
+
+  return { iso, ymd };
+}
 
 function getFocusToken(): string {
   const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN;
@@ -149,9 +175,11 @@ export function registerFiscalRoutes(app: App) {
         const ref = "nfsen-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
         const cnpjLimpo = restaurante.cnpj.replace(/[.\-\/]/g, "");
 
+        const brazilTime = formatBrazilTime(new Date());
+
         const nfsenPayload: any = {
-          data_emissao: new Date().toISOString(),
-          data_competencia: new Date().toISOString().slice(0, 10),
+          data_emissao: brazilTime.iso,
+          data_competencia: brazilTime.ymd,
           codigo_municipio_emissora: 3304557,
           cnpj_prestador: cnpjLimpo,
           codigo_opcao_simples_nacional: 1,
@@ -443,6 +471,53 @@ export function registerFiscalRoutes(app: App) {
         return reply.code(200).send(notas);
       } catch (err: any) {
         app.logger.error({ err }, "Failed to list notas fiscais");
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  // DELETE /api/fiscal/cleanup — Clean up old test notes
+  app.fastify.delete(
+    "/api/fiscal/cleanup",
+    {
+      schema: {
+        description: "Delete old test notes with erro or rejeitada status",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            description: "Cleanup completed",
+            type: "object",
+            properties: {
+              deletedCount: { type: "number" },
+            },
+          },
+          500: {
+            description: "Internal server error",
+            ...errorResponse,
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info("DELETE /api/fiscal/cleanup started");
+        const authUser = await requireAuth(app, request, reply);
+        if (!authUser) return;
+        const restauranteId = requireTenant(authUser);
+
+        const result = await db.delete(schema.notasFiscais)
+          .where(
+            or(
+              eq(schema.notasFiscais.status, "erro"),
+              eq(schema.notasFiscais.status, "rejeitada")
+            )
+          )
+          .returning();
+
+        app.logger.info({ deletedCount: result.length }, "Old test notes cleanup completed");
+        return reply.code(200).send({ deletedCount: result.length });
+      } catch (err: any) {
+        app.logger.error({ err }, "Failed to cleanup old test notes");
         return reply.code(500).send({ error: err.message });
       }
     }

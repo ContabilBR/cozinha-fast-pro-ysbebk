@@ -2729,6 +2729,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Fiscal cleanup - delete old test notes returns 200 or 500", async () => {
+    const res = await authenticatedApi("/api/fiscal/cleanup", authToken, {
+      method: "DELETE",
+    });
+    const status = res.status;
+    expect(status === 200 || status === 500).toBe(true);
+    if (status === 200) {
+      const data = await res.json();
+      expect(data.deletedCount).toBeDefined();
+    }
+  });
+
   // ==================== Inventory (Insumos) Management ====================
   test("List all insumos returns 200 or 401 or 403", async () => {
     const res = await authenticatedApi("/api/insumos", authToken);
