@@ -4,8 +4,6 @@ import type { App } from "../index.js";
 import { requireAuth, requireTenant } from "../utils/auth.js";
 import * as schema from "../db/schema/schema.js";
 
-const FOCUS_BASE_URL = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
-
 function getFocusToken(): string {
   const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN;
   if (!token) throw new Error("FOCUS_NFE_TOKEN não configurada - nenhuma variável encontrada");
@@ -13,8 +11,9 @@ function getFocusToken(): string {
 }
 
 async function focusRequest(method: string, path: string, body?: any): Promise<any> {
+  const baseUrl = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
   const auth = Buffer.from(getFocusToken() + ":").toString("base64");
-  const res = await fetch(FOCUS_BASE_URL + path, {
+  const res = await fetch(baseUrl + path, {
     method,
     headers: { "Content-Type": "application/json", "Authorization": "Basic " + auth },
     body: body ? JSON.stringify(body) : undefined
@@ -30,6 +29,31 @@ async function focusRequest(method: string, path: string, body?: any): Promise<a
 
 export function registerFiscalRoutes(app: App) {
   const db = app.db as any;
+
+  app.fastify.get("/api/fiscal/diagnostico", async (request: FastifyRequest, reply: FastifyReply) => {
+    const steps: string[] = [];
+    try {
+      const token = process.env.FOCUS_NFE_TOKEN || process.env.SPECULAR_SECRET_FOCUS_NFE_TOKEN || process.env.SECRET_FOCUS_NFE_TOKEN || "";
+      const baseUrl = process.env.FOCUS_NFE_ENV === "production" ? "https://api.focusnfe.com.br/v2" : "https://homologacao.focusnfe.com.br/v2";
+      steps.push("env=" + (process.env.FOCUS_NFE_ENV || "NOT_SET"));
+      steps.push("baseUrl=" + baseUrl);
+      steps.push("tokenLen=" + token.length);
+      const rest = await db.select().from(schema.restaurante).limit(1);
+      const cnpj = rest[0] ? rest[0].cnpj.replace(/[.\-\/]/g, "") : "NONE";
+      steps.push("cnpj=" + cnpj);
+      const ref = "diag-" + Date.now();
+      const auth = Buffer.from(token + ":").toString("base64");
+      const payload = { data_emissao: new Date().toISOString(), data_competencia: new Date().toISOString().slice(0, 10), codigo_municipio_emissora: 3304557, cnpj_prestador: cnpj, codigo_opcao_simples_nacional: 1, regime_especial_tributacao: 0, codigo_municipio_prestacao: 3304557, codigo_tributacao_nacional_iss: "070101", codigo_nbs: "109019900", descricao_servico: "TESTE DIAGNOSTICO", valor_servico: 10.00, tributacao_iss: 1, tipo_retencao_iss: 1, situacao_tributaria_pis_cofins: "00", percentual_total_tributos_federais: "3.25", percentual_total_tributos_estaduais: "0.00", percentual_total_tributos_municipais: "5.00", indicador_total_tributacao: null };
+      const focusRes = await fetch(baseUrl + "/nfsen?ref=" + ref, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Basic " + auth }, body: JSON.stringify(payload) });
+      const responseBody = await focusRes.text();
+      steps.push("status=" + focusRes.status);
+      steps.push("body=" + responseBody.slice(0, 300));
+      return reply.send({ success: focusRes.status === 202 || focusRes.status === 200, steps });
+    } catch (err: any) {
+      steps.push("ERROR=" + err.message);
+      return reply.send({ success: false, steps, error: err.message });
+    }
+  });
 
   const errorResponse = {
     type: "object",
