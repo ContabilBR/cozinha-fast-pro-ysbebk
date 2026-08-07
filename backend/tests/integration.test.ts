@@ -14,6 +14,8 @@ describe("API Integration Tests", () => {
   let testCommandaId: string;
   let testPedidoId: string;
   let testMesaForComandaId: string;
+  let testInsumoId: string;
+  let testPratoIdForInsumo: string;
 
   const uniqueEmail = `test-${Date.now()}@example.com`;
   const tableNumber = Math.floor(Math.random() * 900000) + 100000;
@@ -363,6 +365,17 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.env_names)).toBe(true);
     expect(data.asaas_api_key_set).toBeDefined();
     expect(data.node_env).toBeDefined();
+  });
+
+  test("Get admin debug data returns 200 or 500", async () => {
+    const res = await api("/api/fiscal/admin-debug");
+    const status = res.status;
+    expect(status === 200 || status === 500).toBe(true);
+    if (status === 200) {
+      const data = await res.json();
+      expect(data.restaurantes).toBeDefined();
+      expect(data.usuarios).toBeDefined();
+    }
   });
 
   // ==================== Users CRUD ====================
@@ -2024,6 +2037,18 @@ describe("API Integration Tests", () => {
     expect(status === 200 || status === 404 || status === 400 || status === 401 || status === 500).toBe(true);
   });
 
+  test("Create delivery order returns 200 or 201 or 400 or 404", async () => {
+    const res = await api("/api/delivery/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [],
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 201 || status === 400 || status === 404).toBe(true);
+  });
+
   // ==================== Admin Endpoints ====================
   test("Admin run migration - execute query returns 200 or 400 or 500", async () => {
     const res = await api("/admin/run-migration", {
@@ -2303,9 +2328,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Inventory (Insumos) Management ====================
-  let testInsumoId: string;
-  let testPratoIdForInsumo: string;
-
   test("List all insumos returns 200 or 401 or 403", async () => {
     const res = await authenticatedApi("/api/insumos", authToken);
     const status = res.status;

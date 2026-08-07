@@ -272,6 +272,87 @@ export function registerFiscalRoutes(app: App) {
     }
   );
 
+  // GET /api/fiscal/admin-debug — Admin debug endpoint for restaurants and users
+  app.fastify.get(
+    "/api/fiscal/admin-debug",
+    {
+      schema: {
+        description: "Admin debug endpoint for querying all restaurants and up to 10 users",
+        tags: ["fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              restaurantes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    nome: { type: "string" },
+                    cnpj: { type: ["string", "null"] },
+                    created_at: { type: "string", format: "date-time" },
+                  },
+                },
+              },
+              usuarios: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    nome: { type: "string" },
+                    email: { type: "string" },
+                    role: { type: "string" },
+                    restaurante_id: { type: "string", format: "uuid" },
+                  },
+                },
+              },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              stack: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        app.logger.info("Admin debug endpoint called");
+
+        // Query all restaurants ordered by created_at
+        const restaurantes = await db.select({
+          id: schema.restaurante.id,
+          nome: schema.restaurante.nome,
+          cnpj: schema.restaurante.cnpj,
+          created_at: schema.restaurante.createdAt,
+        }).from(schema.restaurante).orderBy(desc(schema.restaurante.createdAt));
+
+        app.logger.info({ restauranteCount: restaurantes.length }, "Restaurants queried successfully");
+
+        // Query up to 10 users
+        const usuarios = await db.select({
+          id: schema.usuarios.id,
+          nome: schema.usuarios.nome,
+          email: schema.usuarios.email,
+          role: schema.usuarios.role,
+          restaurante_id: schema.usuarios.restauranteId,
+        }).from(schema.usuarios).limit(10);
+
+        app.logger.info({ usuarioCount: usuarios.length }, "Users queried successfully");
+
+        return reply.code(200).send({ restaurantes, usuarios });
+      } catch (err: any) {
+        app.logger.error({ err }, "Error in admin debug endpoint");
+        return reply.code(500).send({ error: err.message, stack: err.stack });
+      }
+    }
+  );
+
   // GET /api/fiscal/diagnostico — Diagnostic endpoint for Focus NFE API integration
   app.fastify.get(
     "/api/fiscal/diagnostico",

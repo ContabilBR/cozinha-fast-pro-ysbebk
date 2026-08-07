@@ -25,6 +25,69 @@ export function registerDeliveryRoutes(app: App) {
   // POST /api/delivery/pedidos — criar pedido delivery
   app.fastify.post<{ Body: DeliveryBody }>(
     "/api/delivery/pedidos",
+    {
+      schema: {
+        description: "Create a new delivery order",
+        tags: ["delivery"],
+        body: {
+          type: "object",
+          required: ["cliente_nome", "cliente_telefone", "endereco", "itens"],
+          properties: {
+            cliente_nome: { type: "string" },
+            cliente_telefone: { type: "string" },
+            endereco: { type: "string" },
+            complemento: { type: "string" },
+            bairro: { type: "string" },
+            cidade: { type: "string" },
+            cep: { type: "string" },
+            referencia: { type: "string" },
+            taxa_entrega: { type: "number" },
+            tempo_estimado: { type: "integer" },
+            observacao: { type: "string" },
+            itens: {
+              type: "array",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["prato_id", "quantidade"],
+                properties: {
+                  prato_id: { type: "string", format: "uuid" },
+                  quantidade: { type: "integer", minimum: 1 },
+                  observacao: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        response: {
+          201: {
+            type: "object",
+            properties: {
+              comanda: { type: "object" },
+              entrega: { type: "object" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Body: DeliveryBody }>, reply: FastifyReply) => {
       try {
         const authUser = await customRequireAuth(app, request, reply);
