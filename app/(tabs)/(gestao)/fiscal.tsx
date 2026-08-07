@@ -42,7 +42,7 @@ export default function FiscalScreen() {
   const [cancelando, setCancelando] = useState(false);
 
   const fetchNotas = useCallback(async () => {
-    try { const res = await apiGet<any>("/api/fiscal/notas"); setNotas(res.notas || []); } catch (e) { console.error("Erro:", e); } finally { setLoading(false); setRefreshing(false); }
+    try { const res = await apiGet<any>("/api/fiscal/notas"); setNotas(Array.isArray(res) ? res : (res.notas || [])); } catch (e) { console.error("Erro:", e); } finally { setLoading(false); setRefreshing(false); }
   }, []);
   useFocusEffect(useCallback(() => { setLoading(true); fetchNotas(); }, [fetchNotas]));
 
