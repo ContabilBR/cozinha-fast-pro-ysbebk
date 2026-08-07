@@ -164,11 +164,12 @@ export async function seedDatabase(app: App) {
       // Try to upsert the specific seed restaurante with the CNPJ
       const [r] = await app.db.insert(schema.restaurante).values({
         id: seedRestauranteSpecificId,
-        nome: 'CozinhaFast Demo',
+        nome: 'Cozinha Fast Pro',
         cnpj: '52.893.314/0001-64',
       }).onConflictDoUpdate({
         target: schema.restaurante.id,
         set: {
+          nome: 'Cozinha Fast Pro',
           cnpj: '52.893.314/0001-64',
         },
       }).returning();
@@ -178,16 +179,27 @@ export async function seedDatabase(app: App) {
       const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
       if (existingRestaurante.length > 0) {
         // Update CNPJ in fallback path
-        await app.db.update(schema.restaurante).set({ cnpj: '52.893.314/0001-64' }).where(eq(schema.restaurante.id, existingRestaurante[0].id));
+        await app.db.update(schema.restaurante).set({ cnpj: '52.893.314/0001-64', nome: 'Cozinha Fast Pro' }).where(eq(schema.restaurante.id, existingRestaurante[0].id));
         seedRestauranteId = existingRestaurante[0].id;
       } else {
         const [r] = await app.db.insert(schema.restaurante).values({
-          nome: 'CozinhaFast Demo',
+          nome: 'Cozinha Fast Pro',
           cnpj: '52.893.314/0001-64',
         }).returning();
         seedRestauranteId = r.id;
       }
     }
+
+    // Force-correct CNPJ on every startup — runs unconditionally
+    try {
+      await (app.db as any).execute(
+        `UPDATE restaurante SET cnpj = '52.893.314/0001-64', nome = 'Cozinha Fast Pro' WHERE id = '00000000-0000-0000-0000-000000000001'`
+      );
+      app.logger.info("Force-corrected restaurante CNPJ to 52.893.314/0001-64");
+    } catch (forceErr) {
+      app.logger.warn({ err: forceErr }, "Failed to force-correct restaurante CNPJ");
+    }
+
     app.logger.info({ seedRestauranteId }, "Seed restaurante resolved");
 
     // Step 1: Ensure all enum values exist using raw SQL
