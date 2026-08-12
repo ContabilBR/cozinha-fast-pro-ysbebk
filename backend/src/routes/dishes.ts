@@ -51,6 +51,9 @@ function validateFiscalDigits(valueRaw: string | null | undefined, fieldName: st
   if (valueRaw === null || valueRaw === undefined || valueRaw === "") return null;
   const value = String(valueRaw).replace(/[^0-9]/g, "");
   if (value === "") return null;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${fieldName} deve conter apenas dígitos`);
+  }
   if (value.length !== expectedLength) {
     throw new Error(`${fieldName} deve ter exatamente ${expectedLength} dígitos`);
   }
@@ -304,7 +307,7 @@ export function registerDishRoutes(app: App) {
                   cest: { type: "string", nullable: true },
                   csosn: { type: "string", nullable: true },
                   cstIcms: { type: "string", nullable: true },
-                  origemMercadoria: { type: "integer", nullable: true },
+                  origemMercadoria: { type: "integer" },
                   unidadeComercial: { type: "string" },
                   aliquotaIcms: { type: "string", nullable: true },
                   createdAt: { type: "string", format: "date-time" },
@@ -416,6 +419,11 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
+              id: { type: "string", format: "uuid" },
+              nome: { type: "string" },
+              descricao: { type: "string", nullable: true },
+              preco: { type: "number" },
+              categoria_id: { type: "string", format: "uuid", nullable: true },
               prato: {
                 type: "object",
                 properties: {
@@ -424,6 +432,17 @@ export function registerDishRoutes(app: App) {
                   descricao: { type: "string", nullable: true },
                   preco: { type: "string" },
                   categoriaId: { type: "string", format: "uuid", nullable: true },
+                  imagemUrl: { type: "string", nullable: true },
+                  disponivel: { type: "boolean" },
+                  ncm: { type: "string", nullable: true },
+                  cfop: { type: "string" },
+                  cest: { type: "string", nullable: true },
+                  csosn: { type: "string", nullable: true },
+                  cstIcms: { type: "string", nullable: true },
+                  origemMercadoria: { type: "integer" },
+                  unidadeComercial: { type: "string" },
+                  aliquotaIcms: { type: "string", nullable: true },
+                  createdAt: { type: "string", format: "date-time" },
                   categoria: {
                     type: "object",
                     nullable: true,
@@ -432,17 +451,6 @@ export function registerDishRoutes(app: App) {
                       nome: { type: "string" },
                     },
                   },
-                  imagemUrl: { type: "string", nullable: true },
-                  disponivel: { type: "boolean" },
-                  ncm: { type: "string", nullable: true },
-                  cfop: { type: "string" },
-                  cest: { type: "string", nullable: true },
-                  csosn: { type: "string", nullable: true },
-                  cstIcms: { type: "string", nullable: true },
-                  origemMercadoria: { type: "integer", nullable: true },
-                  unidadeComercial: { type: "string" },
-                  aliquotaIcms: { type: "string", nullable: true },
-                  createdAt: { type: "string", format: "date-time" },
                 },
               },
             },
@@ -497,10 +505,7 @@ export function registerDishRoutes(app: App) {
             descricao: p.descricao,
             preco: p.preco,
             categoriaId: p.categoriaId,
-            categoria: p.categoriaIdFromJoin ? {
-              id: p.categoriaIdFromJoin,
-              nome: p.categoriaNome,
-            } : null,
+            categoria: p.categoriaIdFromJoin ? { id: p.categoriaIdFromJoin, nome: p.categoriaNome } : null,
             imagemUrl: p.imagemUrl,
             disponivel: p.disponivel,
             ncm: p.ncm,
@@ -573,7 +578,7 @@ export function registerDishRoutes(app: App) {
                   cest: { type: "string", nullable: true },
                   csosn: { type: "string", nullable: true },
                   cstIcms: { type: "string", nullable: true },
-                  origemMercadoria: { type: "integer", nullable: true },
+                  origemMercadoria: { type: "integer" },
                   unidadeComercial: { type: "string" },
                   aliquotaIcms: { type: "string", nullable: true },
                   createdAt: { type: "string", format: "date-time" },
