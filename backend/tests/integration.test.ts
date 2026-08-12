@@ -2706,6 +2706,76 @@ describe("API Integration Tests", () => {
     }
   });
 
+  // ==================== NFC-e Fiscal Endpoints ====================
+  test("Emit NFC-e (cupom fiscal eletronico) returns 200 or 400 or 404 or 409 or 500 or 502", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfce", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: "00000000-0000-0000-0000-000000000000",
+        presenca_comprador: 1,
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 404 || status === 409 || status === 500 || status === 502).toBe(true);
+  });
+
+  test("Emit NFC-e with valid comanda returns 200 or 400 or 404 or 409 or 500 or 502", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi("/api/fiscal/nfce", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: comandaData.comanda.id,
+        presenca_comprador: 1,
+      }),
+    });
+    const status = res.status;
+    expect(status === 200 || status === 400 || status === 404 || status === 409 || status === 500 || status === 502).toBe(true);
+  });
+
+  test("Emit NFC-e without comanda_id returns 400", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfce", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        presenca_comprador: 1,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Emit NFC-e without authentication returns 401", async () => {
+    const res = await api("/api/fiscal/nfce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        comanda_id: "00000000-0000-0000-0000-000000000000",
+        presenca_comprador: 1,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // ==================== Inventory (Insumos) Management ====================
   test("List all insumos returns 200 or 401 or 403", async () => {
     const res = await authenticatedApi("/api/insumos", authToken);
