@@ -2148,6 +2148,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Get restaurant fiscal readiness status returns 200 or 401 or 404", async () => {
+    const res = await authenticatedApi("/api/restaurante/fiscal/status", authToken);
+    const status = res.status;
+    expect(status === 200 || status === 401 || status === 404).toBe(true);
+    if (status === 200) {
+      const data = await res.json();
+      expect(data.pronto_para_nfce).toBeDefined();
+      expect(typeof data.pronto_para_nfce).toBe("boolean");
+      expect(Array.isArray(data.campos_faltantes)).toBe(true);
+    }
+  });
+
+  test("Get fiscal status without authentication returns 401", async () => {
+    const res = await api("/api/restaurante/fiscal/status");
+    await expectStatus(res, 401);
+  });
+
   test("Create new restaurant with admin returns 201 or 400 or 409", async () => {
     const res = await api("/api/restaurantes/signup", {
       method: "POST",

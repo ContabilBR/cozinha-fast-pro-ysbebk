@@ -3,37 +3,201 @@ import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
+import { validarRestauranteParaNfce } from "../utils/fiscal-payloads.js";
 
 interface UpdateRestauranteBody {
   nome: string;
   filial?: string;
   endereco?: string;
   cnpj?: string;
+  // Dados fiscais
+  inscricao_estadual?: string | null;
+  inscricao_municipal?: string | null;
+  regime_tributario?: string | null;
+  cnae_principal?: string | null;
+  csc_token?: string | null;
+  csc_id?: string | null;
+  ambiente_focus?: number;
+  ncm_padrao?: string;
+  // Endereco estruturado
+  cep?: string | null;
+  logradouro?: string | null;
+  numero_endereco?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  codigo_municipio_ibge?: number | null;
+  uf?: string | null;
+  telefone?: string | null;
+  email?: string | null;
 }
 
+const REGIMES_VALIDOS = ["simples_nacional", "simples_excesso", "regime_normal", "mei"];
+
+const UFS_VALIDAS = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"
+];
+
+// Rotulos legiveis para os campos exigidos pela NFC-e
+const LABELS_CAMPOS: Record<string, string> = {
+  cnpj: "CNPJ",
+  nome: "Razao social",
+  inscricaoEstadual: "Inscricao estadual",
+  regimeTributario: "Regime tributario",
+  cscToken: "CSC Token (SEFAZ)",
+  cscId: "CSC ID",
+  cnaePrincipal: "CNAE principal",
+  cep: "CEP",
+  logradouro: "Logradouro",
+  numeroEndereco: "Numero",
+  bairro: "Bairro",
+  codigoMunicipioIbge: "Codigo IBGE do municipio",
+  uf: "UF",
+};
+
+function somenteDigitos(v: any): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  return String(v).replace(/\D/g, "");
+}
+
+function textoOuNull(v: any): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+/** Valida o body. Retorna mensagem de erro ou null se estiver tudo certo. */
+function validarBodyFiscal(body: UpdateRestauranteBody): string | null {
+  if (body.regime_tributario !== undefined && body.regime_tributario !== null && body.regime_tributario !== "") {
+    if (!REGIMES_VALIDOS.includes(body.regime_tributario)) {
+      return "regime_tributario invalido. Valores aceitos: " + REGIMES_VALIDOS.join(", ");
+    }
+  }
+  if (body.uf !== undefined && body.uf !== null && body.uf !== "") {
+    if (!UFS_VALIDAS.includes(String(body.uf).toUpperCase())) {
+      return "uf invalida";
+    }
+  }
+  if (body.codigo_municipio_ibge !== undefined && body.codigo_municipio_ibge !== null) {
+    const n = Number(body.codigo_municipio_ibge);
+    if (!Number.isInteger(n) || String(n).length !== 7) {
+      return "codigo_municipio_ibge deve ser um inteiro de 7 digitos";
+    }
+  }
+  if (body.ambiente_focus !== undefined && body.ambiente_focus !== null) {
+    const n = Number(body.ambiente_focus);
+    if (n !== 1 && n !== 2) {
+      return "ambiente_focus deve ser 1 (producao) ou 2 (homologacao)";
+    }
+  }
+  if (body.cnpj !== undefined && body.cnpj !== null && body.cnpj !== "") {
+    const d = somenteDigitos(body.cnpj);
+    if (d && d.length !== 14) return "cnpj deve ter 14 digitos";
+  }
+  if (body.cep !== undefined && body.cep !== null && body.cep !== "") {
+    const d = somenteDigitos(body.cep);
+    if (d && d.length !== 8) return "cep deve ter 8 digitos";
+  }
+  if (body.ncm_padrao !== undefined && body.ncm_padrao !== null && body.ncm_padrao !== "") {
+    const d = somenteDigitos(body.ncm_padrao);
+    if (d && d.length !== 8) return "ncm_padrao deve ter 8 digitos";
+  }
+  return null;
+}
+
+/** Monta o objeto de resposta. Nunca inclui csc_token. */
+function serializar(r: any) {
+  return {
+    id: r.id,
+    nome: r.nome,
+    filial: r.filial,
+    endereco: r.endereco,
+    cnpj: r.cnpj,
+    inscricao_estadual: r.inscricaoEstadual,
+    inscricao_municipal: r.inscricaoMunicipal,
+    regime_tributario: r.regimeTributario,
+    cnae_principal: r.cnaePrincipal,
+    csc_configurado: !!(r.cscToken && r.cscId),
+    csc_id: r.cscId,
+    ambiente_focus: r.ambienteFocus,
+    ncm_padrao: r.ncmPadrao,
+    cep: r.cep,
+    logradouro: r.logradouro,
+    numero_endereco: r.numeroEndereco,
+    complemento: r.complemento,
+    bairro: r.bairro,
+    codigo_municipio_ibge: r.codigoMunicipioIbge,
+    uf: r.uf,
+    telefone: r.telefone,
+    email: r.email,
+    created_at: r.createdAt.toISOString(),
+    updated_at: r.updatedAt.toISOString(),
+  };
+}
+
+const RESTAURANTE_PROPS = {
+  id: { type: "string", format: "uuid" },
+  nome: { type: "string" },
+  filial: { type: ["string", "null"] },
+  endereco: { type: ["string", "null"] },
+  cnpj: { type: ["string", "null"] },
+  inscricao_estadual: { type: ["string", "null"] },
+  inscricao_municipal: { type: ["string", "null"] },
+  regime_tributario: { type: ["string", "null"] },
+  cnae_principal: { type: ["string", "null"] },
+  csc_configurado: { type: "boolean" },
+  csc_id: { type: ["string", "null"] },
+  ambiente_focus: { type: "integer" },
+  ncm_padrao: { type: ["string", "null"] },
+  cep: { type: ["string", "null"] },
+  logradouro: { type: ["string", "null"] },
+  numero_endereco: { type: ["string", "null"] },
+  complemento: { type: ["string", "null"] },
+  bairro: { type: ["string", "null"] },
+  codigo_municipio_ibge: { type: ["integer", "null"] },
+  uf: { type: ["string", "null"] },
+  telefone: { type: ["string", "null"] },
+  email: { type: ["string", "null"] },
+  created_at: { type: "string", format: "date-time" },
+  updated_at: { type: "string", format: "date-time" },
+} as const;
+
+const BODY_PROPS = {
+  nome: { type: "string" },
+  filial: { type: ["string", "null"] },
+  endereco: { type: ["string", "null"] },
+  cnpj: { type: ["string", "null"] },
+  inscricao_estadual: { type: ["string", "null"] },
+  inscricao_municipal: { type: ["string", "null"] },
+  regime_tributario: { type: ["string", "null"] },
+  cnae_principal: { type: ["string", "null"] },
+  csc_token: { type: ["string", "null"] },
+  csc_id: { type: ["string", "null"] },
+  ambiente_focus: { type: "integer" },
+  ncm_padrao: { type: ["string", "null"] },
+  cep: { type: ["string", "null"] },
+  logradouro: { type: ["string", "null"] },
+  numero_endereco: { type: ["string", "null"] },
+  complemento: { type: ["string", "null"] },
+  bairro: { type: ["string", "null"] },
+  codigo_municipio_ibge: { type: ["integer", "null"] },
+  uf: { type: ["string", "null"] },
+  telefone: { type: ["string", "null"] },
+  email: { type: ["string", "null"] },
+} as const;
+
 export function registerRestauranteRoutes(app: App) {
-  // GET /api/restaurante - Get restaurante info
+  // GET /api/restaurante
   app.fastify.get(
     "/api/restaurante",
     {
       schema: {
-        description: "Get restaurant information (requires authentication)",
+        description: "Get restaurant information including fiscal config (csc_token never returned)",
         tags: ["restaurante"],
         response: {
-          200: {
-            description: "Restaurant information retrieved successfully",
-            type: "object",
-            properties: {
-              id: { type: "string", format: "uuid" },
-              nome: { type: "string" },
-              filial: { type: ["string", "null"] },
-              endereco: { type: ["string", "null"] },
-              cnpj: { type: ["string", "null"] },
-              created_at: { type: "string", format: "date-time" },
-              updated_at: { type: "string", format: "date-time" },
-            },
-          },
+          200: { description: "OK", type: "object", properties: RESTAURANTE_PROPS },
           401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -63,17 +227,7 @@ export function registerRestauranteRoutes(app: App) {
           return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
-        const restaurante = result[0];
-
-        return reply.code(200).send({
-          id: restaurante.id,
-          nome: restaurante.nome,
-          filial: restaurante.filial,
-          endereco: restaurante.endereco,
-          cnpj: restaurante.cnpj,
-          created_at: restaurante.createdAt.toISOString(),
-          updated_at: restaurante.updatedAt.toISOString(),
-        });
+        return reply.code(200).send(serializar(result[0]));
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get restaurante info");
         return reply.code(500).send({ error: "Internal server error" });
@@ -81,39 +235,84 @@ export function registerRestauranteRoutes(app: App) {
     }
   );
 
-  // PUT /api/restaurante - Update or create restaurante
+  // GET /api/restaurante/fiscal/status - diagnostico de prontidao para NFC-e
+  app.fastify.get(
+    "/api/restaurante/fiscal/status",
+    {
+      schema: {
+        description: "Check whether the restaurant is fully configured to emit NFC-e",
+        tags: ["restaurante", "fiscal"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              pronto_para_nfce: { type: "boolean" },
+              campos_faltantes: { type: "array", items: { type: "string" } },
+              campos_faltantes_labels: { type: "array", items: { type: "string" } },
+              ambiente_focus: { type: "integer" },
+              ambiente_label: { type: "string" },
+            },
+          },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
+      try {
+        let tenantId: string;
+        try {
+          tenantId = requireTenant(authUser);
+        } catch {
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
+
+        const result = await app.db
+          .select()
+          .from(schema.restaurante)
+          .where(eq(schema.restaurante.id, tenantId))
+          .limit(1);
+
+        if (result.length === 0) {
+          return reply.code(404).send({ error: "Nenhum dado cadastrado" });
+        }
+
+        const r = result[0] as any;
+        const validacao = validarRestauranteParaNfce(r);
+        const ambiente = r.ambienteFocus ?? 2;
+
+        return reply.code(200).send({
+          pronto_para_nfce: validacao.ok,
+          campos_faltantes: validacao.camposFaltantes,
+          campos_faltantes_labels: validacao.camposFaltantes.map(
+            (c: string) => LABELS_CAMPOS[c] || c
+          ),
+          ambiente_focus: ambiente,
+          ambiente_label: ambiente === 1 ? "producao" : "homologacao",
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to get fiscal status");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
+  // PUT /api/restaurante - atualizacao parcial nos campos fiscais
   app.fastify.put<{ Body: UpdateRestauranteBody }>(
     "/api/restaurante",
     {
       schema: {
-        description: "Update or create restaurant information (requires authentication)",
+        description: "Update restaurant information and fiscal config (partial for fiscal fields)",
         tags: ["restaurante"],
-        body: {
-          type: "object",
-          required: ["nome"],
-          properties: {
-            nome: { type: "string" },
-            filial: { type: ["string", "null"] },
-            endereco: { type: ["string", "null"] },
-            cnpj: { type: ["string", "null"] },
-          },
-        },
+        body: { type: "object", required: ["nome"], properties: BODY_PROPS },
         response: {
-          200: {
-            description: "Restaurant information updated or created successfully",
-            type: "object",
-            properties: {
-              id: { type: "string", format: "uuid" },
-              nome: { type: "string" },
-              filial: { type: ["string", "null"] },
-              endereco: { type: ["string", "null"] },
-              cnpj: { type: ["string", "null"] },
-              created_at: { type: "string", format: "date-time" },
-              updated_at: { type: "string", format: "date-time" },
-            },
-          },
+          200: { description: "OK", type: "object", properties: RESTAURANTE_PROPS },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -133,60 +332,81 @@ export function registerRestauranteRoutes(app: App) {
           return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
-        // Validate nome is present
-        if (!request.body.nome) {
-          return reply.code(400).send({ error: "nome é obrigatório" });
+        const body = request.body;
+
+        if (!body.nome) {
+          return reply.code(400).send({ error: "nome e obrigatorio" });
         }
 
-        app.logger.info({ nome: request.body.nome, tenantId }, "Upserting restaurante");
+        const erroValidacao = validarBodyFiscal(body);
+        if (erroValidacao) {
+          return reply.code(400).send({ error: erroValidacao });
+        }
 
-        // Check if the tenant's restaurante exists
         const existing = await app.db
           .select()
           .from(schema.restaurante)
           .where(eq(schema.restaurante.id, tenantId));
 
-        let restaurante;
-
-        if (existing.length > 0) {
-          // Update existing record
-          const [updated] = await app.db
-            .update(schema.restaurante)
-            .set({
-              nome: request.body.nome,
-              filial: request.body.filial,
-              endereco: request.body.endereco,
-              cnpj: request.body.cnpj,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.restaurante.id, tenantId))
-            .returning();
-
-          restaurante = updated;
-          app.logger.info({ restauranteId: restaurante.id }, "Restaurante updated successfully");
-        } else {
-          // This shouldn't happen in normal flow - tenant must have a restaurante
+        if (existing.length === 0) {
           app.logger.warn({ tenantId }, "Tenant restaurante not found for update");
           return reply.code(404).send({ error: "Restaurante not found" });
         }
 
-        return reply.code(200).send({
-          id: restaurante.id,
-          nome: restaurante.nome,
-          filial: restaurante.filial,
-          endereco: restaurante.endereco,
-          cnpj: restaurante.cnpj,
-          created_at: restaurante.createdAt.toISOString(),
-          updated_at: restaurante.updatedAt.toISOString(),
-        });
+        // Campos legados: comportamento original preservado
+        const updates: any = {
+          nome: body.nome,
+          filial: body.filial,
+          endereco: body.endereco,
+          updatedAt: new Date(),
+        };
+
+        if (body.cnpj !== undefined) updates.cnpj = somenteDigitos(body.cnpj);
+
+        // Campos fiscais: parcial - so aplica o que veio no body
+        if (body.inscricao_estadual !== undefined) updates.inscricaoEstadual = somenteDigitos(body.inscricao_estadual);
+        if (body.inscricao_municipal !== undefined) updates.inscricaoMunicipal = somenteDigitos(body.inscricao_municipal);
+        if (body.regime_tributario !== undefined) updates.regimeTributario = textoOuNull(body.regime_tributario);
+        if (body.cnae_principal !== undefined) updates.cnaePrincipal = somenteDigitos(body.cnae_principal);
+        if (body.csc_token !== undefined) updates.cscToken = textoOuNull(body.csc_token);
+        if (body.csc_id !== undefined) updates.cscId = textoOuNull(body.csc_id);
+        if (body.ambiente_focus !== undefined) updates.ambienteFocus = Number(body.ambiente_focus);
+        if (body.ncm_padrao !== undefined) updates.ncmPadrao = somenteDigitos(body.ncm_padrao) || "21069090";
+
+        if (body.cep !== undefined) updates.cep = somenteDigitos(body.cep);
+        if (body.logradouro !== undefined) updates.logradouro = textoOuNull(body.logradouro);
+        if (body.numero_endereco !== undefined) updates.numeroEndereco = textoOuNull(body.numero_endereco);
+        if (body.complemento !== undefined) updates.complemento = textoOuNull(body.complemento);
+        if (body.bairro !== undefined) updates.bairro = textoOuNull(body.bairro);
+        if (body.codigo_municipio_ibge !== undefined) {
+          updates.codigoMunicipioIbge = body.codigo_municipio_ibge === null ? null : Number(body.codigo_municipio_ibge);
+        }
+        if (body.uf !== undefined) updates.uf = body.uf ? String(body.uf).toUpperCase() : null;
+        if (body.telefone !== undefined) updates.telefone = somenteDigitos(body.telefone);
+        if (body.email !== undefined) updates.email = textoOuNull(body.email);
+
+        app.logger.info(
+          { tenantId, camposAtualizados: Object.keys(updates).length },
+          "Upserting restaurante"
+        );
+
+        const [updated] = await app.db
+          .update(schema.restaurante)
+          .set(updates)
+          .where(eq(schema.restaurante.id, tenantId))
+          .returning();
+
+        app.logger.info({ restauranteId: updated.id }, "Restaurante updated successfully");
+
+        return reply.code(200).send(serializar(updated));
       } catch (error) {
-        app.logger.error({ err: error, body: request.body }, "Failed to upsert restaurante");
+        app.logger.error({ err: error }, "Failed to upsert restaurante");
         return reply.code(500).send({ error: "Internal server error" });
       }
     }
   );
 
-  // DELETE /api/restaurante - Delete restaurante
+  // DELETE /api/restaurante
   app.fastify.delete(
     "/api/restaurante",
     {
@@ -194,13 +414,8 @@ export function registerRestauranteRoutes(app: App) {
         description: "Delete restaurant information (requires authentication)",
         tags: ["restaurante"],
         response: {
-          200: {
-            description: "Restaurant deleted successfully",
-            type: "object",
-            properties: {
-              success: { type: "boolean" },
-            },
-          },
+          200: { type: "object", properties: { success: { type: "boolean" } } },
+          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
@@ -221,7 +436,6 @@ export function registerRestauranteRoutes(app: App) {
 
         app.logger.info({ tenantId }, "Deleting restaurante");
 
-        // Check if the tenant's restaurante exists
         const existing = await app.db
           .select()
           .from(schema.restaurante)
@@ -233,7 +447,6 @@ export function registerRestauranteRoutes(app: App) {
           return reply.code(404).send({ error: "Nenhum dado cadastrado" });
         }
 
-        // Try to delete the record
         let deleteError: any = null;
         try {
           await app.db
@@ -244,33 +457,23 @@ export function registerRestauranteRoutes(app: App) {
         }
 
         if (deleteError) {
-          // Check if it's a foreign key constraint violation
           const errorStr = JSON.stringify(deleteError).toLowerCase();
           const message = String(deleteError?.message || "").toLowerCase();
           const detail = String(deleteError?.detail || "").toLowerCase();
           const code = deleteError?.code;
 
-          app.logger.warn({
-            code,
-            message,
-            detail,
-            hasFK: errorStr.includes('foreign key') || errorStr.includes('restrict') || code === '23503'
-          }, "Delete failed - checking if FK constraint");
-
-          // Check various FK error indicators
           const isFKError = code === '23503' ||
                            code === 23503 ||
                            message.includes('foreign key') ||
                            message.includes('violates') ||
                            detail.includes('foreign key') ||
                            detail.includes('restrict') ||
-                           errorStr.includes('fk') ||
                            errorStr.includes('foreign key') ||
                            errorStr.includes('still referenced');
 
           if (isFKError) {
             app.logger.warn({ tenantId }, "Cannot delete restaurante - has dependent records");
-            return reply.code(400).send({ error: "Não é possível deletar restaurante com registros relacionados" });
+            return reply.code(400).send({ error: "Nao e possivel deletar restaurante com registros relacionados" });
           }
 
           app.logger.error({ err: deleteError, code, message }, "Delete failed with non-FK error");
