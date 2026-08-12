@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
+import { verifyAsaasWebhook } from "../utils/webhook-auth.js";
 import * as schema from "../db/schema/schema.js";
 
 // === Plans Definition ===
@@ -336,6 +337,7 @@ export function registerAssinaturaRoutes(app: App) {
     "/api/webhooks/asaas/assinatura",
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        if (!verifyAsaasWebhook(request, reply, app.logger)) return;
         const body = request.body as any;
         const event = body?.event;
         const payment = body?.payment;

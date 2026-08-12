@@ -1,4 +1,4 @@
-import { eq, desc, or } from "drizzle-orm";
+import { eq, desc, or, and } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth, requireTenant } from "../utils/auth.js";
@@ -485,9 +485,12 @@ export function registerFiscalRoutes(app: App) {
 
         const result = await db.delete(schema.notasFiscais)
           .where(
-            or(
-              eq(schema.notasFiscais.status, "erro"),
-              eq(schema.notasFiscais.status, "rejeitada")
+            and(
+              eq(schema.notasFiscais.restauranteId, restauranteId),
+              or(
+                eq(schema.notasFiscais.status, "erro"),
+                eq(schema.notasFiscais.status, "rejeitada")
+              )
             )
           )
           .returning();
