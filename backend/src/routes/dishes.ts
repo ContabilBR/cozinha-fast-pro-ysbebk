@@ -4,7 +4,22 @@ import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
-interface CreatePratoBody {
+interface FiscalFields {
+  ncm?: string | null;
+  cfop?: string | null;
+  cest?: string | null;
+  csosn?: string | null;
+  cstIcms?: string | null;
+  cst_icms?: string | null;
+  origemMercadoria?: number | null;
+  origem_mercadoria?: number | null;
+  unidadeComercial?: string | null;
+  unidade_comercial?: string | null;
+  aliquotaIcms?: string | null;
+  aliquota_icms?: string | null;
+}
+
+interface CreatePratoBody extends FiscalFields {
   nome: string;
   descricao?: string;
   preco: string;
@@ -13,7 +28,7 @@ interface CreatePratoBody {
   disponivel?: boolean;
 }
 
-interface UpdatePratoBody {
+interface UpdatePratoBody extends FiscalFields {
   nome?: string;
   descricao?: string;
   preco?: string;
@@ -29,6 +44,82 @@ function normalizeDecimal(value: any): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return parseFloat(value.replace(',', '.'));
   return value;
+}
+
+// Validate fiscal digit fields have correct length and contain only digits
+function validateFiscalDigits(value: string | null | undefined, fieldName: string, expectedLength: number): string | null {
+  if (!value) return null;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${fieldName} deve conter apenas dígitos`);
+  }
+  if (value.length !== expectedLength) {
+    throw new Error(`${fieldName} deve ter exatamente ${expectedLength} dígitos`);
+  }
+  return value;
+}
+
+// Validate origem_mercadoria is 0-8
+function validateOrigemMercadoria(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isInteger(value) || value < 0 || value > 8) {
+    throw new Error('origem_mercadoria deve ser um inteiro entre 0 e 8');
+  }
+  return value;
+}
+
+// Normalize unidade_comercial: trim and uppercase, 1-6 characters
+function normalizeUnidadeComercial(value: string | null | undefined): string {
+  if (!value) return 'UN'; // default
+  const normalized = value.trim().toUpperCase();
+  if (normalized.length < 1 || normalized.length > 6) {
+    throw new Error('unidade_comercial deve ter entre 1 e 6 caracteres');
+  }
+  return normalized;
+}
+
+// Validate and normalize fiscal fields
+function validateAndNormalizeFiscalFields(body: any): any {
+  const normalized: any = {};
+
+  if (body.ncm !== undefined) {
+    normalized.ncm = validateFiscalDigits(body.ncm, 'NCM', 8);
+  }
+
+  if (body.cfop !== undefined) {
+    normalized.cfop = validateFiscalDigits(body.cfop, 'CFOP', 4) || '5102';
+  }
+
+  if (body.cest !== undefined) {
+    normalized.cest = validateFiscalDigits(body.cest, 'CEST', 7);
+  }
+
+  if (body.csosn !== undefined) {
+    normalized.csosn = validateFiscalDigits(body.csosn, 'CSOSN', 3);
+  }
+
+  const cstIcms = body.cst_icms || body.cstIcms;
+  if (cstIcms !== undefined) {
+    normalized.cstIcms = validateFiscalDigits(cstIcms, 'CST ICMS', 2);
+  }
+
+  const origemMercadoria = body.origem_mercadoria || body.origemMercadoria;
+  if (origemMercadoria !== undefined) {
+    normalized.origemMercadoria = validateOrigemMercadoria(origemMercadoria);
+  }
+
+  const unidadeComercial = body.unidade_comercial || body.unidadeComercial;
+  if (unidadeComercial !== undefined) {
+    normalized.unidadeComercial = normalizeUnidadeComercial(unidadeComercial);
+  }
+
+  if (body.aliquota_icms !== undefined || body.aliquotaIcms !== undefined) {
+    const aliquota = body.aliquota_icms || body.aliquotaIcms;
+    if (aliquota) {
+      normalized.aliquotaIcms = normalizeDecimal(aliquota).toString();
+    }
+  }
+
+  return normalized;
 }
 
 export function registerDishRoutes(app: App) {
@@ -54,18 +145,27 @@ export function registerDishRoutes(app: App) {
               properties: {
                 id: { type: "string", format: "uuid" },
                 nome: { type: "string" },
-                descricao: { type: ["string", "null"] },
+                descricao: { type: "string", nullable: true },
                 preco: { type: "number" },
-                imagem_url: { type: ["string", "null"] },
+                imagem_url: { type: "string", nullable: true },
                 disponivel: { type: "boolean" },
-                categoria_id: { type: ["string", "null"], format: "uuid" },
+                categoria_id: { type: "string", format: "uuid", nullable: true },
                 categoria: {
-                  type: ["object", "null"],
+                  type: "object",
+                  nullable: true,
                   properties: {
                     id: { type: "string", format: "uuid" },
                     nome: { type: "string" },
                   },
                 },
+                ncm: { type: "string", nullable: true },
+                cfop: { type: "string" },
+                cest: { type: "string", nullable: true },
+                csosn: { type: "string", nullable: true },
+                cst_icms: { type: "string", nullable: true },
+                origem_mercadoria: { type: "integer" },
+                unidade_comercial: { type: "string" },
+                aliquota_icms: { type: "string", nullable: true },
                 created_at: { type: "string", format: "date-time" },
               },
             },
@@ -114,6 +214,14 @@ export function registerDishRoutes(app: App) {
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
+            ncm: schema.pratos.ncm,
+            cfop: schema.pratos.cfop,
+            cest: schema.pratos.cest,
+            csosn: schema.pratos.csosn,
+            cstIcms: schema.pratos.cstIcms,
+            origemMercadoria: schema.pratos.origemMercadoria,
+            unidadeComercial: schema.pratos.unidadeComercial,
+            aliquotaIcms: schema.pratos.aliquotaIcms,
             createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
@@ -133,6 +241,14 @@ export function registerDishRoutes(app: App) {
             disponivel: p.disponivel,
             categoria_id: p.categoriaId,
             categoria: p.categoriaIdFk && p.categoriaNome ? { id: p.categoriaIdFk, nome: p.categoriaNome } : null,
+            ncm: p.ncm,
+            cfop: p.cfop,
+            cest: p.cest,
+            csosn: p.csosn,
+            cst_icms: p.cstIcms,
+            origem_mercadoria: p.origemMercadoria,
+            unidade_comercial: p.unidadeComercial,
+            aliquota_icms: p.aliquotaIcms,
             created_at: p.createdAt.toISOString(),
           }))
         );
@@ -148,41 +264,53 @@ export function registerDishRoutes(app: App) {
     "/api/pratos",
     {
       schema: {
-        description: "Create a new prato (requires authentication)",
+        description: "Create a new prato (requires admin/administrador/gerente role)",
         tags: ["pratos"],
         body: {
           type: "object",
           required: ["nome", "preco"],
           properties: {
             nome: { type: "string" },
-            descricao: { type: ["string", "null"] },
+            descricao: { type: "string", nullable: true },
             preco: { type: "string" },
-            categoriaId: { type: ["string", "null"] },
-            imagemUrl: { type: ["string", "null"] },
+            categoriaId: { type: "string", format: "uuid", nullable: true },
+            imagemUrl: { type: "string", nullable: true },
             disponivel: { type: "boolean" },
+            ncm: { type: "string", nullable: true },
+            cfop: { type: "string", nullable: true },
+            cest: { type: "string", nullable: true },
+            csosn: { type: "string", nullable: true },
+            cst_icms: { type: "string", nullable: true },
+            origem_mercadoria: { type: "integer", nullable: true },
+            unidade_comercial: { type: "string", nullable: true },
+            aliquota_icms: { type: "string", nullable: true },
           },
         },
         response: {
           201: {
             type: "object",
             properties: {
-              prato: {
-                type: "object",
-                properties: {
-                  id: { type: "string", format: "uuid" },
-                  nome: { type: "string" },
-                  descricao: { type: ["string", "null"] },
-                  preco: { type: "string" },
-                  categoriaId: { type: ["string", "null"] },
-                  imagemUrl: { type: ["string", "null"] },
-                  disponivel: { type: "boolean" },
-                  createdAt: { type: "string", format: "date-time" },
-                },
-              },
+              id: { type: "string", format: "uuid" },
+              nome: { type: "string" },
+              descricao: { type: "string", nullable: true },
+              preco: { type: "number" },
+              categoria_id: { type: "string", format: "uuid", nullable: true },
+              imagem_url: { type: "string", nullable: true },
+              disponivel: { type: "boolean" },
+              ncm: { type: "string", nullable: true },
+              cfop: { type: "string" },
+              cest: { type: "string", nullable: true },
+              csosn: { type: "string", nullable: true },
+              cst_icms: { type: "string", nullable: true },
+              origem_mercadoria: { type: "integer" },
+              unidade_comercial: { type: "string" },
+              aliquota_icms: { type: "string", nullable: true },
+              created_at: { type: "string", format: "date-time" },
             },
           },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
@@ -204,34 +332,60 @@ export function registerDishRoutes(app: App) {
 
         app.logger.info({ nome: request.body.nome, restauranteId }, "Creating prato");
 
+        // Validate and normalize fiscal fields
+        let fiscalFields: any = {};
+        try {
+          fiscalFields = validateAndNormalizeFiscalFields(request.body);
+        } catch (validationError: any) {
+          app.logger.warn({ err: validationError, body: request.body }, "Fiscal field validation failed");
+          return reply.code(400).send({ error: validationError.message });
+        }
+
         const normalizedPreco = normalizeDecimal(request.body.preco);
+
+        const insertValues: any = {
+          nome: request.body.nome,
+          descricao: request.body.descricao,
+          preco: normalizedPreco.toString(),
+          categoriaId: request.body.categoriaId,
+          imagemUrl: request.body.imagemUrl,
+          disponivel: request.body.disponivel !== false,
+          restauranteId,
+          cfop: fiscalFields.cfop || '5102',
+          origemMercadoria: fiscalFields.origemMercadoria !== undefined ? fiscalFields.origemMercadoria : 0,
+          unidadeComercial: fiscalFields.unidadeComercial || 'UN',
+        };
+
+        if (fiscalFields.ncm) insertValues.ncm = fiscalFields.ncm;
+        if (fiscalFields.cest) insertValues.cest = fiscalFields.cest;
+        if (fiscalFields.csosn) insertValues.csosn = fiscalFields.csosn;
+        if (fiscalFields.cstIcms) insertValues.cstIcms = fiscalFields.cstIcms;
+        if (fiscalFields.aliquotaIcms) insertValues.aliquotaIcms = fiscalFields.aliquotaIcms;
 
         const [prato] = await app.db
           .insert(schema.pratos)
-          .values({
-            nome: request.body.nome,
-            descricao: request.body.descricao,
-            preco: normalizedPreco.toString(),
-            categoriaId: request.body.categoriaId,
-            imagemUrl: request.body.imagemUrl,
-            disponivel: request.body.disponivel !== false,
-            restauranteId,
-          })
+          .values(insertValues)
           .returning();
 
         app.logger.info({ pratoId: prato.id }, "Prato created successfully");
 
         return reply.code(201).send({
-          prato: {
-            id: prato.id,
-            nome: prato.nome,
-            descricao: prato.descricao,
-            preco: prato.preco,
-            categoriaId: prato.categoriaId,
-            imagemUrl: prato.imagemUrl,
-            disponivel: prato.disponivel,
-            createdAt: prato.createdAt.toISOString(),
-          },
+          id: prato.id,
+          nome: prato.nome,
+          descricao: prato.descricao,
+          preco: parseFloat(prato.preco),
+          categoria_id: prato.categoriaId,
+          imagem_url: prato.imagemUrl,
+          disponivel: prato.disponivel,
+          ncm: prato.ncm,
+          cfop: prato.cfop,
+          cest: prato.cest,
+          csosn: prato.csosn,
+          cst_icms: prato.cstIcms,
+          origem_mercadoria: prato.origemMercadoria,
+          unidade_comercial: prato.unidadeComercial,
+          aliquota_icms: prato.aliquotaIcms,
+          created_at: prato.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error, body: request.body }, "Failed to create prato");
@@ -256,26 +410,30 @@ export function registerDishRoutes(app: App) {
           200: {
             type: "object",
             properties: {
-              prato: {
+              id: { type: "string", format: "uuid" },
+              nome: { type: "string" },
+              descricao: { type: "string", nullable: true },
+              preco: { type: "number" },
+              categoria_id: { type: "string", format: "uuid", nullable: true },
+              categoria: {
                 type: "object",
+                nullable: true,
                 properties: {
                   id: { type: "string", format: "uuid" },
                   nome: { type: "string" },
-                  descricao: { type: ["string", "null"] },
-                  preco: { type: "string" },
-                  categoriaId: { type: ["string", "null"] },
-                  categoria: {
-                    type: ["object", "null"],
-                    properties: {
-                      id: { type: "string", format: "uuid" },
-                      nome: { type: "string" },
-                    },
-                  },
-                  imagemUrl: { type: ["string", "null"] },
-                  disponivel: { type: "boolean" },
-                  createdAt: { type: "string", format: "date-time" },
                 },
               },
+              imagem_url: { type: "string", nullable: true },
+              disponivel: { type: "boolean" },
+              ncm: { type: "string", nullable: true },
+              cfop: { type: "string" },
+              cest: { type: "string", nullable: true },
+              csosn: { type: "string", nullable: true },
+              cst_icms: { type: "string", nullable: true },
+              origem_mercadoria: { type: "integer" },
+              unidade_comercial: { type: "string" },
+              aliquota_icms: { type: "string", nullable: true },
+              created_at: { type: "string", format: "date-time" },
             },
           },
           401: { type: "object", properties: { error: { type: "string" } } },
@@ -302,6 +460,14 @@ export function registerDishRoutes(app: App) {
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
+            ncm: schema.pratos.ncm,
+            cfop: schema.pratos.cfop,
+            cest: schema.pratos.cest,
+            csosn: schema.pratos.csosn,
+            cstIcms: schema.pratos.cstIcms,
+            origemMercadoria: schema.pratos.origemMercadoria,
+            unidadeComercial: schema.pratos.unidadeComercial,
+            aliquotaIcms: schema.pratos.aliquotaIcms,
             createdAt: schema.pratos.createdAt,
           })
           .from(schema.pratos)
@@ -314,20 +480,26 @@ export function registerDishRoutes(app: App) {
 
         const p = pratos[0];
         return reply.code(200).send({
-          prato: {
-            id: p.id,
-            nome: p.nome,
-            descricao: p.descricao,
-            preco: p.preco,
-            categoriaId: p.categoriaId,
-            categoria: p.categoriaIdFromJoin ? {
-              id: p.categoriaIdFromJoin,
-              nome: p.categoriaNome,
-            } : null,
-            imagemUrl: p.imagemUrl,
-            disponivel: p.disponivel,
-            createdAt: p.createdAt.toISOString(),
-          },
+          id: p.id,
+          nome: p.nome,
+          descricao: p.descricao,
+          preco: parseFloat(p.preco),
+          categoria_id: p.categoriaId,
+          categoria: p.categoriaIdFromJoin ? {
+            id: p.categoriaIdFromJoin,
+            nome: p.categoriaNome,
+          } : null,
+          imagem_url: p.imagemUrl,
+          disponivel: p.disponivel,
+          ncm: p.ncm,
+          cfop: p.cfop,
+          cest: p.cest,
+          csosn: p.csosn,
+          cst_icms: p.cstIcms,
+          origem_mercadoria: p.origemMercadoria,
+          unidade_comercial: p.unidadeComercial,
+          aliquota_icms: p.aliquotaIcms,
+          created_at: p.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to get prato");
@@ -341,7 +513,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Update a prato (requires authentication)",
+        description: "Update a prato (requires admin/administrador/gerente role)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -352,35 +524,48 @@ export function registerDishRoutes(app: App) {
           type: "object",
           properties: {
             nome: { type: "string" },
-            descricao: { type: ["string", "null"] },
+            descricao: { type: "string", nullable: true },
             preco: { type: "string" },
-            categoriaId: { type: ["string", "null"] },
-            categoria_id: { type: ["string", "null"] },
-            imagemUrl: { type: ["string", "null"] },
-            imagem_url: { type: ["string", "null"] },
+            categoriaId: { type: "string", format: "uuid", nullable: true },
+            categoria_id: { type: "string", format: "uuid", nullable: true },
+            imagemUrl: { type: "string", nullable: true },
+            imagem_url: { type: "string", nullable: true },
             disponivel: { type: "boolean" },
+            ncm: { type: "string", nullable: true },
+            cfop: { type: "string", nullable: true },
+            cest: { type: "string", nullable: true },
+            csosn: { type: "string", nullable: true },
+            cst_icms: { type: "string", nullable: true },
+            origem_mercadoria: { type: "integer", nullable: true },
+            unidade_comercial: { type: "string", nullable: true },
+            aliquota_icms: { type: "string", nullable: true },
           },
         },
         response: {
           200: {
             type: "object",
             properties: {
-              prato: {
-                type: "object",
-                properties: {
-                  id: { type: "string", format: "uuid" },
-                  nome: { type: "string" },
-                  descricao: { type: ["string", "null"] },
-                  preco: { type: "string" },
-                  categoriaId: { type: ["string", "null"] },
-                  imagemUrl: { type: ["string", "null"] },
-                  disponivel: { type: "boolean" },
-                  createdAt: { type: "string", format: "date-time" },
-                },
-              },
+              id: { type: "string", format: "uuid" },
+              nome: { type: "string" },
+              descricao: { type: "string", nullable: true },
+              preco: { type: "number" },
+              categoria_id: { type: "string", format: "uuid", nullable: true },
+              imagem_url: { type: "string", nullable: true },
+              disponivel: { type: "boolean" },
+              ncm: { type: "string", nullable: true },
+              cfop: { type: "string" },
+              cest: { type: "string", nullable: true },
+              csosn: { type: "string", nullable: true },
+              cst_icms: { type: "string", nullable: true },
+              origem_mercadoria: { type: "integer" },
+              unidade_comercial: { type: "string" },
+              aliquota_icms: { type: "string", nullable: true },
+              created_at: { type: "string", format: "date-time" },
             },
           },
+          400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
@@ -407,15 +592,37 @@ export function registerDishRoutes(app: App) {
           return reply.code(404).send({ error: "Prato not found" });
         }
 
+        // Validate and normalize fiscal fields
+        let fiscalFields: any = {};
+        try {
+          fiscalFields = validateAndNormalizeFiscalFields(request.body);
+        } catch (validationError: any) {
+          app.logger.warn({ err: validationError, body: request.body }, "Fiscal field validation failed");
+          return reply.code(400).send({ error: validationError.message });
+        }
+
         const updates: any = {};
         if (request.body.nome !== undefined) updates.nome = request.body.nome;
         if (request.body.descricao !== undefined) updates.descricao = request.body.descricao;
         if (request.body.preco !== undefined) updates.preco = normalizeDecimal(request.body.preco).toString();
+
         const categoriaId = request.body.categoriaId !== undefined ? request.body.categoriaId : request.body.categoria_id;
         if (categoriaId !== undefined) updates.categoriaId = categoriaId;
+
         const imagemUrl = request.body.imagemUrl || request.body.imagem_url;
         if (imagemUrl !== undefined) updates.imagemUrl = imagemUrl;
+
         if (request.body.disponivel !== undefined) updates.disponivel = request.body.disponivel;
+
+        // Apply fiscal field updates
+        if (fiscalFields.ncm !== undefined) updates.ncm = fiscalFields.ncm;
+        if (fiscalFields.cfop !== undefined) updates.cfop = fiscalFields.cfop;
+        if (fiscalFields.cest !== undefined) updates.cest = fiscalFields.cest;
+        if (fiscalFields.csosn !== undefined) updates.csosn = fiscalFields.csosn;
+        if (fiscalFields.cstIcms !== undefined) updates.cstIcms = fiscalFields.cstIcms;
+        if (fiscalFields.origemMercadoria !== undefined) updates.origemMercadoria = fiscalFields.origemMercadoria;
+        if (fiscalFields.unidadeComercial !== undefined) updates.unidadeComercial = fiscalFields.unidadeComercial;
+        if (fiscalFields.aliquotaIcms !== undefined) updates.aliquotaIcms = fiscalFields.aliquotaIcms;
 
         const [updated] = await app.db
           .update(schema.pratos)
@@ -426,16 +633,22 @@ export function registerDishRoutes(app: App) {
         app.logger.info({ pratoId: updated.id }, "Prato updated successfully");
 
         return reply.code(200).send({
-          prato: {
-            id: updated.id,
-            nome: updated.nome,
-            descricao: updated.descricao,
-            preco: updated.preco,
-            categoriaId: updated.categoriaId,
-            imagemUrl: updated.imagemUrl,
-            disponivel: updated.disponivel,
-            createdAt: updated.createdAt.toISOString(),
-          },
+          id: updated.id,
+          nome: updated.nome,
+          descricao: updated.descricao,
+          preco: parseFloat(updated.preco),
+          categoria_id: updated.categoriaId,
+          imagem_url: updated.imagemUrl,
+          disponivel: updated.disponivel,
+          ncm: updated.ncm,
+          cfop: updated.cfop,
+          cest: updated.cest,
+          csosn: updated.csosn,
+          cst_icms: updated.cstIcms,
+          origem_mercadoria: updated.origemMercadoria,
+          unidade_comercial: updated.unidadeComercial,
+          aliquota_icms: updated.aliquotaIcms,
+          created_at: updated.createdAt.toISOString(),
         });
       } catch (error) {
         app.logger.error({ err: error }, "Failed to update prato");
@@ -449,7 +662,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id",
     {
       schema: {
-        description: "Delete a prato (requires authentication and admin/gerente role)",
+        description: "Delete a prato (requires admin/administrador/gerente role)",
         tags: ["pratos"],
         params: {
           type: "object",
@@ -500,7 +713,7 @@ export function registerDishRoutes(app: App) {
     "/api/pratos/:id/foto",
     {
       schema: {
-        description: "Upload a photo for a prato via multipart/form-data (file) or application/json (imagem_base64). Requires authentication and admin/gerente/cozinheiro role.",
+        description: "Upload a photo for a prato via multipart/form-data (file) or application/json (imagem_base64). Requires authentication and administrador/gerente/cozinheiro role.",
         tags: ["pratos"],
         params: {
           type: "object",

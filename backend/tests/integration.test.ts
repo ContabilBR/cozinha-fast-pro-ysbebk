@@ -654,8 +654,8 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    testDishId = data.prato.id;
-    expect(data.prato.nome).toBeDefined();
+    testDishId = data.id;
+    expect(data.nome).toBeDefined();
   });
 
   test("Create prato without authentication returns 401", async () => {
@@ -685,8 +685,7 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi(`/api/pratos/${testDishId}`, authToken);
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.prato).toBeDefined();
-    expect(data.prato.id).toBe(testDishId);
+    expect(data.id).toBe(testDishId);
   });
 
   test("Get non-existent prato returns 404", async () => {
@@ -716,7 +715,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.prato.nome).toBe("Updated Prato");
+    expect(data.nome).toBe("Updated Prato");
   });
 
   test("Update non-existent prato returns 404", async () => {
@@ -763,7 +762,7 @@ describe("API Integration Tests", () => {
     const pratoData = await createRes.json();
 
     const res = await authenticatedApi(
-      `/api/pratos/${pratoData.prato.id}`,
+      `/api/pratos/${pratoData.id}`,
       regularUserToken,
       {
         method: "DELETE",
@@ -794,7 +793,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(createRes, 201);
     const pratoData = await createRes.json();
-    const pratoId = pratoData.prato.id;
+    const pratoId = pratoData.id;
 
     const form = new FormData();
     form.append("file", createTestFile("dish.jpg", "test image content", "image/jpeg"));
@@ -839,7 +838,7 @@ describe("API Integration Tests", () => {
     form.append("file", createTestFile());
 
     const res = await authenticatedApi(
-      `/api/pratos/${pratoData.prato.id}/foto`,
+      `/api/pratos/${pratoData.id}/foto`,
       regularUserToken,
       {
         method: "POST",
@@ -877,7 +876,7 @@ describe("API Integration Tests", () => {
     form.append("file", createTestFile("large.jpg", largeContent, "image/jpeg"));
 
     const res = await authenticatedApi(
-      `/api/pratos/${pratoData.prato.id}/foto`,
+      `/api/pratos/${pratoData.id}/foto`,
       adminToken,
       {
         method: "POST",
@@ -1303,7 +1302,7 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({
         items: [
           {
-            prato_id: pratoData.prato.id,
+            prato_id: pratoData.id,
             quantidade: 2,
             preco_unitario: 25.99,
             observacao: "Well done",
@@ -1586,7 +1585,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         comanda_id: comandaData.comanda.id,
-        prato_id: pratoData.prato.id,
+        prato_id: pratoData.id,
         quantidade: 1,
       }),
     });
@@ -2795,7 +2794,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 201);
     const data = await res.json();
-    testPratoIdForInsumo = data.prato.id;
+    testPratoIdForInsumo = data.id;
   });
 
   test("Get prato insumos returns 200 or 404", async () => {
