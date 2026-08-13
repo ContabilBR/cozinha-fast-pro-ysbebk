@@ -235,7 +235,7 @@ export default function CupomFiscalScreen() {
             </Text>
           ))}
           <Pressable
-            onPress={() => router.push("/(tabs)/(gestao)/restaurante")}
+            onPress={() => router.push("/(tabs)/(gestao)/fiscal-config")}
             style={{
               marginTop: 12,
               backgroundColor: "#F59E0B",
