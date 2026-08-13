@@ -267,6 +267,8 @@ export const notasFiscais = pgTable("notas_fiscais", {
   serie: integer("serie"),
   xmlUrl: text("xml_url"),
   danfeUrl: text("danfe_url"),
+  qrcodeUrl: text("qrcode_url"),
+  urlConsulta: text("url_consulta"),
   protocolo: text("protocolo"),
   mensagemSefaz: text("mensagem_sefaz"),
   motivoCancelamento: text("motivo_cancelamento"),
