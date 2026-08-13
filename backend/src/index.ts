@@ -25,7 +25,6 @@ import { registerDeliveryRoutes } from './routes/delivery.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
 import { registerCardapioPublicoRoutes } from './routes/cardapio-publico.js';
 import { registerEstoqueRoutes } from './routes/estoque.js';
-import { registerDebugRoutes } from './routes/debug.js';
 import { seedDatabase } from './db/seed.js';
 
 // Combine schemas
@@ -112,7 +111,6 @@ registerDeliveryRoutes(app);
 registerRealtimeRoutes(app);
 registerCardapioPublicoRoutes(app);
 registerEstoqueRoutes(app);
-registerDebugRoutes(app);
 
 // Seed database on startup (only if not in production and explicitly enabled)
 if (process.env.NODE_ENV !== 'production' && process.env.SEED_ENABLED === 'true') {
