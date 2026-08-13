@@ -156,6 +156,13 @@ export default function CupomFiscalScreen() {
         setNota({ id: e.body.nota_id, ref: e.body.referencia_focus, status: "processando" });
         setEtapa("resultado");
         consultarNota(e.body.referencia_focus);
+      } else if (e.status === 502) {
+        Alert.alert(
+          "Erro na comunicação com a SEFAZ",
+          (e.message || "Falha ao emitir") +
+            (e.body?.detail ? "\n\nDetalhe: " + String(e.body.detail).slice(0, 400) : "") +
+            (e.body?.ref ? "\n\nRef: " + e.body.ref : "")
+        );
       } else if (e.status === 500) {
         Alert.alert(
           "Erro no servidor",
