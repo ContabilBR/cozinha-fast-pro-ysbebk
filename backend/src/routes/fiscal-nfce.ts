@@ -1,9 +1,12 @@
 /**
  * POST /api/fiscal/nfce — emissao de cupom fiscal eletronico (modelo 65).
- * Orquestra nfce-data (carga), nfce-builder (montagem) e focus (envio).
+ * GET  /api/fiscal/nfce/:ref — consulta status e devolve payload de impressao.
+ *
+ * Orquestra nfce-data (carga), nfce-builder (montagem),
+ * nfce-qrcode (QR Code) e focus (envio).
  */
 
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth, requireTenant } from "../utils/auth.js";
@@ -31,6 +34,82 @@ import {
   buscarNfceBloqueante,
   proximoNumeroNfce,
 } from "../services/nfce-data.js";
+import {
+  extrairUrlsFiscais,
+  gerarQrCodeBase64,
+  formatarChaveAcesso,
+} from "../services/nfce-qrcode.js";
+
+function focusHost(): string {
+  return process.env.FOCUS_NFE_ENV === "production"
+    ? "https://api.focusnfe.com.br"
+    : "https://homologacao.focusnfe.com.br";
+}
+
+function absolutizar(caminho: any): string | null {
+  if (typeof caminho === "string" && caminho.startsWith("/")) {
+    return focusHost() + caminho;
+  }
+  return caminho ?? null;
+}
+
+/**
+ * Traduz o retorno da Focus em campos de atualizacao da nota.
+ * Compartilhado entre POST e GET para que ambos interpretem igual.
+ */
+function aplicarResultadoFocus(
+  resultado: any,
+  ctx: { numeroNf?: number; serieNota?: number },
+  logger: any
+): any {
+  const updateData: any = {};
+
+  if (resultado.status === "autorizado") {
+    updateData.status = "autorizada";
+    updateData.chaveAcesso = resultado.chave_nfe ?? null;
+    updateData.numeroNota = resultado.numero
+      ? parseInt(resultado.numero)
+      : ctx.numeroNf ?? null;
+    updateData.serie = resultado.serie
+      ? parseInt(resultado.serie)
+      : ctx.serieNota ?? null;
+    updateData.protocolo = resultado.protocolo ?? null;
+    updateData.danfeUrl = absolutizar(resultado.caminho_danfe);
+    updateData.xmlUrl = absolutizar(resultado.caminho_xml_nota_fiscal);
+    updateData.mensagemSefaz = resultado.mensagem_sefaz ?? "NFC-e autorizada";
+    updateData.emitidaEm = new Date();
+  } else if (
+    resultado._httpStatus === 202 ||
+    resultado.status === "processando_autorizacao"
+  ) {
+    updateData.status = "processando";
+    updateData.mensagemSefaz = "Aguardando autorizacao da SEFAZ";
+  } else if (resultado.status === "erro_autorizacao" || resultado.erros) {
+    updateData.status = "rejeitada";
+    updateData.mensagemSefaz = JSON.stringify(
+      resultado.erros ?? resultado.mensagem_sefaz ?? resultado.mensagem ?? resultado
+    );
+  } else if (resultado.status === "cancelado") {
+    updateData.status = "cancelada";
+    updateData.mensagemSefaz = resultado.mensagem_sefaz ?? "NFC-e cancelada";
+  } else {
+    updateData.status = "processando";
+    updateData.mensagemSefaz = JSON.stringify(resultado);
+  }
+
+  const { qrcodeUrl, urlConsulta, chavesDisponiveis } = extrairUrlsFiscais(resultado);
+  if (qrcodeUrl) updateData.qrcodeUrl = qrcodeUrl;
+  if (urlConsulta) updateData.urlConsulta = urlConsulta;
+
+  if (!qrcodeUrl && updateData.status === "autorizada") {
+    logger.warn(
+      { chavesDisponiveis },
+      "QR Code nao encontrado no retorno da Focus — verificar nome do campo"
+    );
+  }
+
+  return updateData;
+}
 
 export function registerFiscalNfceRoutes(app: App) {
   const db = app.db as any;
@@ -45,6 +124,7 @@ export function registerFiscalNfceRoutes(app: App) {
     },
   };
 
+  // ==================== POST /api/fiscal/nfce ====================
   app.fastify.post(
     "/api/fiscal/nfce",
     {
@@ -56,8 +136,7 @@ export function registerFiscalNfceRoutes(app: App) {
           required: ["comanda_id"],
           properties: {
             comanda_id: { type: "string", format: "uuid" },
-            cpf_destinatario: { type: "string" },
-            cnpj_destinatario: { type: "string" },
+            cpf_destinatario: { type: "string", description: "CPF do consumidor (opcional)" },
             nome_destinatario: { type: "string" },
             email_destinatario: { type: "string" },
             serie: { type: "integer" },
@@ -79,7 +158,6 @@ export function registerFiscalNfceRoutes(app: App) {
         Body: {
           comanda_id: string;
           cpf_destinatario?: string;
-          cnpj_destinatario?: string;
           nome_destinatario?: string;
           email_destinatario?: string;
           serie?: number;
@@ -96,7 +174,6 @@ export function registerFiscalNfceRoutes(app: App) {
         const {
           comanda_id,
           cpf_destinatario,
-          cnpj_destinatario,
           nome_destinatario,
           email_destinatario,
           serie,
@@ -186,15 +263,16 @@ export function registerFiscalNfceRoutes(app: App) {
           restaurante.ambienteFocus === 1 ? "producao" : "homologacao";
         const serieNota = serie ?? 1;
 
-        // 7. Destinatario opcional (CPF na nota)
+        // 7. Destinatario opcional — apenas CPF.
+        // NFC-e para CNPJ e vedada (Ajuste SINIEF 11/2025); use NF-e modelo 55.
         let destinatario: DestinatarioInput | undefined;
-        if (cpf_destinatario || cnpj_destinatario) {
-          destinatario = {};
-          if (cpf_destinatario) destinatario.cpf = limparDocumento(cpf_destinatario);
-          if (cnpj_destinatario) destinatario.cnpj = limparDocumento(cnpj_destinatario);
+        if (cpf_destinatario) {
+          destinatario = {
+            cpf: limparDocumento(cpf_destinatario),
+            indicador_ie: 9,
+          };
           if (nome_destinatario) destinatario.razao_social = nome_destinatario;
           if (email_destinatario) destinatario.email = email_destinatario;
-          destinatario.indicador_ie = 9;
         }
 
         // 8. Payload
@@ -238,52 +316,23 @@ export function registerFiscalNfceRoutes(app: App) {
           .returning();
         const notaFiscal = inserted[0];
 
-        const focusHost =
-          process.env.FOCUS_NFE_ENV === "production"
-            ? "https://api.focusnfe.com.br"
-            : "https://homologacao.focusnfe.com.br";
-        const absolutizar = (caminho: any) =>
-          typeof caminho === "string" && caminho.startsWith("/")
-            ? focusHost + caminho
-            : caminho ?? null;
-
         try {
           const resultado = await focusRequest("POST", "/nfce?ref=" + ref, payload);
-          const updateData: any = {};
-
-          if (resultado.status === "autorizado") {
-            updateData.status = "autorizada";
-            updateData.chaveAcesso = resultado.chave_nfe ?? null;
-            updateData.numeroNota = resultado.numero ? parseInt(resultado.numero) : numeroNf;
-            updateData.serie = resultado.serie ? parseInt(resultado.serie) : serieNota;
-            updateData.protocolo = resultado.protocolo ?? null;
-            updateData.danfeUrl = absolutizar(resultado.caminho_danfe);
-            updateData.xmlUrl = absolutizar(resultado.caminho_xml_nota_fiscal);
-            updateData.mensagemSefaz = resultado.mensagem_sefaz ?? "NFC-e autorizada";
-            updateData.emitidaEm = new Date();
-          } else if (
-            resultado._httpStatus === 202 ||
-            resultado.status === "processando_autorizacao"
-          ) {
-            updateData.status = "processando";
-            updateData.mensagemSefaz = "Aguardando autorizacao da SEFAZ";
-          } else if (resultado.status === "erro_autorizacao" || resultado.erros) {
-            updateData.status = "rejeitada";
-            updateData.mensagemSefaz = JSON.stringify(
-              resultado.erros ?? resultado.mensagem_sefaz ?? resultado.mensagem ?? resultado
-            );
-          } else {
-            updateData.status = "processando";
-            updateData.mensagemSefaz = JSON.stringify(resultado);
-          }
+          const updateData = aplicarResultadoFocus(
+            resultado,
+            { numeroNf, serieNota },
+            app.logger
+          );
 
           await db
             .update(schema.notasFiscais)
             .set(updateData)
             .where(eq(schema.notasFiscais.id, notaFiscal.id));
 
+          const qrCodeBase64 = await gerarQrCodeBase64(updateData.qrcodeUrl);
+
           app.logger.info(
-            { notaId: notaFiscal.id, status: updateData.status, ref, numeroNf },
+            { notaId: notaFiscal.id, status: updateData.status, ref, numeroNf, temQr: !!qrCodeBase64 },
             "NFC-e processada"
           );
 
@@ -291,6 +340,8 @@ export function registerFiscalNfceRoutes(app: App) {
             ...notaFiscal,
             ...updateData,
             ref,
+            qrCodeBase64,
+            chaveAcessoFormatada: formatarChaveAcesso(updateData.chaveAcesso),
             valor_produtos: valorItens,
             quantidade_itens: itens.length,
           });
@@ -309,6 +360,91 @@ export function registerFiscalNfceRoutes(app: App) {
         }
       } catch (err: any) {
         app.logger.error({ err }, "Falha ao emitir NFC-e");
+        return reply.code(500).send({ error: err.message });
+      }
+    }
+  );
+
+  // ==================== GET /api/fiscal/nfce/:ref ====================
+  app.fastify.get(
+    "/api/fiscal/nfce/:ref",
+    {
+      schema: {
+        description: "Consultar NFC-e e obter payload de impressao (QR Code em base64)",
+        tags: ["fiscal"],
+        params: {
+          type: "object",
+          required: ["ref"],
+          properties: { ref: { type: "string" } },
+        },
+        response: {
+          200: { type: "object", additionalProperties: true },
+          404: { description: "Nota nao encontrada", ...errorResponse },
+          502: { description: "Erro na comunicacao com Focus NFe", ...errorResponse },
+          500: { description: "Erro interno", ...errorResponse },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Params: { ref: string } }>, reply: FastifyReply) => {
+      try {
+        const authUser = await requireAuth(app, request, reply);
+        if (!authUser) return;
+        const restauranteId = requireTenant(authUser);
+
+        const { ref } = request.params;
+
+        const rows = await db
+          .select()
+          .from(schema.notasFiscais)
+          .where(
+            and(
+              eq(schema.notasFiscais.referenciaFocus, ref),
+              eq(schema.notasFiscais.restauranteId, restauranteId),
+              eq(schema.notasFiscais.tipoDocumento, "nfce")
+            )
+          );
+        if (!rows.length) {
+          return reply.code(404).send({ error: "NFC-e nao encontrada" });
+        }
+        let nota = rows[0];
+
+        // Se ainda esta processando, consulta a Focus e atualiza
+        if (nota.status === "processando") {
+          try {
+            const resultado = await focusRequest("GET", "/nfce/" + ref);
+            const updateData = aplicarResultadoFocus(
+              resultado,
+              { numeroNf: nota.numeroNota ?? undefined, serieNota: nota.serie ?? undefined },
+              app.logger
+            );
+
+            await db
+              .update(schema.notasFiscais)
+              .set(updateData)
+              .where(eq(schema.notasFiscais.id, nota.id));
+
+            nota = { ...nota, ...updateData };
+            app.logger.info({ ref, status: updateData.status }, "NFC-e atualizada via consulta");
+          } catch (focusErr: any) {
+            app.logger.error({ err: focusErr, ref }, "Erro ao consultar NFC-e na Focus");
+            return reply.code(502).send({
+              error: "Erro ao consultar Focus NFe",
+              detail: focusErr.message,
+              nota,
+            });
+          }
+        }
+
+        const qrCodeBase64 = await gerarQrCodeBase64(nota.qrcodeUrl);
+
+        return reply.code(200).send({
+          ...nota,
+          qrCodeBase64,
+          chaveAcessoFormatada: formatarChaveAcesso(nota.chaveAcesso),
+          imprimivel: nota.status === "autorizada",
+        });
+      } catch (err: any) {
+        app.logger.error({ err }, "Falha ao consultar NFC-e");
         return reply.code(500).send({ error: err.message });
       }
     }
