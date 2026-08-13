@@ -85,18 +85,22 @@ export const apiRequest = async <T = any>(
   console.log(`[API] ${options?.method ?? "GET"} ${path}${token ? "" : " (unauthenticated)"}`);
 
   const response = await fetch(url, { ...options, headers });
-
-  if (!response.ok) {
+if (!response.ok) {
     const text = await response.text();
     let message = text;
+    let body: any = null;
     try {
       const json = JSON.parse(text);
+      body = json;
       message = json.message || json.error || text;
     } catch {
       // use raw text
     }
     console.error(`[API] Error ${response.status} on ${path}:`, message);
-    throw new Error(message || `HTTP ${response.status}`);
+    const err: any = new Error(message || `HTTP ${response.status}`);
+    err.status = response.status;
+    err.body = body;
+    throw err;
   }
 
   // 204 No Content or explicitly empty body — skip JSON parsing to avoid
