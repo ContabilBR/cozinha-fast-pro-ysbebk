@@ -156,6 +156,12 @@ export default function CupomFiscalScreen() {
         setNota({ id: e.body.nota_id, ref: e.body.referencia_focus, status: "processando" });
         setEtapa("resultado");
         consultarNota(e.body.referencia_focus);
+      } else if (e.status === 500) {
+        Alert.alert(
+          "Erro no servidor",
+          "Não foi possível emitir o cupom. Avise o suporte técnico.\n\nDetalhe: " +
+            String(e.message || "").slice(0, 120)
+        );
       } else {
         Alert.alert("Não foi possível emitir", e.message || "Erro desconhecido");
       }
