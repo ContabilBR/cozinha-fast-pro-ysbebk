@@ -180,6 +180,7 @@ export default function FiscalConfigScreen() {
     somenteDigitos,
     maiusculas,
     secreto,
+    forcarObrigatorio,
   }: {
     label: string;
     campo: keyof FiscalForm;
@@ -190,8 +191,9 @@ export default function FiscalConfigScreen() {
     somenteDigitos?: boolean;
     maiusculas?: boolean;
     secreto?: boolean;
+    forcarObrigatorio?: boolean;
   }) => {
-    const obrigatorio = OBRIGATORIOS.includes(campo);
+    const obrigatorio = forcarObrigatorio || OBRIGATORIOS.includes(campo);
     const vazio = !String(form[campo] || "").trim();
     return (
       <View style={{ marginBottom: 14 }}>
@@ -448,12 +450,18 @@ export default function FiscalConfigScreen() {
             </Text>
           </View>
 
-          <Campo label="ID do CSC" campo="csc_id" placeholder="Ex: 000001" />
+          <Campo
+            label="ID do CSC"
+            campo="csc_id"
+            placeholder="Ex: 000001"
+            forcarObrigatorio
+          />
           <Campo
             label={cscConfigurado ? "Novo token CSC (deixe vazio para manter)" : "Token CSC"}
             campo="csc_token"
             placeholder="Cole o token da SEFAZ"
             secreto
+            forcarObrigatorio={!cscConfigurado}
           />
         </Secao>
 
