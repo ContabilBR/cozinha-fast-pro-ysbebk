@@ -201,57 +201,6 @@ export function registerCustomAuthRoutes(app: App) {
       throw err;
     }
   });
-
-  // GET /api/debug/usuarios - Debug endpoint to view all usuarios (senha_hash masked)
-  app.fastify.get<{}>('/api/debug/usuarios', {
-    schema: {
-      description: 'Debug endpoint - list all usuarios with masked passwords',
-      tags: ['debug'],
-      response: {
-        200: {
-          description: 'List of usuarios with masked passwords',
-          type: 'object',
-          properties: {
-            usuarios: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string', format: 'uuid' },
-                  nome: { type: 'string' },
-                  email: { type: 'string' },
-                  senha_hash: { type: 'string' },
-                  role: { type: 'string' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      app.logger.info('Debug endpoint: fetching all usuarios');
-      const allUsuarios = await app.db
-        .select()
-        .from(schema.usuarios);
-
-      const maskedUsuarios = allUsuarios.map(u => ({
-        id: u.id,
-        nome: u.nome,
-        email: u.email,
-        senha_hash: '***',
-        role: u.role,
-      }));
-
-      return {
-        usuarios: maskedUsuarios,
-      };
-    } catch (err) {
-      app.logger.error({ err }, 'Debug endpoint error');
-      throw err;
-    }
-  });
 }
 
 /**
@@ -259,19 +208,6 @@ export function registerCustomAuthRoutes(app: App) {
  * Validates the Bearer token in Authorization header against session table.
  * Attaches userId and role to request context.
  * Should be called at the start of protected route handlers.
- *
- * @param app - Application instance
- * @param request - Fastify request object
- * @param reply - Fastify reply object
- * @returns true if authentication succeeds, false if it fails (reply with 401 sent)
- *
- * Usage:
- * app.fastify.get('/api/protected', async (request, reply) => {
- *   if (!await verifyAndAttachUser(app, request, reply)) return;
- *   const userId = (request as any).userId;
- *   const role = (request as any).role;
- *   // ... route logic using userId and role
- * });
  */
 export async function verifyAndAttachUser(
   app: App,

@@ -1,9 +1,11 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
+
+const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
 
 interface CreateUsuarioBody {
   nome: string;
@@ -21,7 +23,7 @@ interface UpdateUsuarioBody {
 
 export function registerUsuariosRoutes(app: App) {
 
-  // GET /api/usuarios - List all usuarios
+  // GET /api/usuarios - List usuarios do restaurante autenticado
   app.fastify.get(
     "/api/usuarios",
     {
@@ -52,11 +54,11 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
-        app.logger.info({}, "Listing usuarios");
+        app.logger.info({ restauranteId: authUser.restauranteId }, "Listing usuarios");
 
         const result = await app.db
           .select({
@@ -67,6 +69,7 @@ export function registerUsuariosRoutes(app: App) {
             createdAt: schema.usuarios.createdAt,
           })
           .from(schema.usuarios)
+          .where(eq(schema.usuarios.restauranteId, authUser.restauranteId))
           .orderBy(schema.usuarios.nome);
 
         return reply.code(200).send({
@@ -121,13 +124,15 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (POST /api/usuarios)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         if (!request.body.nome || !request.body.email || !request.body.senha) {
           return reply.code(400).send({ error: "nome, email, and senha are required" });
+        }
+
+        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+          return reply.code(400).send({ error: "role inválido" });
         }
 
         const restauranteId = requireTenant(authUser);
@@ -209,8 +214,6 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (PUT /api/usuarios/:id)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
@@ -219,10 +222,14 @@ export function registerUsuariosRoutes(app: App) {
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(eq(schema.usuarios.id, request.params.id));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });
+        }
+
+        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+          return reply.code(400).send({ error: "role inválido" });
         }
 
         const updates: any = {};
@@ -279,8 +286,6 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (DELETE /api/usuarios/:id)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
@@ -289,7 +294,7 @@ export function registerUsuariosRoutes(app: App) {
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(eq(schema.usuarios.id, request.params.id));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });
