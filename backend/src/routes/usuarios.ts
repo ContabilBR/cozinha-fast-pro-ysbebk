@@ -63,7 +63,7 @@ export function registerUsuariosRoutes(app: App) {
       }
 
       try {
-        app.logger.info({}, "Listing usuarios");
+        app.logger.info({ restauranteId, authUserId: session.id, authUserEmail: session.email }, "Listing usuarios");
 
         const result = await app.db
           .select({
@@ -145,7 +145,7 @@ export function registerUsuariosRoutes(app: App) {
           return reply.code(404).send({ error: "Nenhum restaurante associado" });
         }
 
-        app.logger.info({ email: request.body.email, restauranteId }, "Creating usuario");
+        app.logger.info({ email: request.body.email, restauranteId, authUserId: authUser.id, authUserEmail: authUser.email }, "Creating usuario");
 
         const hashedPassword = await bcrypt.hash(request.body.senha, 10);
 
