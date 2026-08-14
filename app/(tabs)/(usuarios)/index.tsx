@@ -34,8 +34,8 @@ const ROLE_COLORS: Record<string, string> = {
   cozinheiro: "#F59E0B",
 };
 
-type RoleOption = "garcom" | "cozinheiro" | "gerente" | "admin";
-const ROLES: RoleOption[] = ["garcom", "cozinheiro", "gerente", "admin"];
+type RoleOption = "garcom" | "cozinheiro" | "gerente" | "administrador";
+const ROLES: RoleOption[] = ["garcom", "cozinheiro", "gerente", "administrador"];
 
 function getUserDisplayName(user: ApiUser): string {
   return user.nome || user.name || "";
