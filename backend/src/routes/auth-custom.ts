@@ -208,19 +208,6 @@ export function registerCustomAuthRoutes(app: App) {
  * Validates the Bearer token in Authorization header against session table.
  * Attaches userId and role to request context.
  * Should be called at the start of protected route handlers.
- *
- * @param app - Application instance
- * @param request - Fastify request object
- * @param reply - Fastify reply object
- * @returns true if authentication succeeds, false if it fails (reply with 401 sent)
- *
- * Usage:
- * app.fastify.get('/api/protected', async (request, reply) => {
- *   if (!await verifyAndAttachUser(app, request, reply)) return;
- *   const userId = (request as any).userId;
- *   const role = (request as any).role;
- *   // ... route logic using userId and role
- * });
  */
 export async function verifyAndAttachUser(
   app: App,

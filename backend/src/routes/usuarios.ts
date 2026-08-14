@@ -5,6 +5,8 @@ import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
+const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
+
 interface CreateUsuarioBody {
   nome: string;
   email: string;
@@ -21,7 +23,7 @@ interface UpdateUsuarioBody {
 
 export function registerUsuariosRoutes(app: App) {
 
-  // GET /api/usuarios - List all usuarios
+  // GET /api/usuarios - List usuarios do restaurante autenticado
   app.fastify.get(
     "/api/usuarios",
     {
@@ -56,7 +58,7 @@ export function registerUsuariosRoutes(app: App) {
       if (!authUser) return;
 
       try {
-        app.logger.info({}, "Listing usuarios");
+        app.logger.info({ restauranteId: authUser.restauranteId }, "Listing usuarios");
 
         const result = await app.db
           .select({
@@ -129,14 +131,13 @@ export function registerUsuariosRoutes(app: App) {
           return reply.code(400).send({ error: "nome, email, and senha are required" });
         }
 
+        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+          return reply.code(400).send({ error: "role inválido" });
+        }
+
         const restauranteId = requireTenant(authUser);
         if (!restauranteId) {
           return reply.code(404).send({ error: "Nenhum restaurante associado" });
-        }
-
-        const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
-        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
-          return reply.code(400).send({ error: "role inválido" });
         }
 
         app.logger.info({ email: request.body.email, restauranteId }, "Creating usuario");
@@ -227,7 +228,6 @@ export function registerUsuariosRoutes(app: App) {
           return reply.code(404).send({ error: "Usuario not found" });
         }
 
-        const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
         if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
           return reply.code(400).send({ error: "role inválido" });
         }
