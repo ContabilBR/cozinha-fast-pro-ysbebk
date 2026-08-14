@@ -201,57 +201,6 @@ export function registerCustomAuthRoutes(app: App) {
       throw err;
     }
   });
-
-  // GET /api/debug/usuarios - Debug endpoint to view all usuarios (senha_hash masked)
-  app.fastify.get<{}>('/api/debug/usuarios', {
-    schema: {
-      description: 'Debug endpoint - list all usuarios with masked passwords',
-      tags: ['debug'],
-      response: {
-        200: {
-          description: 'List of usuarios with masked passwords',
-          type: 'object',
-          properties: {
-            usuarios: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string', format: 'uuid' },
-                  nome: { type: 'string' },
-                  email: { type: 'string' },
-                  senha_hash: { type: 'string' },
-                  role: { type: 'string' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      app.logger.info('Debug endpoint: fetching all usuarios');
-      const allUsuarios = await app.db
-        .select()
-        .from(schema.usuarios);
-
-      const maskedUsuarios = allUsuarios.map(u => ({
-        id: u.id,
-        nome: u.nome,
-        email: u.email,
-        senha_hash: '***',
-        role: u.role,
-      }));
-
-      return {
-        usuarios: maskedUsuarios,
-      };
-    } catch (err) {
-      app.logger.error({ err }, 'Debug endpoint error');
-      throw err;
-    }
-  });
 }
 
 /**

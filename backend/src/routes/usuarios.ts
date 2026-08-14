@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
@@ -52,8 +52,8 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const session = await customRequireAuth(app, request, reply);
-      if (!session) return;
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
 
       try {
         app.logger.info({}, "Listing usuarios");
@@ -67,6 +67,7 @@ export function registerUsuariosRoutes(app: App) {
             createdAt: schema.usuarios.createdAt,
           })
           .from(schema.usuarios)
+          .where(eq(schema.usuarios.restauranteId, authUser.restauranteId))
           .orderBy(schema.usuarios.nome);
 
         return reply.code(200).send({
@@ -121,8 +122,6 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (POST /api/usuarios)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
@@ -133,6 +132,11 @@ export function registerUsuariosRoutes(app: App) {
         const restauranteId = requireTenant(authUser);
         if (!restauranteId) {
           return reply.code(404).send({ error: "Nenhum restaurante associado" });
+        }
+
+        const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
+        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+          return reply.code(400).send({ error: "role inválido" });
         }
 
         app.logger.info({ email: request.body.email, restauranteId }, "Creating usuario");
@@ -209,8 +213,6 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (PUT /api/usuarios/:id)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
@@ -219,10 +221,15 @@ export function registerUsuariosRoutes(app: App) {
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(eq(schema.usuarios.id, request.params.id));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });
+        }
+
+        const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
+        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+          return reply.code(400).send({ error: "role inválido" });
         }
 
         const updates: any = {};
@@ -279,8 +286,6 @@ export function registerUsuariosRoutes(app: App) {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
 
-      app.logger.info({ userId: authUser.id, userRole: authUser.role }, "ROLE CHECK DEBUG - usuarios write (DELETE /api/usuarios/:id)");
-
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
@@ -289,7 +294,7 @@ export function registerUsuariosRoutes(app: App) {
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(eq(schema.usuarios.id, request.params.id));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });

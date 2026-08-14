@@ -291,14 +291,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Debug Endpoints ====================
-  test("Get debug usuarios with masked passwords returns 200", async () => {
-    const res = await api("/api/debug/usuarios");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.usuarios).toBeDefined();
-    expect(Array.isArray(data.usuarios)).toBe(true);
-  });
-
   test("Get debug environment variables returns 200", async () => {
     const res = await api("/api/debug/env");
     await expectStatus(res, 200);
