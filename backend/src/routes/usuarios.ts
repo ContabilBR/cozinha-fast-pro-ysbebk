@@ -1,11 +1,11 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { eq, and } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as bcrypt from "bcrypt";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireRole, requireTenant } from "../utils/auth.js";
 
-const ROLES_VALIDOS = ["administrador", "gerente", "garcom", "cozinheiro"];
+const VALID_ROLES = ["administrador", "gerente", "garcom", "cozinheiro"] as const;
 
 interface CreateUsuarioBody {
   nome: string;
@@ -23,7 +23,7 @@ interface UpdateUsuarioBody {
 
 export function registerUsuariosRoutes(app: App) {
 
-  // GET /api/usuarios - List usuarios do restaurante autenticado
+  // GET /api/usuarios - List all usuarios
   app.fastify.get(
     "/api/usuarios",
     {
@@ -54,11 +54,16 @@ export function registerUsuariosRoutes(app: App) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const authUser = await customRequireAuth(app, request, reply);
-      if (!authUser) return;
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
+      const restauranteId = requireTenant(session);
+      if (!restauranteId) {
+        return reply.code(404).send({ error: "Nenhum restaurante associado" });
+      }
 
       try {
-        app.logger.info({ restauranteId: authUser.restauranteId }, "Listing usuarios");
+        app.logger.info({}, "Listing usuarios");
 
         const result = await app.db
           .select({
@@ -69,7 +74,7 @@ export function registerUsuariosRoutes(app: App) {
             createdAt: schema.usuarios.createdAt,
           })
           .from(schema.usuarios)
-          .where(eq(schema.usuarios.restauranteId, authUser.restauranteId))
+          .where(eq(schema.usuarios.restauranteId, restauranteId))
           .orderBy(schema.usuarios.nome);
 
         return reply.code(200).send({
@@ -131,7 +136,7 @@ export function registerUsuariosRoutes(app: App) {
           return reply.code(400).send({ error: "nome, email, and senha are required" });
         }
 
-        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
+        if (request.body.role !== undefined && !VALID_ROLES.includes(request.body.role as any)) {
           return reply.code(400).send({ error: "role inválido" });
         }
 
@@ -216,20 +221,25 @@ export function registerUsuariosRoutes(app: App) {
 
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
+      const restauranteId = requireTenant(authUser);
+      if (!restauranteId) {
+        return reply.code(404).send({ error: "Nenhum restaurante associado" });
+      }
+
       try {
         app.logger.info({ usuarioId: request.params.id }, "Updating usuario");
+
+        if (request.body.role !== undefined && !VALID_ROLES.includes(request.body.role as any)) {
+          return reply.code(400).send({ error: "role inválido" });
+        }
 
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });
-        }
-
-        if (request.body.role !== undefined && !ROLES_VALIDOS.includes(request.body.role)) {
-          return reply.code(400).send({ error: "role inválido" });
         }
 
         const updates: any = {};
@@ -243,7 +253,7 @@ export function registerUsuariosRoutes(app: App) {
         const [updated] = await app.db
           .update(schema.usuarios)
           .set(updates)
-          .where(eq(schema.usuarios.id, request.params.id))
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, restauranteId)))
           .returning();
 
         app.logger.info({ usuarioId: updated.id }, "Usuario updated successfully");
@@ -288,19 +298,24 @@ export function registerUsuariosRoutes(app: App) {
 
       if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
+      const restauranteId = requireTenant(authUser);
+      if (!restauranteId) {
+        return reply.code(404).send({ error: "Nenhum restaurante associado" });
+      }
+
       try {
         app.logger.info({ usuarioId: request.params.id }, "Deleting usuario");
 
         const existing = await app.db
           .select()
           .from(schema.usuarios)
-          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, authUser.restauranteId)));
+          .where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, restauranteId)));
 
         if (!existing.length) {
           return reply.code(404).send({ error: "Usuario not found" });
         }
 
-        await app.db.delete(schema.usuarios).where(eq(schema.usuarios.id, request.params.id));
+        await app.db.delete(schema.usuarios).where(and(eq(schema.usuarios.id, request.params.id), eq(schema.usuarios.restauranteId, restauranteId)));
 
         app.logger.info({ usuarioId: request.params.id }, "Usuario deleted successfully");
 
