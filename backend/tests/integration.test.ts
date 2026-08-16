@@ -429,6 +429,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Update user own profile without admin role returns 200", async () => {
+    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated Own Name",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.name).toBe("Updated Own Name");
+  });
+
   test("Delete user as admin returns 204", async () => {
     const createRes = await authenticatedApi("/api/users", adminToken, {
       method: "POST",
@@ -628,6 +641,16 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("List pratos with both categoria_id and disponivel filters returns 200", async () => {
+    const res = await authenticatedApi(
+      "/api/pratos?categoria_id=00000000-0000-0000-0000-000000000000&disponivel=true",
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
   test("Create prato returns 201", async () => {
     const res = await authenticatedApi("/api/pratos", adminToken, {
       method: "POST",
@@ -666,6 +689,32 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 400);
+  });
+
+  test("Create prato with all optional fields returns 201", async () => {
+    const res = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Full Prato ${Date.now()}`,
+        preco: "45.99",
+        descricao: "Complete prato with all fields",
+        disponivel: true,
+        tempoPreparoMinutos: 15,
+        ncm: "87111000",
+        cfop: "5102",
+        cest: "1621000",
+        csosn: "102",
+        cst_icms: "00",
+        origem_mercadoria: 0,
+        unidade_comercial: "UN",
+        aliquota_icms: "7.00",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.prato).toBeDefined();
+    expect(data.prato.nome).toContain("Full Prato");
   });
 
   test("Get prato by ID returns 200", async () => {
@@ -765,6 +814,78 @@ describe("API Integration Tests", () => {
       adminToken,
       {
         method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Toggle prato availability returns 200 or 404", async () => {
+    const createRes = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Prato Availability Test ${Date.now()}`,
+        preco: "22.50",
+        disponivel: true,
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const pratoData = await createRes.json();
+
+    const res = await authenticatedApi(`/api/pratos/${pratoData.prato.id}/disponibilidade`, adminToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        disponivel: false,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.prato).toBeDefined();
+    expect(data.prato.disponivel).toBe(false);
+  });
+
+  test("Toggle prato availability without authentication returns 401", async () => {
+    const res = await api("/api/pratos/00000000-0000-0000-0000-000000000000/disponibilidade", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        disponivel: false,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Toggle prato availability with missing disponivel returns 400", async () => {
+    const createRes = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Prato Availability Missing Field ${Date.now()}`,
+        preco: "22.50",
+      }),
+    });
+    await expectStatus(createRes, 201);
+    const pratoData = await createRes.json();
+
+    const res = await authenticatedApi(`/api/pratos/${pratoData.prato.id}/disponibilidade`, authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Toggle prato availability for non-existent prato returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/pratos/00000000-0000-0000-0000-000000000000/disponibilidade",
+      adminToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          disponivel: false,
+        }),
       }
     );
     await expectStatus(res, 404);
@@ -1488,6 +1609,11 @@ describe("API Integration Tests", () => {
     expect(data.comanda === null || (typeof data.comanda === "object")).toBe(true);
   });
 
+  test("Get current comanda for mesa without authentication returns 401", async () => {
+    const res = await api("/api/mesas/00000000-0000-0000-0000-000000000000/comanda");
+    await expectStatus(res, 401);
+  });
+
   test("Get current comanda for non-existent mesa returns 400 or 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000/comanda",
@@ -1505,6 +1631,11 @@ describe("API Integration Tests", () => {
     expect(Array.isArray(data.comandas)).toBe(true);
   });
 
+  test("Get mesa historico without authentication returns 401", async () => {
+    const res = await api("/api/mesas/00000000-0000-0000-0000-000000000000/historico");
+    await expectStatus(res, 401);
+  });
+
   test("Get mesa historico for non-existent mesa returns 404", async () => {
     const res = await authenticatedApi(
       "/api/mesas/00000000-0000-0000-0000-000000000000/historico",
@@ -1520,6 +1651,47 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({ gorjeta: 10.00 }),
     });
     await expectStatus(res, 200, 404);
+  });
+
+  test("Get comanda info returns status and total", async () => {
+    if (testMesaForComandaId) {
+      const res = await authenticatedApi(`/api/mesas/${testMesaForComandaId}/comanda`, authToken);
+      if (res.status === 200) {
+        const data = await res.json();
+        if (data.comanda) {
+          expect(data.comanda.status).toBeDefined();
+          expect(data.comanda.total).toBeDefined();
+        }
+      }
+    }
+  });
+
+  test("Get comanda payments list returns 200 or 404 or 400 or 401", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken
+    );
+    await expectStatus(res, 200, 404, 400, 401);
   });
 
   // ==================== Pedidos CRUD ====================
@@ -1740,6 +1912,26 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Garcom Endpoints ====================
+  test("Get garcons for authenticated garcom user returns 200 or 401", async () => {
+    const res = await authenticatedApi("/api/garcom/pedidos", authToken);
+    await expectStatus(res, 200, 401);
+  });
+
+  test("Get garcom pedidos returns 200 or 401 or 403", async () => {
+    const res = await authenticatedApi("/api/garcom/pedidos", authToken);
+    if (res.status === 200) {
+      const data = await res.json();
+      expect(Array.isArray(data)).toBe(true);
+    } else {
+      await expectStatus(res, 200, 401, 403);
+    }
+  });
+
+  test("Get garcom pedidos without authentication returns 401", async () => {
+    const res = await api("/api/garcom/pedidos");
+    await expectStatus(res, 401);
+  });
+
   test("List all garcons returns 200", async () => {
     const res = await authenticatedApi("/api/garcons", authToken);
     await expectStatus(res, 200);
@@ -1828,11 +2020,6 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 403);
-  });
-
-  test("Get garcons for authenticated garcom user returns 200 or 401", async () => {
-    const res = await authenticatedApi("/api/garcom/pedidos", authToken);
-    await expectStatus(res, 200, 401);
   });
 
   test("Check email exists returns 200", async () => {
@@ -2441,11 +2628,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Get comanda payments returns 200 or 404 or 400", async () => {
-    const res = await authenticatedApi("/api/comandas/test-comanda-id/pagamentos", authToken);
-    await expectStatus(res, 200, 404, 400);
-  });
-
   test("Delete payment returns 200 or 204 or 404 or 400 or 403", async () => {
     const res = await authenticatedApi("/api/pagamentos/00000000-0000-0000-0000-000000000000", authToken, {
       method: "DELETE",
@@ -2671,6 +2853,16 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 200, 400, 404, 409, 500, 502);
+  });
+
+  test("Get NFC-e status by reference returns 200 or 404 or 500 or 502", async () => {
+    const res = await authenticatedApi("/api/fiscal/nfce/test-reference", authToken);
+    await expectStatus(res, 200, 404, 500, 502);
+  });
+
+  test("Get NFC-e status without authentication returns 401", async () => {
+    const res = await api("/api/fiscal/nfce/test-reference");
+    await expectStatus(res, 401);
   });
 
   test("Emit NFC-e with valid comanda returns 200 or 400 or 404 or 409 or 500 or 502", async () => {

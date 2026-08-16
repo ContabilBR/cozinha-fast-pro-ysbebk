@@ -1268,11 +1268,15 @@ export function registerOrderRoutes(app: App) {
               },
             },
           },
-          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         const mesaId = request.params.id;
         app.logger.info({ mesaId }, "Fetching current open comanda for mesa");
@@ -1452,11 +1456,15 @@ export function registerOrderRoutes(app: App) {
               },
             },
           },
+          401: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },
     },
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const session = await customRequireAuth(app, request, reply);
+      if (!session) return;
+
       try {
         const mesaId = request.params.id;
         app.logger.info({ mesaId }, "Fetching historical data for mesa");
@@ -1714,6 +1722,7 @@ export function registerOrderRoutes(app: App) {
                         properties: {
                           id: { type: "string", format: "uuid" },
                           prato_nome: { type: "string" },
+                          tempo_preparo_min: { type: ["number", "null"] },
                           quantidade: { type: "number" },
                           status: { type: "string" },
                           observacao: { type: ["string", "null"] },
@@ -1763,6 +1772,7 @@ export function registerOrderRoutes(app: App) {
             p.id,
             p.comanda_id,
             COALESCE(pr.nome, 'Prato') as prato_nome,
+            pr.tempo_preparo_min,
             p.quantidade,
             p.status,
             p.observacao,
@@ -1810,6 +1820,7 @@ export function registerOrderRoutes(app: App) {
             pedidos: comandaPedidos.map((p: any) => ({
               id: p.id,
               prato_nome: p.prato_nome || "Prato",
+              tempo_preparo_min: p.tempo_preparo_min !== null && p.tempo_preparo_min !== undefined ? Number(p.tempo_preparo_min) : null,
               quantidade: Number(p.quantidade) || 0,
               status: p.status,
               observacao: p.observacao || null,

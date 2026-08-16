@@ -1,5 +1,5 @@
 {
-  "id": "7a8e9f10-b2c3-41d2-9e4f-5c6d7a8b9c0d",
+  "id": "a55499bc-3bfe-4b59-9b36-9ae3f8524214",
   "prevId": "c5db7c36-11a0-46e8-b4c1-bda532d6a4b1",
   "version": "7",
   "dialect": "postgresql",
@@ -1898,6 +1898,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "tempo_preparo_min": {
+          "name": "tempo_preparo_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
