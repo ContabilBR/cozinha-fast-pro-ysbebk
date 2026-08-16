@@ -16,8 +16,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AnimatedPressable } from "@/components/AnimatedPressable";
 import { SkeletonLine } from "@/components/SkeletonLoader";
-import { apiGet } from "@/utils/api";
-import { Search, UtensilsCrossed, X } from "lucide-react-native";
+import { apiGet, apiPatch } from "@/utils/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { Search, UtensilsCrossed, X, Check, Ban } from "lucide-react-native";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,7 +125,17 @@ function SectionSkeleton() {
 
 // ─── Prato Card ───────────────────────────────────────────────────────────────
 
-function PratoCard({ prato, index }: { prato: Prato; index: number }) {
+function PratoCard({
+  prato,
+  index,
+  podeAlternarDisponibilidade,
+  onToggleDisponibilidade,
+}: {
+  prato: Prato;
+  index: number;
+  podeAlternarDisponibilidade?: boolean;
+  onToggleDisponibilidade?: (id: string, novoValor: boolean) => void;
+}) {
   const COLORS = useColors();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(10)).current;
@@ -238,27 +249,58 @@ function PratoCard({ prato, index }: { prato: Prato; index: number }) {
           </Text>
         </View>
 
-        {/* Indisponível badge */}
-        {prato.disponivel === false && (
-          <View
+        {/* Disponibilidade: badge estático, ou botão de alternar para quem pode */}
+        {podeAlternarDisponibilidade && onToggleDisponibilidade ? (
+          <AnimatedPressable
+            onPress={() => onToggleDisponibilidade(prato.id, prato.disponivel === false)}
             style={{
-              backgroundColor: COLORS.surfaceSecondary,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              backgroundColor: prato.disponivel === false ? "#EF444420" : "#22C55E20",
               borderRadius: 8,
               paddingHorizontal: 8,
               paddingVertical: 4,
             }}
           >
+            {prato.disponivel === false ? (
+              <Ban size={12} color="#EF4444" />
+            ) : (
+              <Check size={12} color="#22C55E" />
+            )}
             <Text
               style={{
                 fontFamily: "Outfit_600SemiBold",
                 fontSize: 10,
-                color: COLORS.textTertiary,
+                color: prato.disponivel === false ? "#EF4444" : "#22C55E",
                 letterSpacing: 0.3,
               }}
             >
-              Indisponível
+              {prato.disponivel === false ? "Esgotado — toque p/ voltar" : "Disponível — toque p/ esgotar"}
             </Text>
-          </View>
+          </AnimatedPressable>
+        ) : (
+          prato.disponivel === false && (
+            <View
+              style={{
+                backgroundColor: COLORS.surfaceSecondary,
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Outfit_600SemiBold",
+                  fontSize: 10,
+                  color: COLORS.textTertiary,
+                  letterSpacing: 0.3,
+                }}
+              >
+                Indisponível
+              </Text>
+            </View>
+          )
         )}
       </View>
     </Animated.View>
@@ -270,6 +312,7 @@ function PratoCard({ prato, index }: { prato: Prato; index: number }) {
 export default function CardapioScreen() {
   const COLORS = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [pratos, setPratos] = useState<Prato[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
@@ -278,6 +321,24 @@ export default function CardapioScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  const podeAlternarDisponibilidade =
+    user?.role === "cozinheiro" ||
+    user?.role === "gerente" ||
+    user?.role === "administrador" ||
+    user?.role === "admin";
+
+  const handleToggleDisponibilidade = useCallback(async (id: string, novoValor: boolean) => {
+    // Optimistic update — reverte se a chamada falhar.
+    setPratos((prev) => prev.map((p) => (p.id === id ? { ...p, disponivel: novoValor } : p)));
+    try {
+      console.log("[Cardápio] PATCH /api/pratos/" + id + "/disponibilidade ->", novoValor);
+      await apiPatch(`/api/pratos/${id}/disponibilidade`, { disponivel: novoValor });
+    } catch (e) {
+      console.error("[Cardápio] Erro ao alternar disponibilidade:", e);
+      setPratos((prev) => prev.map((p) => (p.id === id ? { ...p, disponivel: !novoValor } : p)));
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     console.log("[Cardápio] GET /api/pratos e /api/categorias");
@@ -680,7 +741,13 @@ export default function CardapioScreen() {
                 {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""}
               </Text>
               {searchResults.map((prato, idx) => (
-                <PratoCard key={prato.id} prato={prato} index={idx} />
+                <PratoCard
+                  key={prato.id}
+                  prato={prato}
+                  index={idx}
+                  podeAlternarDisponibilidade={podeAlternarDisponibilidade}
+                  onToggleDisponibilidade={handleToggleDisponibilidade}
+                />
               ))}
             </>
           )}
@@ -749,7 +816,12 @@ export default function CardapioScreen() {
             </View>
           )}
           renderItem={({ item, index }) => (
-            <PratoCard prato={item} index={index} />
+            <PratoCard
+              prato={item}
+              index={index}
+              podeAlternarDisponibilidade={podeAlternarDisponibilidade}
+              onToggleDisponibilidade={handleToggleDisponibilidade}
+            />
           )}
           ListEmptyComponent={
             <View
