@@ -125,7 +125,7 @@ export function registerCustomAuthRoutes(app: App) {
         expiresAt,
       });
 
-      app.logger.info({ userId: user.id, email: user.email }, 'Session created successfully');
+      app.logger.info({ userId: user.id, email: user.email, role: user.role }, 'Session created successfully - returning role to client');
 
       return {
         token,
