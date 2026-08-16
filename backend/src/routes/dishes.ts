@@ -682,6 +682,99 @@ export function registerDishRoutes(app: App) {
     }
   );
 
+  // PATCH /api/pratos/:id/disponibilidade - Toggle only availability (esgotado/disponível).
+  // Narrower than PUT /api/pratos/:id on purpose: cozinheiro can mark a dish as out of
+  // stock from the kitchen, but should not be able to edit price, description, or fiscal fields.
+  app.fastify.patch<{ Params: { id: string }; Body: { disponivel: boolean } }>(
+    "/api/pratos/:id/disponibilidade",
+    {
+      schema: {
+        description: "Toggle prato availability (admin/administrador/gerente/cozinheiro)",
+        tags: ["pratos"],
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          required: ["disponivel"],
+          properties: {
+            disponivel: { type: "boolean" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              prato: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  nome: { type: "string" },
+                  disponivel: { type: "boolean" },
+                },
+              },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { id: string }; Body: { disponivel: boolean } }>,
+      reply: FastifyReply
+    ) => {
+      const authUser = await customRequireAuth(app, request, reply);
+      if (!authUser) return;
+
+      if (!requireRole(authUser, ["admin", "administrador", "gerente", "cozinheiro"], reply)) return;
+
+      if (typeof request.body?.disponivel !== "boolean") {
+        return reply.code(400).send({ error: "disponivel (boolean) is required" });
+      }
+
+      try {
+        const restauranteId = requireTenant(authUser);
+        app.logger.info(
+          { pratoId: request.params.id, disponivel: request.body.disponivel, authUserId: authUser.id, authUserRole: authUser.role },
+          "Toggling prato disponibilidade"
+        );
+
+        const existing = await app.db
+          .select()
+          .from(schema.pratos)
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)));
+
+        if (!existing.length) {
+          return reply.code(404).send({ error: "Prato not found" });
+        }
+
+        const [updated] = await app.db
+          .update(schema.pratos)
+          .set({ disponivel: request.body.disponivel })
+          .where(and(eq(schema.pratos.id, request.params.id), eq(schema.pratos.restauranteId, restauranteId)))
+          .returning();
+
+        app.logger.info({ pratoId: updated.id, disponivel: updated.disponivel }, "Prato disponibilidade updated");
+
+        return reply.code(200).send({
+          prato: {
+            id: updated.id,
+            nome: updated.nome,
+            disponivel: updated.disponivel,
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, "Failed to toggle prato disponibilidade");
+        return reply.code(500).send({ error: "Internal server error" });
+      }
+    }
+  );
+
   // DELETE /api/pratos/:id - Delete a prato
   app.fastify.delete<{ Params: { id: string } }>(
     "/api/pratos/:id",
