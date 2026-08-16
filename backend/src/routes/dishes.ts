@@ -26,6 +26,7 @@ interface CreatePratoBody extends FiscalFields {
   categoriaId?: string;
   imagemUrl?: string;
   disponivel?: boolean;
+  tempoPreparoMinutos?: number | null;
 }
 
 interface UpdatePratoBody extends FiscalFields {
@@ -37,6 +38,7 @@ interface UpdatePratoBody extends FiscalFields {
   imagemUrl?: string;
   imagem_url?: string;
   disponivel?: boolean;
+  tempoPreparoMinutos?: number | null;
 }
 
 // Helper function to normalize decimal values (comma to dot)
@@ -168,6 +170,7 @@ export function registerDishRoutes(app: App) {
                 origem_mercadoria: { type: "integer" },
                 unidade_comercial: { type: "string" },
                 aliquota_icms: { type: "string", nullable: true },
+                tempoPreparoMinutos: { type: ["integer", "null"] },
                 created_at: { type: "string", format: "date-time" },
               },
             },
@@ -216,6 +219,7 @@ export function registerDishRoutes(app: App) {
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
+            tempoPreparoMinutos: schema.pratos.tempoPreparoMinutos,
             ncm: schema.pratos.ncm,
             cfop: schema.pratos.cfop,
             cest: schema.pratos.cest,
@@ -251,6 +255,7 @@ export function registerDishRoutes(app: App) {
             origem_mercadoria: p.origemMercadoria,
             unidade_comercial: p.unidadeComercial,
             aliquota_icms: p.aliquotaIcms,
+            tempoPreparoMinutos: p.tempoPreparoMinutos,
             created_at: p.createdAt.toISOString(),
           }))
         );
@@ -278,6 +283,7 @@ export function registerDishRoutes(app: App) {
             categoriaId: { type: "string", format: "uuid", nullable: true },
             imagemUrl: { type: "string", nullable: true },
             disponivel: { type: "boolean" },
+            tempoPreparoMinutos: { type: ["integer", "null"] },
             ncm: { type: "string", nullable: true },
             cfop: { type: "string", nullable: true },
             cest: { type: "string", nullable: true },
@@ -302,6 +308,7 @@ export function registerDishRoutes(app: App) {
                   categoriaId: { type: "string", format: "uuid", nullable: true },
                   imagemUrl: { type: "string", nullable: true },
                   disponivel: { type: "boolean" },
+                  tempoPreparoMinutos: { type: ["integer", "null"] },
                   ncm: { type: "string", nullable: true },
                   cfop: { type: "string" },
                   cest: { type: "string", nullable: true },
@@ -357,6 +364,7 @@ export function registerDishRoutes(app: App) {
           categoriaId: request.body.categoriaId,
           imagemUrl: request.body.imagemUrl,
           disponivel: request.body.disponivel !== false,
+          tempoPreparoMinutos: request.body.tempoPreparoMinutos ?? null,
           restauranteId,
           cfop: fiscalFields.cfop || '5102',
           origemMercadoria: fiscalFields.origemMercadoria !== undefined ? fiscalFields.origemMercadoria : 0,
@@ -385,6 +393,7 @@ export function registerDishRoutes(app: App) {
             categoriaId: prato.categoriaId,
             imagemUrl: prato.imagemUrl,
             disponivel: prato.disponivel,
+            tempoPreparoMinutos: prato.tempoPreparoMinutos,
             ncm: prato.ncm,
             cfop: prato.cfop,
             cest: prato.cest,
@@ -424,6 +433,7 @@ export function registerDishRoutes(app: App) {
               descricao: { type: "string", nullable: true },
               preco: { type: "number" },
               categoria_id: { type: "string", format: "uuid", nullable: true },
+              tempoPreparoMinutos: { type: ["integer", "null"] },
               prato: {
                 type: "object",
                 properties: {
@@ -434,6 +444,7 @@ export function registerDishRoutes(app: App) {
                   categoriaId: { type: "string", format: "uuid", nullable: true },
                   imagemUrl: { type: "string", nullable: true },
                   disponivel: { type: "boolean" },
+                  tempoPreparoMinutos: { type: ["integer", "null"] },
                   ncm: { type: "string", nullable: true },
                   cfop: { type: "string" },
                   cest: { type: "string", nullable: true },
@@ -479,6 +490,7 @@ export function registerDishRoutes(app: App) {
             categoriaNome: schema.categorias.nome,
             imagemUrl: schema.pratos.imagemUrl,
             disponivel: schema.pratos.disponivel,
+            tempoPreparoMinutos: schema.pratos.tempoPreparoMinutos,
             ncm: schema.pratos.ncm,
             cfop: schema.pratos.cfop,
             cest: schema.pratos.cest,
@@ -508,6 +520,7 @@ export function registerDishRoutes(app: App) {
             categoria: p.categoriaIdFromJoin ? { id: p.categoriaIdFromJoin, nome: p.categoriaNome } : null,
             imagemUrl: p.imagemUrl,
             disponivel: p.disponivel,
+            tempoPreparoMinutos: p.tempoPreparoMinutos,
             ncm: p.ncm,
             cfop: p.cfop,
             cest: p.cest,
@@ -549,6 +562,7 @@ export function registerDishRoutes(app: App) {
             imagemUrl: { type: "string", nullable: true },
             imagem_url: { type: "string", nullable: true },
             disponivel: { type: "boolean" },
+            tempoPreparoMinutos: { type: ["integer", "null"] },
             ncm: { type: "string", nullable: true },
             cfop: { type: "string", nullable: true },
             cest: { type: "string", nullable: true },
@@ -573,6 +587,7 @@ export function registerDishRoutes(app: App) {
                   categoriaId: { type: "string", format: "uuid", nullable: true },
                   imagemUrl: { type: "string", nullable: true },
                   disponivel: { type: "boolean" },
+                  tempoPreparoMinutos: { type: ["integer", "null"] },
                   ncm: { type: "string", nullable: true },
                   cfop: { type: "string" },
                   cest: { type: "string", nullable: true },
@@ -636,6 +651,7 @@ export function registerDishRoutes(app: App) {
         if (imagemUrl !== undefined) updates.imagemUrl = imagemUrl;
 
         if (request.body.disponivel !== undefined) updates.disponivel = request.body.disponivel;
+        if (request.body.tempoPreparoMinutos !== undefined) updates.tempoPreparoMinutos = request.body.tempoPreparoMinutos;
 
         // Apply fiscal field updates
         if (fiscalFields.ncm !== undefined) updates.ncm = fiscalFields.ncm;
@@ -664,6 +680,7 @@ export function registerDishRoutes(app: App) {
             categoriaId: updated.categoriaId,
             imagemUrl: updated.imagemUrl,
             disponivel: updated.disponivel,
+            tempoPreparoMinutos: updated.tempoPreparoMinutos,
             ncm: updated.ncm,
             cfop: updated.cfop,
             cest: updated.cest,

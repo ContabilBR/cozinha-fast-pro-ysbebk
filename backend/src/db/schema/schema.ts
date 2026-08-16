@@ -72,6 +72,7 @@ export const pratos = pgTable("pratos", {
   categoriaId: uuid("categoria_id").references(() => categorias.id, { onDelete: "set null" }),
   imagemUrl: text("imagem_url"),
   disponivel: boolean("disponivel").default(true).notNull(),
+  tempoPreparoMinutos: integer("tempo_preparo_min"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   // === Campos fiscais (Tier 2B.1) ===
   ncm: text("ncm"),
