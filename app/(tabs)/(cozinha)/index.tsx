@@ -39,6 +39,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 interface ComandaPedido {
   id: string;
   prato_nome: string;
+  tempo_preparo_min: number | null;
   quantidade: number;
   status: string;
   observacao: string | null;
@@ -102,6 +103,16 @@ const COMANDA_FILTER_STATUS: Record<ComandaFilter, string | null> = {
 
 const ACTIVE_STATUSES = ["pendente", "em_preparo", "pronto"];
 
+const DEFAULT_TEMPO_PREPARO_MIN = 15;
+
+function getPedidoUrgencia(pedido: { created_at: string; tempo_preparo_min: number | null }) {
+  const targetMin = pedido.tempo_preparo_min ?? DEFAULT_TEMPO_PREPARO_MIN;
+  const diffMin = Math.floor((Date.now() - new Date(pedido.created_at).getTime()) / 60000);
+  const isUrgent = diffMin >= targetMin;
+  const isWarning = !isUrgent && diffMin >= targetMin * 0.7;
+  return { diffMin, targetMin, isUrgent, isWarning };
+}
+
 function KitchenTicketCard({
   item,
   index,
@@ -127,6 +138,11 @@ function KitchenTicketCard({
     (p) => ACTIVE_STATUSES.includes(p.status)
   );
 
+  const itemUrgencias = activePedidos.map((p) => getPedidoUrgencia(p));
+  const isUrgent = itemUrgencias.some((u) => u.isUrgent);
+  const isWarning = !isUrgent && itemUrgencias.some((u) => u.isWarning);
+  const borderColor = isUrgent ? "#EF444460" : isWarning ? "#F59E0B60" : COLORS.border;
+
   const oldestCreatedAt = activePedidos.reduce<string | null>((oldest, p) => {
     if (!oldest) return p.created_at;
     return new Date(p.created_at).getTime() < new Date(oldest).getTime() ? p.created_at : oldest;
@@ -135,9 +151,6 @@ function KitchenTicketCard({
   const diffMin = oldestCreatedAt
     ? Math.floor((Date.now() - new Date(oldestCreatedAt).getTime()) / 60000)
     : 0;
-  const isUrgent = diffMin > 20;
-  const isWarning = diffMin > 10 && !isUrgent;
-  const borderColor = isUrgent ? "#EF444460" : isWarning ? "#F59E0B60" : COLORS.border;
   const elapsed = formatElapsed(oldestCreatedAt ?? undefined);
 
   const mesaNum = String(item.mesa_numero);
@@ -263,6 +276,7 @@ function KitchenTicketCard({
             const isEmPreparo = pedido.status === "em_preparo";
             const isPronto = pedido.status === "pronto";
             const isUpdating = updatingId === pedido.id;
+            const pedidoUrgencia = getPedidoUrgencia(pedido);
 
             const nextStatus = isPendente ? "em_preparo" : isEmPreparo ? "pronto" : null;
             const actionLabel = isPendente ? "Iniciar" : isEmPreparo ? "Pronto" : null;
@@ -302,6 +316,17 @@ function KitchenTicketCard({
                   <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 13, color: COLORS.text }}>
                     {pedido.prato_nome}
                   </Text>
+                  {(isPendente || isEmPreparo) && (
+                    <Text
+                      style={{
+                        fontFamily: "Outfit_600SemiBold",
+                        fontSize: 10,
+                        color: pedidoUrgencia.isUrgent ? "#EF4444" : pedidoUrgencia.isWarning ? "#F59E0B" : COLORS.textTertiary,
+                      }}
+                    >
+                      {pedidoUrgencia.diffMin}/{pedidoUrgencia.targetMin} min
+                    </Text>
+                  )}
                   {pedido.observacao ? (
                     <Text
                       style={{

@@ -45,6 +45,7 @@ interface ApiPrato {
   preco: number;
   imagem_url?: string;
   disponivel?: boolean;
+  tempoPreparoMinutos?: number | null;
   categoria_id?: string;
   categoria?: { id: string; nome: string };
 }
@@ -72,6 +73,7 @@ export default function GestaoPratos() {
   const [preco, setPreco] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [disponivel, setDisponivel] = useState(true);
+  const [tempoPreparo, setTempoPreparo] = useState("");
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [imagemUrl, setImagemUrl] = useState("");
   const [imagemUrlInput, setImagemUrlInput] = useState("");
@@ -154,6 +156,7 @@ export default function GestaoPratos() {
     setPreco("");
     setCategoriaId("");
     setDisponivel(true);
+    setTempoPreparo("");
     setLocalImageUri(null);
     setImagemUrl("");
     setImagemUrlInput("");
@@ -170,6 +173,7 @@ export default function GestaoPratos() {
     setPreco(p.preco != null ? Number(p.preco).toFixed(2).replace(".", ",") : "");
     setCategoriaId(p.categoria_id ?? "");
     setDisponivel(p.disponivel !== false);
+    setTempoPreparo(p.tempoPreparoMinutos != null ? String(p.tempoPreparoMinutos) : "");
     setLocalImageUri(null);
     setImagemUrl(p.imagem_url ?? "");
     setImagemUrlInput(p.imagem_url ?? "");
@@ -233,6 +237,11 @@ export default function GestaoPratos() {
     if (!nome.trim()) { setModalError("Nome é obrigatório."); return; }
     const precoNum = parseFloat(preco.replace(",", "."));
     if (isNaN(precoNum) || precoNum < 0) { setModalError("Preço inválido."); return; }
+    let tempoPreparoNum: number | null = null;
+    if (tempoPreparo.trim()) {
+      tempoPreparoNum = parseInt(tempoPreparo.trim(), 10);
+      if (isNaN(tempoPreparoNum) || tempoPreparoNum < 0) { setModalError("Tempo de preparo inválido."); return; }
+    }
     console.log("[GestaoPratos] Salvar pressionado, editando:", editingPrato?.id ?? "novo");
     setSaving(true);
     setModalError("");
@@ -242,6 +251,7 @@ export default function GestaoPratos() {
         descricao: descricao.trim() || undefined,
         preco: precoNum,
         disponivel,
+        tempoPreparoMinutos: tempoPreparoNum,
       };
       if (categoriaId) payload.categoria_id = categoriaId;
       if (imagemUrlInput.trim() && !localImageUri) payload.imagem_url = imagemUrlInput.trim();
@@ -966,6 +976,21 @@ export default function GestaoPratos() {
                     placeholder="0,00"
                     placeholderTextColor={COLORS.textTertiary}
                     keyboardType="decimal-pad"
+                    style={inputStyle}
+                  />
+                </View>
+
+                {/* Tempo de preparo */}
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text }}>
+                    Tempo de preparo (minutos)
+                  </Text>
+                  <TextInput
+                    value={tempoPreparo}
+                    onChangeText={(t) => { setTempoPreparo(t.replace(/[^0-9]/g, "")); setModalError(""); }}
+                    placeholder="Ex: 15 — usado pra alertar a cozinha se passar do prazo"
+                    placeholderTextColor={COLORS.textTertiary}
+                    keyboardType="number-pad"
                     style={inputStyle}
                   />
                 </View>
