@@ -83,7 +83,7 @@ export default function GestaoUsuariosScreen() {
     console.log("[GestaoUsuarios] GET /api/usuarios");
     try {
       const res = await apiGet<any>("/api/usuarios");
-      const list: ApiUsuario[] = Array.isArray(res) ? res : (res.usuarios || res.users || []);
+      const list: ApiUsuario[] = Array.isArray(res) ? res : (res.data || res.usuarios || res.users || []);
       console.log("[GestaoUsuarios] Carregados", list.length, "usuários");
       setUsuarios(list);
       setError("");
