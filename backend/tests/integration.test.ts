@@ -285,17 +285,6 @@ describe("API Integration Tests", () => {
     expect(data.profiles).toBeDefined();
   });
 
-  // ==================== Debug Endpoints ====================
-  test("Get debug environment variables returns 200", async () => {
-    const res = await api("/api/debug/env");
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.env_names).toBeDefined();
-    expect(Array.isArray(data.env_names)).toBe(true);
-    expect(data.asaas_api_key_set).toBeDefined();
-    expect(data.node_env).toBeDefined();
-  });
-
   // ==================== Users CRUD ====================
   test("List all users returns 200", async () => {
     const res = await authenticatedApi("/api/users", authToken);
@@ -1694,6 +1683,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200, 404, 400, 401);
   });
 
+  test("Get comanda payments without authentication returns 401", async () => {
+    const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/pagamentos");
+    await expectStatus(res, 401);
+  });
+
   // ==================== Pedidos CRUD ====================
   test("List all pedidos returns 200", async () => {
     const res = await authenticatedApi("/api/pedidos", authToken);
@@ -1912,11 +1906,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Garcom Endpoints ====================
-  test("Get garcons for authenticated garcom user returns 200 or 401", async () => {
-    const res = await authenticatedApi("/api/garcom/pedidos", authToken);
-    await expectStatus(res, 200, 401);
-  });
-
   test("Get garcom pedidos returns 200 or 401 or 403", async () => {
     const res = await authenticatedApi("/api/garcom/pedidos", authToken);
     if (res.status === 200) {

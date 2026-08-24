@@ -44,61 +44,6 @@ async function buscarQrCodePix(paymentId: string): Promise<{ encodedImage: strin
 export function registerPagamentoRoutes(app: App) {
   const db = app.db as any;
 
-  // GET /api/debug/env — debug endpoint for environment variables
-  app.fastify.get(
-    "/api/debug/env",
-    {
-      schema: {
-        description: "Debug endpoint for environment variables",
-        tags: ["debug"],
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              env_names: {
-                type: "array",
-                items: { type: "string" },
-                description: "Environment variable names containing ASAAS, SPECULAR, or SECRET (sorted)",
-              },
-              asaas_api_key_set: {
-                type: "boolean",
-                description: "Whether ASAAS_API_KEY is set",
-              },
-              node_env: {
-                type: "string",
-                description: "Current NODE_ENV value",
-              },
-            },
-          },
-        },
-      },
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      app.logger.info({}, "Debug endpoint called");
-
-      const keywords = ["ASAAS", "SPECULAR", "SECRET"];
-      const envNames = Object.keys(process.env)
-        .filter((name) =>
-          keywords.some((keyword) => name.includes(keyword))
-        )
-        .sort();
-
-      const asaasKeySet = !!process.env.ASAAS_API_KEY;
-      const nodeEnv = process.env.NODE_ENV || "not set";
-
-      app.logger.info(
-        { envNames, asaasKeySet, nodeEnv },
-        "Debug info retrieved"
-      );
-
-      return reply.code(200).send({
-        env_names: envNames,
-        asaas_api_key_set: asaasKeySet,
-        node_env: nodeEnv,
-      });
-    }
-  );
-
   // POST /api/comandas/:id/pagamentos — registrar pagamento
   app.fastify.post<{ Params: { id: string }; Body: { forma_pagamento: string; valor: number; troco?: number; referencia?: string } }>(
     "/api/comandas/:id/pagamentos",
