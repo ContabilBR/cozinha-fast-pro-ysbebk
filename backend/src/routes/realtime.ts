@@ -1,7 +1,6 @@
 import type { App } from "../index.js";
 import { realtimeHub } from "../realtime/hub.js";
 import * as schema from "../db/schema/schema.js";
-import { session } from "../db/schema/auth-schema.js";
 import { eq, sql } from "drizzle-orm";
 
 export function registerRealtimeRoutes(app: App) {
@@ -51,12 +50,11 @@ export function registerRealtimeRoutes(app: App) {
             return;
           }
 
-          // Try to validate token against both custom session (usuariosSession) and Better Auth session
-          let restauranteId: string | null = null;
-
+          // Query usuarios_session (the table POST /api/login actually
+          // writes to) joined with usuarios to get restaurante_id.
+          let restauranteId: string;
           try {
-            // First, try custom session (usuariosSession joined with usuarios)
-            const customSessions = await db
+            const sessions = await db
               .select({
                 userId: schema.usuariosSession.userId,
                 expiresAt: schema.usuariosSession.expiresAt,
@@ -65,74 +63,28 @@ export function registerRealtimeRoutes(app: App) {
               .from(schema.usuariosSession)
               .innerJoin(
                 schema.usuarios,
-                eq(schema.usuarios.id, sql`${schema.usuariosSession.userId}::uuid`)
+                sql`${schema.usuarios.id}::text = ${schema.usuariosSession.userId}`
               )
               .where(eq(schema.usuariosSession.token, token))
               .limit(1);
 
-            if (customSessions && customSessions.length > 0) {
-              const sess = customSessions[0];
-              // Check if session is expired
-              if (new Date(sess.expiresAt) < new Date()) {
-                app.logger.warn({ token: token.substring(0, 10) }, "Custom session expired");
-                socket.send(JSON.stringify({ error: "Invalid token" }));
-                socket.close();
-                clearTimeout(timeoutId);
-                return;
-              }
-              restauranteId = sess.restauranteId;
-              app.logger.debug({ token: token.substring(0, 10) }, "Authenticated via custom session");
-            }
-
-            // If not found in custom session, try Better Auth session
-            if (!restauranteId) {
-              const betterAuthSessions = await db
-                .select({
-                  userId: session.userId,
-                  expiresAt: session.expiresAt,
-                })
-                .from(session)
-                .where(eq(session.token, token))
-                .limit(1);
-
-              if (betterAuthSessions && betterAuthSessions.length > 0) {
-                const sess = betterAuthSessions[0];
-                // Check if session is expired
-                if (new Date(sess.expiresAt) < new Date()) {
-                  app.logger.warn({ token: token.substring(0, 10) }, "Better Auth session expired");
-                  socket.send(JSON.stringify({ error: "Invalid token" }));
-                  socket.close();
-                  clearTimeout(timeoutId);
-                  return;
-                }
-
-                // Get restauranteId from user profile
-                const profiles = await db
-                  .select({ restauranteId: schema.profiles.restauranteId })
-                  .from(schema.profiles)
-                  .where(eq(schema.profiles.userId, sess.userId))
-                  .limit(1);
-
-                if (profiles && profiles.length > 0) {
-                  restauranteId = profiles[0].restauranteId;
-                  app.logger.debug({ token: token.substring(0, 10) }, "Authenticated via Better Auth session");
-                } else {
-                  app.logger.warn({ userId: sess.userId }, "No profile found for Better Auth user");
-                  socket.send(JSON.stringify({ error: "Invalid token" }));
-                  socket.close();
-                  clearTimeout(timeoutId);
-                  return;
-                }
-              }
-            }
-
-            if (!restauranteId) {
-              app.logger.warn({ token: token.substring(0, 10) }, "Invalid token - not found in any session table");
+            if (!sessions || sessions.length === 0) {
+              app.logger.warn({ token: token.substring(0, 10) }, "Invalid token");
               socket.send(JSON.stringify({ error: "Invalid token" }));
               socket.close();
               clearTimeout(timeoutId);
               return;
             }
+
+            if (new Date(sessions[0].expiresAt) < new Date()) {
+              app.logger.warn({ token: token.substring(0, 10) }, "Expired token");
+              socket.send(JSON.stringify({ error: "Invalid token" }));
+              socket.close();
+              clearTimeout(timeoutId);
+              return;
+            }
+
+            restauranteId = sessions[0].restauranteId;
           } catch (queryErr: any) {
             app.logger.error({ err: queryErr }, "Error querying token");
             socket.send(JSON.stringify({ error: "Authentication error" }));
