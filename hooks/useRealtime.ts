@@ -7,6 +7,7 @@ export interface RealtimeEvent {
   type: string;
   entityId: string;
   occurredAt: string;
+  payload?: Record<string, any>;
 }
 
 interface UseRealtimeOptions {
