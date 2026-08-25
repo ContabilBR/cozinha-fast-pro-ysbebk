@@ -1084,11 +1084,13 @@ describe("API Integration Tests", () => {
   });
 
   test("Force delete mesa with cascading delete returns 204", async () => {
+    // Use a unique number based on timestamp to avoid collisions
+    const uniqueTableNumber = Math.floor(Date.now() / 1000) % 900000 + 100000;
     const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        numero: Math.floor(Math.random() * 900000) + 100000,
+        numero: uniqueTableNumber,
       }),
     });
     await expectStatus(res, 201);

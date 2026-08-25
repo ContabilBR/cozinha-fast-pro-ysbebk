@@ -134,7 +134,7 @@ export function registerLgpdRoutes(app: App) {
         seus_direitos: [
           "Acessar seus dados pessoais (GET /api/lgpd/meus-dados)",
           "Solicitar exclusão dos seus dados (DELETE /api/lgpd/meus-dados)",
-          "Solicitar correção de dados incorretos (PUT /api/users/:id)",
+          "Solicitar correção de dados incorretos (PUT /api/usuarios/:id)",
           "Revogar consentimento a qualquer momento",
         ],
         dados_coletados: [
