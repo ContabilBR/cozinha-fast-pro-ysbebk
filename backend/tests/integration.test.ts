@@ -1101,7 +1101,6 @@ describe("API Integration Tests", () => {
   });
 
   test("Force delete mesa with cascading delete returns 204", async () => {
-    // Use a unique number based on timestamp to avoid collisions
     const uniqueTableNumber = Math.floor(Date.now() / 1000) % 900000 + 100000;
     const res = await authenticatedApi("/api/mesas", adminToken, {
       method: "POST",
@@ -1208,6 +1207,48 @@ describe("API Integration Tests", () => {
     testCommandaId = data.comanda.id;
     expect(data.comanda.id).toBeDefined();
     expect(data.comanda.mesa_id).toBe(testMesaForComandaId);
+  });
+
+  test("Create comanda with items at creation time returns 201", async () => {
+    const pratoRes = await authenticatedApi("/api/pratos", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: `Prato for Comanda Items ${Date.now()}`,
+        preco: "28.50",
+      }),
+    });
+    await expectStatus(pratoRes, 201);
+    const pratoData = await pratoRes.json();
+
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const res = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+        itens: [
+          {
+            prato_id: pratoData.prato.id,
+            quantidade: 2,
+            preco_unitario: 28.50,
+            observacao: "No onions",
+          },
+        ],
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.comanda).toBeDefined();
   });
 
   test("Create comanda without mesa_id returns 400", async () => {

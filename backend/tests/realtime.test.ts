@@ -8,18 +8,10 @@ describe("Realtime WebSocket Tests", () => {
   let regularUserId: string;
 
   test("Setup: Sign up admin user", async () => {
-    const { token, user } = await signUpTestUser();
+    const { token, user } = await signUpTestUser("administrador");
     adminToken = token;
     adminUserId = user.id;
     expect(adminToken).toBeDefined();
-
-    // Update to admin role
-    const updateRes = await authenticatedApi(`/api/users/${adminUserId}`, adminToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "administrador" }),
-    });
-    await expectStatus(updateRes, 200);
   });
 
   test("Setup: Sign up regular user", async () => {

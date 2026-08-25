@@ -57,9 +57,9 @@ export interface TestUser {
 }
 
 /**
- * Sign up a test user via Better Auth (simple and reliable).
+ * Sign up a test user via Better Auth.
+ * If role is specified (other than "garcom"), update the user's role in the database.
  * Returns the Better Auth token which works with all authenticated endpoints.
- * role parameter is stored but not currently enforced by Better Auth signup.
  */
 export async function signUpTestUser(role: string = "garcom"): Promise<TestUser> {
   const id = crypto.randomUUID();
@@ -100,6 +100,20 @@ export async function signUpTestUser(role: string = "garcom"): Promise<TestUser>
       role: role,
     },
   };
+
+  // Set up user profile with role and default restaurante
+  const updateRes = await authenticatedApi("/api/auth/update-user", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      restaurante_id: "00000000-0000-0000-0000-000000000001", // Default test restaurante
+      role: role || "garcom",
+    }),
+  });
+  if (!updateRes.ok) {
+    const body = await updateRes.text();
+    console.warn(`Failed to set up user profile (${updateRes.status}): ${body}`);
+  }
 
   // Auto-register cleanup so the test file doesn't need to
   afterAll(async () => {
