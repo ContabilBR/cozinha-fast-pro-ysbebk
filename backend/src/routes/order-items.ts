@@ -413,13 +413,43 @@ export function registerOrderItemRoutes(app: App) {
 
         app.logger.info({ pedidoId: updated.id }, "Pedido status updated successfully");
 
-        // Publish realtime event
+        // Publish realtime event, enriched with mesa/prato info so clients
+        // (e.g. the garcom-facing "prato pronto" notification) don't need a
+        // follow-up fetch just to render something useful.
         try {
           const restauranteId = requireTenant(session);
+
+          let mesaNumero: number | null = null;
+          let pratoNome: string | null = null;
+          try {
+            const [enriched] = await app.db
+              .select({
+                mesaNumero: schema.comandas.mesaNumero,
+                pratoNome: schema.pratos.nome,
+              })
+              .from(schema.pedidos)
+              .innerJoin(schema.comandas, eq(schema.pedidos.comandaId, schema.comandas.id))
+              .leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id))
+              .where(eq(schema.pedidos.id, updated.id))
+              .limit(1);
+            if (enriched) {
+              mesaNumero = enriched.mesaNumero;
+              pratoNome = enriched.pratoNome;
+            }
+          } catch (enrichErr) {
+            app.logger.warn({ err: enrichErr }, "Failed to enrich pedido.status_changed event, publishing minimal payload");
+          }
+
           realtimeHub.publish(restauranteId, {
             type: "pedido.status_changed",
             entityId: updated.id,
             occurredAt: new Date().toISOString(),
+            payload: {
+              status: updated.status,
+              comanda_id: updated.comandaId,
+              mesa_numero: mesaNumero,
+              prato_nome: pratoNome,
+            },
           });
         } catch (err) {
           app.logger.error({ err }, "Failed to publish pedido.status_changed event");
