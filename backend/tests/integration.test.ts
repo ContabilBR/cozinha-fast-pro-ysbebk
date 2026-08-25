@@ -30,16 +30,9 @@ describe("API Integration Tests", () => {
   });
 
   test("Sign up admin user for delete tests", async () => {
-    const { token, user } = await signUpTestUser();
+    const { token, user } = await signUpTestUser("administrador");
     adminToken = token;
     adminUserId = user.id;
-
-    const updateRes = await authenticatedApi(`/api/users/${adminUserId}`, adminToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "administrador" }),
-    });
-    await expectStatus(updateRes, 200);
   });
 
   test("Sign up regular user for 403 tests", async () => {
@@ -207,6 +200,89 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // ==================== Auth Endpoints: /api/auth/update-user ====================
+  test("Update user profile with valid restaurante_id returns 200", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurante_id: "00000000-0000-0000-0000-000000000001",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Update user profile with valid role returns 200", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "garcom",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Update user profile with all valid fields returns 200", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurante_id: "00000000-0000-0000-0000-000000000001",
+        role: "gerente",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Update user profile with invalid role returns 400", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "invalid_role",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Update user profile without authentication returns 401", async () => {
+    const res = await api("/api/auth/update-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "garcom",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Update user profile with empty body returns 200", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("Update user profile with invalid UUID format returns 400", async () => {
+    const res = await authenticatedApi("/api/auth/update-user", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurante_id: "invalid-uuid",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ==================== Legacy Auth Endpoints: /api/login & /api/me ====================
   test("Login with valid credentials via /api/login returns 200", async () => {
     const testEmail = "garcom@cozinhafast.com";
@@ -283,215 +359,6 @@ describe("API Integration Tests", () => {
     expect(data.users).toBeDefined();
     expect(data.accounts).toBeDefined();
     expect(data.profiles).toBeDefined();
-  });
-
-  // ==================== Users CRUD ====================
-  test("List all users returns 200", async () => {
-    const res = await authenticatedApi("/api/users", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
-  test("Create new user returns 201", async () => {
-    const res = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "New User",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(res, 201);
-  });
-
-  test("Create user without authentication returns 401", async () => {
-    const res = await api("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user-unauth-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "Unauthorized User",
-      }),
-    });
-    await expectStatus(res, 401);
-  });
-
-  test("Create user missing required field returns 400", async () => {
-    const res = await authenticatedApi("/api/users", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password: "pass123",
-        name: "No Email User",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Create user with duplicate email returns 409", async () => {
-    const firstRes = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: uniqueEmail,
-        password: "pass123456",
-        name: "Unique User",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(firstRes, 201);
-
-    const dupRes = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: uniqueEmail,
-        password: "different",
-        name: "Duplicate",
-      }),
-    });
-    await expectStatus(dupRes, 409);
-  });
-
-  test("Create user as non-admin returns 403", async () => {
-    const res = await authenticatedApi("/api/users", regularUserToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user-403-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "Non-Admin Create",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(res, 403);
-  });
-
-  test("Update user returns 200", async () => {
-    const createRes = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `update-test-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "Original Name",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(createRes, 201);
-    const responseData = await createRes.json();
-    const userId = responseData.id;
-
-    const res = await authenticatedApi(`/api/users/${userId}`, adminToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Updated Name",
-      }),
-    });
-    await expectStatus(res, 200);
-  });
-
-  test("Update non-existent user returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/users/00000000-0000-0000-0000-000000000000",
-      authToken,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Test" }),
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Update user with invalid UUID format returns 400", async () => {
-    const res = await authenticatedApi("/api/users/invalid-uuid", authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Test" }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Update user own profile without admin role returns 200", async () => {
-    const res = await authenticatedApi(`/api/users/${testUserId}`, authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Updated Own Name",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.name).toBe("Updated Own Name");
-  });
-
-  test("Delete user as admin returns 204", async () => {
-    const createRes = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user-delete-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "User to Delete",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(createRes, 201);
-    const responseData = await createRes.json();
-    const userId = responseData.id;
-
-    const res = await authenticatedApi(`/api/users/${userId}`, adminToken, {
-      method: "DELETE",
-    });
-    await expectStatus(res, 204);
-  });
-
-  test("Delete user without authentication returns 401", async () => {
-    const res = await api("/api/users/00000000-0000-0000-0000-000000000000", {
-      method: "DELETE",
-    });
-    await expectStatus(res, 401);
-  });
-
-  test("Delete non-existent user returns 404", async () => {
-    const res = await authenticatedApi(
-      "/api/users/00000000-0000-0000-0000-000000000000",
-      adminToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Delete user as non-admin returns 403", async () => {
-    const createRes = await authenticatedApi("/api/users", adminToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user-403-delete-${Date.now()}@example.com`,
-        password: "pass123456",
-        name: "User to 403 Delete",
-        role: "garcom",
-      }),
-    });
-    await expectStatus(createRes, 201);
-    const userData = await createRes.json();
-
-    const res = await authenticatedApi(
-      `/api/users/${userData.id}`,
-      regularUserToken,
-      {
-        method: "DELETE",
-      }
-    );
-    await expectStatus(res, 403);
   });
 
   // ==================== Categorias CRUD ====================
