@@ -175,10 +175,27 @@ describe("API Integration Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.email).toBeDefined();
     expect(data.name).toBeDefined();
+    expect(data.role).toBeDefined();
+    expect(data.active !== undefined).toBe(true);
   });
 
   test("Get current user via /api/auth/me without authentication returns 401", async () => {
     const res = await api("/api/auth/me");
+    await expectStatus(res, 401);
+  });
+
+  // ==================== Auth Endpoints: /api/me (Legacy) ====================
+  test("Get current authenticated user via /api/me returns 200", async () => {
+    const res = await authenticatedApi("/api/me", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBeDefined();
+    expect(data.email).toBeDefined();
+    expect(data.nome).toBeDefined();
+  });
+
+  test("Get current user via /api/me without authentication returns 401", async () => {
+    const res = await api("/api/me");
     await expectStatus(res, 401);
   });
 
