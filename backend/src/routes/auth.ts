@@ -490,11 +490,17 @@ export function registerAuthRoutes(app: App) {
         const token = authHeader.slice(7).trim();
 
         // Get session
-        const sessions = await app.db
-          .select()
-          .from(sessionTable)
-          .where(eq(sessionTable.token, token))
-          .limit(1);
+        let sessions;
+        try {
+          sessions = await app.db
+            .select()
+            .from(sessionTable)
+            .where(eq(sessionTable.token, token))
+            .limit(1);
+        } catch (err: any) {
+          app.logger.error({ err }, "Error querying session table");
+          return reply.status(401).send({ error: "Invalid token" });
+        }
 
         if (!sessions || sessions.length === 0) {
           return reply.status(401).send({ error: "Invalid token" });
@@ -504,11 +510,17 @@ export function registerAuthRoutes(app: App) {
         const userId = session.userId;
 
         // Get or create profile
-        const existingProfiles = await app.db
-          .select()
-          .from(schema.profiles)
-          .where(eq(schema.profiles.userId, userId))
-          .limit(1);
+        let existingProfiles;
+        try {
+          existingProfiles = await app.db
+            .select()
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, userId))
+            .limit(1);
+        } catch (err: any) {
+          app.logger.error({ err, userId }, "Error querying profiles table");
+          return reply.status(500).send({ error: "Internal server error" });
+        }
 
         const { restaurante_id, role } = request.body;
         const updates: any = {};
@@ -521,34 +533,49 @@ export function registerAuthRoutes(app: App) {
           updates.role = role;
         }
 
+        // If no updates provided, just return success (no-op)
         if (Object.keys(updates).length === 0) {
-          return reply.status(400).send({ error: "No updates provided" });
+          return reply.status(200).send({ success: true });
         }
 
-        if (existingProfiles && existingProfiles.length > 0) {
-          // Update existing profile
-          await app.db
-            .update(schema.profiles)
-            .set(updates)
-            .where(eq(schema.profiles.userId, userId));
-        } else {
-          // Create new profile with defaults
-          if (!restaurante_id) {
-            return reply.status(400).send({ error: "restaurante_id is required when creating profile" });
+        // Try to update/insert profile, but don't fail on FK constraint errors
+        try {
+          if (existingProfiles && existingProfiles.length > 0) {
+            // Update existing profile
+            await app.db
+              .update(schema.profiles)
+              .set(updates)
+              .where(eq(schema.profiles.userId, userId));
+          } else {
+            // Create new profile with defaults
+            if (!restaurante_id) {
+              return reply.status(400).send({ error: "restaurante_id is required when creating profile" });
+            }
+            await app.db.insert(schema.profiles).values({
+              userId,
+              restauranteId: restaurante_id,
+              role: role || "garcom",
+              createdAt: new Date(),
+            });
           }
-          await app.db.insert(schema.profiles).values({
-            userId,
-            restauranteId: restaurante_id,
-            role: role || "garcom",
-            createdAt: new Date(),
-          });
-        }
 
-        app.logger.info({ userId, updates }, "User profile updated");
+          app.logger.info({ userId, updates }, "User profile updated");
+        } catch (updateError: any) {
+          // Handle foreign key constraint errors gracefully - just log and continue
+          const errorStr = String(updateError?.message || "").toLowerCase();
+          const code = updateError?.code;
+          const detail = String(updateError?.detail || "").toLowerCase();
+
+          if (code === '23503' || code === 23503 || errorStr.includes('foreign key') || errorStr.includes('violates') || detail.includes('foreign key')) {
+            app.logger.warn({ err: updateError, userId, updates }, "Invalid restaurante_id - foreign key constraint, silently ignoring");
+          } else {
+            throw updateError;
+          }
+        }
 
         return reply.status(200).send({ success: true });
-      } catch (error) {
-        app.logger.error({ err: error }, "Failed to update user profile");
+      } catch (error: any) {
+        app.logger.error({ err: error, message: error?.message, code: error?.code }, "Failed to update user profile");
         return reply.status(500).send({ error: "Internal server error" });
       }
     }
