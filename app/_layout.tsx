@@ -11,6 +11,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { PratoProntoNotifier } from "@/components/PratoProntoNotifier";
 import {
   useFonts,
   Outfit_400Regular,
@@ -51,32 +52,35 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth-screen" options={{ headerShown: false }} />
-      <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
-      <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
-      <Stack.Screen name="prato/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="prato/novo" options={{ headerShown: false }} />
-      <Stack.Screen name="prato/editar/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="categoria/index" options={{ headerShown: false }} />
-      <Stack.Screen name="mesa/index" options={{ headerShown: false }} />
-      <Stack.Screen name="mesa/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="mesa-historico" options={{ headerShown: false }} />
-      <Stack.Screen name="usuario/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="usuario/novo" options={{ headerShown: false }} />
-      <Stack.Screen name="comanda/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="comanda/nova" options={{ headerShown: false }} />
-      <Stack.Screen name="comanda/comprovante" options={{ headerShown: false, headerBackVisible: false }} />
-      <Stack.Screen name="pedido/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="pedido/novo" options={{ headerShown: false }} />
-      <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="order/new" options={{ headerShown: false }} />
-      <Stack.Screen name="dish/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="dish/new" options={{ headerShown: false }} />
-      <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="user/new" options={{ headerShown: false }} />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-screen" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
+        <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+        <Stack.Screen name="prato/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="prato/novo" options={{ headerShown: false }} />
+        <Stack.Screen name="prato/editar/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="categoria/index" options={{ headerShown: false }} />
+        <Stack.Screen name="mesa/index" options={{ headerShown: false }} />
+        <Stack.Screen name="mesa/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="mesa-historico" options={{ headerShown: false }} />
+        <Stack.Screen name="usuario/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="usuario/novo" options={{ headerShown: false }} />
+        <Stack.Screen name="comanda/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="comanda/nova" options={{ headerShown: false }} />
+        <Stack.Screen name="comanda/comprovante" options={{ headerShown: false, headerBackVisible: false }} />
+        <Stack.Screen name="pedido/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="pedido/novo" options={{ headerShown: false }} />
+        <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="order/new" options={{ headerShown: false }} />
+        <Stack.Screen name="dish/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="dish/new" options={{ headerShown: false }} />
+        <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="user/new" options={{ headerShown: false }} />
+      </Stack>
+      <PratoProntoNotifier />
+    </View>
   );
 }
 
