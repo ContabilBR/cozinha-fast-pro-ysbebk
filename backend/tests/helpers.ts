@@ -56,78 +56,98 @@ export interface TestUser {
   };
 }
 
-/**
- * Create a test user via Better Auth sign-up endpoint, then optionally update
- * their role via /api/auth/update-user if a non-default role is requested.
- *
- * Returns the Better Auth token which works against protected endpoints.
- *
- * role defaults to "garcom"; pass "administrador", "gerente", or "cozinheiro"
- * for other roles. Note: Role updates via /api/auth/update-user may not persist
- * to all endpoints yet, but at least the user is created and authenticated.
- */
-export async function signUpTestUser(role: string = "garcom"): Promise<TestUser> {
-  const id = crypto.randomUUID();
-  const email = `testuser+${id}@example.com`;
-  const password = "TestPassword123!";
-  const name = "Test User";
+// The seeded admin usuario (backend/src/db/seed.ts), scoped to the fixed
+// test restaurante (00000000-0000-0000-0000-000000000001). Used only to
+// bootstrap throwaway test usuarios via the real POST /api/usuarios flow —
+// never returned to test files directly.
+const SEED_ADMIN_EMAIL = "admin@cozinhafast.com";
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "change-me-on-first-login";
 
-  // Sign up via Better Auth
-  const signUpRes = await api("/api/auth/sign-up/email", {
+let cachedSeedAdminToken: string | null = null;
+
+async function getSeedAdminToken(): Promise<string> {
+  if (cachedSeedAdminToken) return cachedSeedAdminToken;
+
+  const res = await api("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ email: SEED_ADMIN_EMAIL, senha: SEED_ADMIN_PASSWORD }),
   });
 
-  if (!signUpRes.ok) {
-    const body = await signUpRes.text();
-    throw new Error(`Failed to sign up test user (${signUpRes.status}): ${body}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to log in as seed admin (${res.status}): ${body}`);
   }
 
-  const signUpData = await signUpRes.json() as any;
-
-  // Better Auth returns { token, user }
-  const token = signUpData.token;
-  const user = signUpData.user;
-
-  if (!token) {
-    throw new Error(`Failed to extract token from sign-up response: ${JSON.stringify(signUpData)}`);
+  const data = await res.json() as any;
+  if (!data.token) {
+    throw new Error(`Seed admin login response missing token: ${JSON.stringify(data)}`);
   }
 
-  // If role is not the default, try to update via /api/auth/update-user
-  // This endpoint requires a Better Auth token and updates the user profile.
-  // If it fails (e.g., due to missing restaurante_id), we log but don't fail.
-  if (role && role !== "garcom") {
-    try {
-      const updateRes = await authenticatedApi("/api/auth/update-user", token, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurante_id: "00000000-0000-0000-0000-000000000001", // Default test restaurante
-          role,
-        }),
-      });
-      if (!updateRes.ok) {
-        console.warn(`Warning: Failed to update user role to ${role} (${updateRes.status})`);
-      }
-    } catch (err) {
-      console.warn(`Warning: Failed to update user role: ${err}`);
-    }
+  cachedSeedAdminToken = data.token;
+  return cachedSeedAdminToken as string;
+}
+
+/**
+ * Create a test usuario through the real production flow (POST /api/usuarios,
+ * authenticated as the seeded admin — exactly how an admin adds a team member
+ * in the actual app) and log in as them via POST /api/login (the same
+ * endpoint the app itself uses). Returns the real usuarios_session bearer
+ * token, so it works against every endpoint — including the WebSocket auth
+ * in realtime.ts, which validates usuarios_session tokens.
+ *
+ * role defaults to "garcom"; pass "administrador" for admin-privileged test
+ * users. Valid roles: administrador, gerente, garcom, cozinheiro.
+ */
+export async function signUpTestUser(role: string = "garcom"): Promise<TestUser> {
+  const adminToken = await getSeedAdminToken();
+
+  const id = crypto.randomUUID();
+  const email = `testuser+${id}@example.com`;
+  const senha = "TestPassword123!";
+
+  const createRes = await authenticatedApi("/api/usuarios", adminToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome: "Test User", email, senha, role }),
+  });
+
+  if (!createRes.ok) {
+    const body = await createRes.text();
+    throw new Error(`Failed to create test usuario (${createRes.status}): ${body}`);
+  }
+
+  const created = await createRes.json() as any;
+
+  const loginRes = await api("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, senha }),
+  });
+
+  if (!loginRes.ok) {
+    const body = await loginRes.text();
+    throw new Error(`Failed to log in as test usuario (${loginRes.status}): ${body}`);
+  }
+
+  const loginData = await loginRes.json() as any;
+  if (!loginData.token) {
+    throw new Error(`Login response missing token: ${JSON.stringify(loginData)}`);
   }
 
   const testUser: TestUser = {
-    token,
+    token: loginData.token,
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: role,
+      id: created.id,
+      name: created.nome,
+      email: created.email,
+      role: created.role,
     },
   };
 
   // Auto-register cleanup so the test file doesn't need to
   afterAll(async () => {
-    await deleteTestUser(testUser.user.id, token);
+    await deleteTestUser(testUser.user.id);
   });
 
   return testUser;
@@ -165,12 +185,14 @@ export async function expectStatus(res: Response, ...expected: number[]): Promis
 }
 
 /**
- * Delete a test user via Better Auth delete-user endpoint, or gracefully skip
- * cleanup if the endpoint is unavailable or the token is invalid.
+ * Delete a test usuario (cleanup), authenticated as the seeded admin via the
+ * real DELETE /api/usuarios/:id endpoint.
  */
-export async function deleteTestUser(userId: string, token?: string): Promise<void> {
-  // For now, skip cleanup. Better Auth delete-user requires specific session context
-  // that may not be available in test cleanup. Test database is ephemeral anyway.
+export async function deleteTestUser(userId: string): Promise<void> {
+  const adminToken = await getSeedAdminToken();
+  await authenticatedApi(`/api/usuarios/${userId}`, adminToken, {
+    method: "DELETE",
+  });
 }
 
 /**
