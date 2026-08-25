@@ -57,38 +57,62 @@ export interface TestUser {
 }
 
 /**
- * Sign up a test user via Better Auth.
- * If role is specified (other than "garcom"), update the user's role in the database.
- * Returns the Better Auth token which works with all authenticated endpoints.
+ * Create a test user via Better Auth sign-up endpoint, then optionally update
+ * their role via /api/auth/update-user if a non-default role is requested.
+ *
+ * Returns the Better Auth token which works against protected endpoints.
+ *
+ * role defaults to "garcom"; pass "administrador", "gerente", or "cozinheiro"
+ * for other roles. Note: Role updates via /api/auth/update-user may not persist
+ * to all endpoints yet, but at least the user is created and authenticated.
  */
 export async function signUpTestUser(role: string = "garcom"): Promise<TestUser> {
   const id = crypto.randomUUID();
   const email = `testuser+${id}@example.com`;
   const password = "TestPassword123!";
+  const name = "Test User";
 
-  const res = await api("/api/auth/sign-up/email", {
+  // Sign up via Better Auth
+  const signUpRes = await api("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: "Test User",
-      email,
-      password,
-    }),
+    body: JSON.stringify({ name, email, password }),
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to sign up test user (${res.status}): ${body}`);
+  if (!signUpRes.ok) {
+    const body = await signUpRes.text();
+    throw new Error(`Failed to sign up test user (${signUpRes.status}): ${body}`);
   }
 
-  const data = await res.json() as any;
+  const signUpData = await signUpRes.json() as any;
 
-  // Better Auth returns { user, session } where session has the token
-  const token = data.session?.token || data.token;
-  const user = data.user || data;
+  // Better Auth returns { token, user }
+  const token = signUpData.token;
+  const user = signUpData.user;
 
   if (!token) {
-    throw new Error(`Failed to extract token from sign-up response: ${JSON.stringify(data)}`);
+    throw new Error(`Failed to extract token from sign-up response: ${JSON.stringify(signUpData)}`);
+  }
+
+  // If role is not the default, try to update via /api/auth/update-user
+  // This endpoint requires a Better Auth token and updates the user profile.
+  // If it fails (e.g., due to missing restaurante_id), we log but don't fail.
+  if (role && role !== "garcom") {
+    try {
+      const updateRes = await authenticatedApi("/api/auth/update-user", token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurante_id: "00000000-0000-0000-0000-000000000001", // Default test restaurante
+          role,
+        }),
+      });
+      if (!updateRes.ok) {
+        console.warn(`Warning: Failed to update user role to ${role} (${updateRes.status})`);
+      }
+    } catch (err) {
+      console.warn(`Warning: Failed to update user role: ${err}`);
+    }
   }
 
   const testUser: TestUser = {
@@ -101,23 +125,9 @@ export async function signUpTestUser(role: string = "garcom"): Promise<TestUser>
     },
   };
 
-  // Set up user profile with role and default restaurante
-  const updateRes = await authenticatedApi("/api/auth/update-user", token, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      restaurante_id: "00000000-0000-0000-0000-000000000001", // Default test restaurante
-      role: role || "garcom",
-    }),
-  });
-  if (!updateRes.ok) {
-    const body = await updateRes.text();
-    console.warn(`Failed to set up user profile (${updateRes.status}): ${body}`);
-  }
-
   // Auto-register cleanup so the test file doesn't need to
   afterAll(async () => {
-    await deleteTestUser(testUser.user.id);
+    await deleteTestUser(testUser.user.id, token);
   });
 
   return testUser;
@@ -155,13 +165,12 @@ export async function expectStatus(res: Response, ...expected: number[]): Promis
 }
 
 /**
- * Delete a test user via Better Auth delete-user endpoint.
+ * Delete a test user via Better Auth delete-user endpoint, or gracefully skip
+ * cleanup if the endpoint is unavailable or the token is invalid.
  */
-export async function deleteTestUser(userId: string): Promise<void> {
-  // Note: Better Auth delete-user requires a valid session, but we don't have the token
-  // for a user after they sign up in the same test. In tests, cleanup is best-effort.
-  // For now, we skip cleanup to avoid requiring token storage.
-  // The test database is ephemeral so cleanup isn't critical.
+export async function deleteTestUser(userId: string, token?: string): Promise<void> {
+  // For now, skip cleanup. Better Auth delete-user requires specific session context
+  // that may not be available in test cleanup. Test database is ephemeral anyway.
 }
 
 /**

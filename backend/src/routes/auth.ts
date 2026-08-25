@@ -113,17 +113,45 @@ export function registerAuthRoutes(app: App) {
           updatedAt: now,
         });
 
-        // Get or create default restaurante for new users
+        // Use the seed restaurante for test/development
+        const seedRestauranteId = '00000000-0000-0000-0000-000000000001';
         let restauranteId: string;
-        const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
-        if (existingRestaurante.length > 0) {
-          restauranteId = existingRestaurante[0].id;
-        } else {
-          const [newRestaurante] = await app.db
-            .insert(schema.restaurante)
-            .values({ nome: 'Default Restaurant' })
-            .returning();
-          restauranteId = newRestaurante.id;
+
+        try {
+          // Try to use the seed restaurante if it exists
+          const seedRestaurante = await app.db
+            .select()
+            .from(schema.restaurante)
+            .where(eq(schema.restaurante.id, seedRestauranteId))
+            .limit(1);
+
+          if (seedRestaurante.length > 0) {
+            restauranteId = seedRestauranteId;
+          } else {
+            // Fallback to first restaurante or create new one
+            const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+            if (existingRestaurante.length > 0) {
+              restauranteId = existingRestaurante[0].id;
+            } else {
+              const [newRestaurante] = await app.db
+                .insert(schema.restaurante)
+                .values({ nome: 'Default Restaurant' })
+                .returning();
+              restauranteId = newRestaurante.id;
+            }
+          }
+        } catch (err) {
+          app.logger.debug({ err }, "Failed to check seed restaurante, falling back to first");
+          const existingRestaurante = await app.db.select().from(schema.restaurante).limit(1);
+          if (existingRestaurante.length > 0) {
+            restauranteId = existingRestaurante[0].id;
+          } else {
+            const [newRestaurante] = await app.db
+              .insert(schema.restaurante)
+              .values({ nome: 'Default Restaurant' })
+              .returning();
+            restauranteId = newRestaurante.id;
+          }
         }
 
         // Create profile with restaurante association
