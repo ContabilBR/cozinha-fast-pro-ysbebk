@@ -62,7 +62,7 @@ export interface TestUser {
 /**
  * Sign up a test user and return the token and user object.
  */
-export async function signUpTestUser(): Promise<TestUser> {
+export async function signUpTestUser(role?: string): Promise<TestUser> {
   const id = crypto.randomUUID();
   const res = await api("/api/auth/sign-up/email", {
     method: "POST",
@@ -104,12 +104,18 @@ export async function signUpTestUser(): Promise<TestUser> {
 
   // Create a profile with the default restaurante so user has a tenant
   const restauranteId = "00000000-0000-0000-0000-000000000001";
+  const updateBody: any = {
+    restaurante_id: restauranteId,
+  };
+
+  if (role) {
+    updateBody.role = role;
+  }
+
   await authenticatedApi("/api/auth/update-user", token, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      restaurante_id: restauranteId,
-    }),
+    body: JSON.stringify(updateBody),
   });
 
   // Auto-register cleanup so the test file doesn't need to

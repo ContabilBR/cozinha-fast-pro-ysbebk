@@ -3,7 +3,6 @@ import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
 import { registerCustomAuthRoutes } from './routes/auth-custom.js';
 import { registerAuthRoutes } from './routes/auth.js';
-import { registerUserRoutes } from './routes/users.js';
 import { registerDishRoutes } from './routes/dishes.js';
 import { registerTableRoutes } from './routes/tables.js';
 import { registerOrderRoutes } from './routes/orders.js';
@@ -89,7 +88,6 @@ try {
 // Register custom auth routes FIRST so they take priority
 registerCustomAuthRoutes(app);
 registerAuthRoutes(app);
-registerUserRoutes(app);
 registerDishRoutes(app);
 registerTableRoutes(app);
 registerOrderRoutes(app);
