@@ -15,9 +15,8 @@ const AUTO_DISMISS_MS = 5000;
 // ============================================================================
 // TEMP DEBUG — remove this whole block (and the <DebugPanel /> render below)
 // once the "prato pronto" notification is confirmed working end to end.
-// Shows the WebSocket connection status and the last raw event received, so
-// you can tell apart "not connecting at all" from "connecting fine, but the
-// backend is still publishing the old event shape without payload".
+// Collapsed by default: just a small dot in the bottom-right corner, out of
+// the way of the tab bar. Tap it to expand and see the last event/payload.
 // ============================================================================
 const DEBUG_ENABLED = true;
 
@@ -37,34 +36,58 @@ function DebugPanel({
   lastEventAt: Date | null;
 }) {
   const insets = useSafeAreaInsets();
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <Pressable
+        onPress={() => setExpanded(true)}
+        style={[debugStyles.collapsedDot, { bottom: insets.bottom + 90, backgroundColor: statusColor(status) }]}
+      />
+    );
+  }
+
   return (
-    <View style={[debugStyles.container, { bottom: insets.bottom + 12 }]} pointerEvents="none">
+    <Pressable
+      onPress={() => setExpanded(false)}
+      style={[debugStyles.container, { bottom: insets.bottom + 90 }]}
+    >
       <View style={debugStyles.row}>
         <View style={[debugStyles.dot, { backgroundColor: statusColor(status) }]} />
-        <Text style={debugStyles.text}>WS: {status}</Text>
+        <Text style={debugStyles.text}>WS: {status} (toque pra fechar)</Text>
       </View>
       {lastEvent ? (
         <>
           <Text style={debugStyles.text} numberOfLines={1}>
             último evento: {lastEvent.type} ({lastEventAt?.toLocaleTimeString()})
           </Text>
-          <Text style={debugStyles.text} numberOfLines={2}>
+          <Text style={debugStyles.text} numberOfLines={3}>
             payload: {lastEvent.payload ? JSON.stringify(lastEvent.payload) : "AUSENTE — backend ainda no formato antigo"}
           </Text>
         </>
       ) : (
         <Text style={debugStyles.text}>nenhum evento recebido ainda</Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
 const debugStyles = StyleSheet.create({
+  collapsedDot: {
+    position: "absolute",
+    right: 14,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    zIndex: 998,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.6)",
+  },
   container: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    backgroundColor: "rgba(0,0,0,0.85)",
+    right: 14,
+    maxWidth: 260,
+    backgroundColor: "rgba(0,0,0,0.9)",
     borderRadius: 10,
     padding: 10,
     zIndex: 998,
