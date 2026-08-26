@@ -28,6 +28,7 @@ export interface TabBarItem {
   route: Href;
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
+  badge?: number;
 }
 
 interface FloatingTabBarProps {
@@ -182,12 +183,19 @@ export default function FloatingTabBar({
                   activeOpacity={0.7}
                 >
                   <View key={index} style={styles.tabContent}>
-                    <IconSymbol
-                      android_material_icon_name={tab.icon}
-                      ios_icon_name={tab.icon}
-                      size={24}
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
-                    />
+                    <View style={styles.iconWrapper}>
+                      <IconSymbol
+                        android_material_icon_name={tab.icon}
+                        ios_icon_name={tab.icon}
+                        size={24}
+                        color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
+                      />
+                      {!!tab.badge && tab.badge > 0 && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{tab.badge > 99 ? '99+' : tab.badge}</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[
                         styles.tabLabel,
@@ -262,5 +270,27 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 2,
     // Dynamic styling applied in component
+  },
+  iconWrapper: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
   },
 });
