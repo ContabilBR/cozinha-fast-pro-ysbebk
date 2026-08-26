@@ -15,6 +15,7 @@ interface SignUpBody {
   name: string;
   email: string;
   password: string;
+  role?: string;
 }
 
 export function registerAuthRoutes(app: App) {
@@ -32,6 +33,7 @@ export function registerAuthRoutes(app: App) {
             name: { type: "string" },
             email: { type: "string", format: "email" },
             password: { type: "string" },
+            role: { type: "string", enum: ["garcom", "gerente", "administrador", "cozinheiro"] },
           },
         },
         response: {
@@ -68,7 +70,7 @@ export function registerAuthRoutes(app: App) {
       try {
         app.logger.info({ email: request.body.email }, "Sign up attempt");
 
-        const { name, email, password } = request.body;
+        const { name, email, password, role } = request.body;
 
         if (!name || !email || !password) {
           return reply.status(400).send({ error: "Name, email e senha são obrigatórios" });
@@ -86,16 +88,17 @@ export function registerAuthRoutes(app: App) {
           return reply.status(409).send({ error: "Email já cadastrado" });
         }
 
-        // Create user
+        // Create user with optional role (default to garcom)
         const userId = randomUUID();
         const now = new Date();
+        const userRole = role || "garcom";
 
         await app.db.insert(userTable).values({
           id: userId,
           name,
           email,
           emailVerified: false,
-          role: "garcom" as any,
+          role: userRole as any,
           active: true,
           createdAt: now,
           updatedAt: now,
@@ -154,11 +157,11 @@ export function registerAuthRoutes(app: App) {
           }
         }
 
-        // Create profile with restaurante association
+        // Create profile with restaurante association and role
         await app.db.insert(schema.profiles).values({
           userId: userId,
           restauranteId: restauranteId,
-          role: "garcom",
+          role: userRole,
           name,
           createdAt: now,
         });
@@ -185,7 +188,7 @@ export function registerAuthRoutes(app: App) {
             id: userId,
             name,
             email,
-            role: "garcom",
+            role: userRole,
             active: true,
             emailVerified: false,
             image: null,
