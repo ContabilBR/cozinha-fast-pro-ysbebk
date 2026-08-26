@@ -15,7 +15,7 @@ import { SkeletonLine } from "@/components/SkeletonLoader";
 import { apiGet } from "@/utils/api";
 import { setMesaHistoricoId } from "@/utils/mesaHistoricoStore";
 import { formatCurrency, isAdmin } from "@/utils/helpers";
-import { TrendingUp, ShoppingBag, Grid3x3, Clock, RefreshCw, ChevronRight, DollarSign } from "lucide-react-native";
+import { TrendingUp, ShoppingBag, Grid3x3, Clock, RefreshCw, ChevronRight, DollarSign, ChefHat } from "lucide-react-native";
 import type { RelatorioResumo } from "@/types";
 
 interface ApiMesa {
@@ -144,6 +144,9 @@ const EMPTY_RESUMO: RelatorioResumo = {
   pedidos_pendentes: 0,
   receita_hoje: 0,
   receita_semana: 0,
+  avg_ticket: 0,
+  top_dishes: [],
+  orders_by_status: { aberta: 0, fechada: 0, cancelada: 0 },
 };
 
 export default function DashboardScreen() {
@@ -189,6 +192,9 @@ export default function DashboardScreen() {
           pedidos_pendentes: Number(r.pedidos_pendentes ?? 0),
           receita_hoje: Number(r.receita_hoje ?? 0),
           receita_semana: Number(r.receita_semana ?? 0),
+          avg_ticket: Number(r.avg_ticket ?? 0),
+          top_dishes: Array.isArray(r.top_dishes) ? r.top_dishes : [],
+          orders_by_status: r.orders_by_status ?? { aberta: 0, fechada: 0, cancelada: 0 },
         });
         console.log("[Dashboard] Resumo loaded:", r);
       }
@@ -233,6 +239,9 @@ export default function DashboardScreen() {
   const pedidosPendentesStr = String(resumo.pedidos_pendentes);
   const receitaHojeStr = formatCurrency(resumo.receita_hoje);
   const receitaSemanaStr = formatCurrency(resumo.receita_semana);
+  const avgTicketStr = formatCurrency(resumo.avg_ticket ?? 0);
+  const topDishes = resumo.top_dishes ?? [];
+  const ordersByStatus = resumo.orders_by_status ?? { aberta: 0, fechada: 0, cancelada: 0 };
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -349,7 +358,117 @@ export default function DashboardScreen() {
               }}
             />
           </View>
+          {/* Row 4: Ticket medio */}
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <StatCard
+              title="Ticket Médio"
+              value={avgTicketStr}
+              color="#0EA5E9"
+              icon={<DollarSign size={20} color="#0EA5E9" />}
+              loading={loading}
+            />
+          </View>
         </Animated.View>
+
+        {/* Pratos mais vendidos */}
+        <View>
+          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, marginBottom: 12 }}>
+            Pratos Mais Vendidos
+          </Text>
+          {loading ? (
+            <View style={{ gap: 10 }}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border, gap: 8 }}>
+                  <SkeletonLine width="60%" height={14} />
+                </View>
+              ))}
+            </View>
+          ) : topDishes.length === 0 ? (
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 24, alignItems: "center", borderWidth: 1, borderColor: COLORS.border }}>
+              <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: COLORS.textSecondary }}>
+                Nenhum prato vendido ainda
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {topDishes.map((dish, index) => (
+                <View
+                  key={dish.dish_name + index}
+                  style={{
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 12,
+                    padding: 14,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      backgroundColor: "#F59E0B18",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {index === 0 ? (
+                      <ChefHat size={16} color="#F59E0B" />
+                    ) : (
+                      <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: "#F59E0B" }}>
+                        {index + 1}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={{ fontFamily: "Outfit_600SemiBold", fontSize: 14, color: COLORS.text, flex: 1 }} numberOfLines={1}>
+                    {dish.dish_name}
+                  </Text>
+                  <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: COLORS.textSecondary }}>
+                    {dish.quantity_sold}x
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Pedidos por status */}
+        <View>
+          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 18, color: COLORS.text, marginBottom: 12 }}>
+            Comandas por Status
+          </Text>
+          <View
+            style={{
+              backgroundColor: COLORS.surface,
+              borderRadius: 12,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              flexDirection: "row",
+              justifyContent: "space-around",
+            }}
+          >
+            {(["aberta", "fechada", "cancelada"] as const).map((status) => (
+              <View key={status} style={{ alignItems: "center", gap: 4 }}>
+                <Text
+                  style={{
+                    fontFamily: "Outfit_700Bold",
+                    fontSize: 20,
+                    color: COMANDA_STATUS_COLORS[status],
+                  }}
+                >
+                  {loading ? "—" : ordersByStatus[status]}
+                </Text>
+                <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 12, color: COLORS.textSecondary }}>
+                  {COMANDA_STATUS_LABELS[status]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         {/* Tables mini-grid */}
         <View>
