@@ -4,8 +4,9 @@ import { Slot, Redirect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { useColors } from "@/hooks/useColors";
+import { usePratoProntoCount } from "@/hooks/usePratoProntoCount";
 
-function getTabsForRole(role: string): TabBarItem[] {
+function getTabsForRole(role: string, pratoProntoCount: number): TabBarItem[] {
   const perfilTab: TabBarItem = {
     name: "perfil",
     route: "/(tabs)/(perfil)",
@@ -19,7 +20,7 @@ function getTabsForRole(role: string): TabBarItem[] {
         { name: "mesas", route: "/(tabs)/(mesas)", icon: "grid-view", label: "Mesas" },
         { name: "cardapio", route: "/(tabs)/(cardapio)", icon: "restaurant-menu", label: "Cardápio" },
         { name: "comandas", route: "/(tabs)/(comandas)", icon: "receipt-long", label: "Comandas" },
-        { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "list-alt", label: "Pedidos" },
+        { name: "pedidos", route: "/(tabs)/(pedidos)", icon: "list-alt", label: "Pedidos", badge: pratoProntoCount },
         { name: "delivery", route: "/(tabs)/(delivery)", icon: "delivery-dining", label: "Delivery" },
         perfilTab,
       ];
@@ -53,12 +54,13 @@ function getTabsForRole(role: string): TabBarItem[] {
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
   const COLORS = useColors();
+  const role = user?.role || "garcom";
+  const pratoProntoCount = usePratoProntoCount(role === "garcom");
 
   if (isLoading) return null;
   if (!user) return <Redirect href="/auth-screen" />;
 
-  const role = user.role || "garcom";
-  const tabs = getTabsForRole(role);
+  const tabs = getTabsForRole(role, pratoProntoCount);
   const tabCount = tabs.length;
   const containerWidth = Math.min(60 + tabCount * 72, 420);
 
