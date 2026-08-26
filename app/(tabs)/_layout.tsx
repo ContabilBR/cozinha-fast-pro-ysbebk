@@ -1,10 +1,15 @@
 import React from "react";
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import { Slot, Redirect } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { useColors } from "@/hooks/useColors";
 import { usePratoProntoCount } from "@/hooks/usePratoProntoCount";
+
+// FloatingTabBar centers its pill with 20px margin on each side — the
+// container can never be wider than the screen minus that margin, or the
+// first/last tabs get clipped off-screen (which is what was happening).
+const CONTAINER_HORIZONTAL_MARGIN = 40;
 
 function getTabsForRole(role: string, pratoProntoCount: number): TabBarItem[] {
   const perfilTab: TabBarItem = {
@@ -54,6 +59,7 @@ function getTabsForRole(role: string, pratoProntoCount: number): TabBarItem[] {
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
   const COLORS = useColors();
+  const { width: screenWidth } = useWindowDimensions();
   const role = user?.role || "garcom";
   const pratoProntoCount = usePratoProntoCount(role === "garcom");
 
@@ -62,7 +68,9 @@ export default function TabLayout() {
 
   const tabs = getTabsForRole(role, pratoProntoCount);
   const tabCount = tabs.length;
-  const containerWidth = Math.min(60 + tabCount * 72, 420);
+  const desiredWidth = 60 + tabCount * 72;
+  const maxWidth = screenWidth - CONTAINER_HORIZONTAL_MARGIN;
+  const containerWidth = Math.min(desiredWidth, maxWidth, 420);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
