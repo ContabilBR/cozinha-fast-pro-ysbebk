@@ -12,6 +12,84 @@ const NOTIFY_ROLES = new Set(["garcom", "gerente", "administrador", "admin"]);
 
 const AUTO_DISMISS_MS = 5000;
 
+// ============================================================================
+// TEMP DEBUG — remove this whole block (and the <DebugPanel /> render below)
+// once the "prato pronto" notification is confirmed working end to end.
+// Shows the WebSocket connection status and the last raw event received, so
+// you can tell apart "not connecting at all" from "connecting fine, but the
+// backend is still publishing the old event shape without payload".
+// ============================================================================
+const DEBUG_ENABLED = true;
+
+function statusColor(status: string) {
+  if (status === "connected") return "#22C55E";
+  if (status === "connecting") return "#F59E0B";
+  return "#EF4444";
+}
+
+function DebugPanel({
+  status,
+  lastEvent,
+  lastEventAt,
+}: {
+  status: string;
+  lastEvent: RealtimeEvent | null;
+  lastEventAt: Date | null;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[debugStyles.container, { bottom: insets.bottom + 12 }]} pointerEvents="none">
+      <View style={debugStyles.row}>
+        <View style={[debugStyles.dot, { backgroundColor: statusColor(status) }]} />
+        <Text style={debugStyles.text}>WS: {status}</Text>
+      </View>
+      {lastEvent ? (
+        <>
+          <Text style={debugStyles.text} numberOfLines={1}>
+            último evento: {lastEvent.type} ({lastEventAt?.toLocaleTimeString()})
+          </Text>
+          <Text style={debugStyles.text} numberOfLines={2}>
+            payload: {lastEvent.payload ? JSON.stringify(lastEvent.payload) : "AUSENTE — backend ainda no formato antigo"}
+          </Text>
+        </>
+      ) : (
+        <Text style={debugStyles.text}>nenhum evento recebido ainda</Text>
+      )}
+    </View>
+  );
+}
+
+const debugStyles = StyleSheet.create({
+  container: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderRadius: 10,
+    padding: 10,
+    zIndex: 998,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  text: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "monospace",
+  },
+});
+// ============================================================================
+// END TEMP DEBUG
+// ============================================================================
+
 /**
  * Global "prato pronto" banner. Mounted once at the root layout (not inside
  * any single tab/screen) so it's visible no matter where the garcom is in
@@ -22,6 +100,8 @@ export function PratoProntoNotifier() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState<string | null>(null);
+  const [lastEvent, setLastEvent] = useState<RealtimeEvent | null>(null);
+  const [lastEventAt, setLastEventAt] = useState<Date | null>(null);
   const translateY = useRef(new Animated.Value(-120)).current;
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -39,6 +119,10 @@ export function PratoProntoNotifier() {
 
   const handleEvent = useCallback(
     (event: RealtimeEvent) => {
+      // TEMP DEBUG: record every event that arrives, regardless of type/filter.
+      setLastEvent(event);
+      setLastEventAt(new Date());
+
       if (event.type !== "pedido.status_changed") return;
       if (event.payload?.status !== "pronto") return;
 
@@ -74,30 +158,36 @@ export function PratoProntoNotifier() {
   const role = (user?.role || "").toLowerCase();
   const shouldConnect = !!user && NOTIFY_ROLES.has(role);
 
-  useRealtime({ onEvent: handleEvent, enabled: shouldConnect });
-
-  if (!message) return null;
+  const wsStatus = useRealtime({ onEvent: handleEvent, enabled: shouldConnect });
 
   return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[styles.container, { top: insets.top + 8, transform: [{ translateY }] }]}
-    >
-      <Pressable
-        onPress={dismiss}
-        style={[
-          styles.banner,
-          { backgroundColor: colors.surface, borderColor: colors.statusPronto },
-        ]}
-      >
-        <View style={[styles.iconWrap, { backgroundColor: colors.statusPronto }]}>
-          <CheckCircle size={18} color="#fff" />
-        </View>
-        <Text style={[styles.text, { color: colors.text }]} numberOfLines={2}>
-          {message}
-        </Text>
-      </Pressable>
-    </Animated.View>
+    <>
+      {DEBUG_ENABLED && shouldConnect && (
+        <DebugPanel status={wsStatus} lastEvent={lastEvent} lastEventAt={lastEventAt} />
+      )}
+
+      {message && (
+        <Animated.View
+          pointerEvents="box-none"
+          style={[styles.container, { top: insets.top + 8, transform: [{ translateY }] }]}
+        >
+          <Pressable
+            onPress={dismiss}
+            style={[
+              styles.banner,
+              { backgroundColor: colors.surface, borderColor: colors.statusPronto },
+            ]}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: colors.statusPronto }]}>
+              <CheckCircle size={18} color="#fff" />
+            </View>
+            <Text style={[styles.text, { color: colors.text }]} numberOfLines={2}>
+              {message}
+            </Text>
+          </Pressable>
+        </Animated.View>
+      )}
+    </>
   );
 }
 
