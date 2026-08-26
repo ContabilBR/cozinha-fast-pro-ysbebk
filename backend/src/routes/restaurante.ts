@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema/schema.js";
 import type { App } from "../index.js";
-import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
+import { requireAuth as customRequireAuth, requireTenant, requireRole } from "../utils/auth.js";
 import { validarRestauranteParaNfce } from "../utils/fiscal-payloads.js";
 
 interface UpdateRestauranteBody {
@@ -322,6 +322,7 @@ export function registerRestauranteRoutes(app: App) {
     ) => {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         let tenantId: string;
@@ -424,6 +425,7 @@ export function registerRestauranteRoutes(app: App) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const authUser = await customRequireAuth(app, request, reply);
       if (!authUser) return;
+      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
 
       try {
         let tenantId: string;
