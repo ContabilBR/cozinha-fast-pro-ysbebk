@@ -105,6 +105,13 @@ export interface RelatorioResumo {
   pedidos_pendentes: number;
   receita_hoje: number;
   receita_semana: number;
+  avg_ticket?: number;
+  top_dishes?: Array<{ dish_name: string; quantity_sold: number }>;
+  orders_by_status?: {
+    aberta: number;
+    fechada: number;
+    cancelada: number;
+  };
 }
 
 // Legacy types kept for backward compat with existing components
