@@ -1,6 +1,6 @@
 // force rebuild v3
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput, Image } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,7 +24,6 @@ export default function PagamentoScreen() {
   const [valor, setValor] = useState(valorParam || "");
   const [troco, setTroco] = useState("0");
   const [saving, setSaving] = useState(false);
-  const [pixData, setPixData] = useState<any>(null);
   const [pagamentos, setPagamentos] = useState<any[]>([]);
   const [totalComanda, setTotalComanda] = useState(0);
   const [totalPago, setTotalPago] = useState(0);
@@ -57,12 +56,8 @@ export default function PagamentoScreen() {
         forma_pagamento: forma, valor: v, troco: forma === "dinheiro" ? parseFloat(troco.replace(",", ".")) || 0 : 0,
       });
       console.log("[PagamentoScreen] Payment registered:", res);
-      if (forma === "pix" && res.pagamento?.pixQrCodeBase64) {
-        setPixData(res.pagamento);
-      } else {
-        Alert.alert("Pagamento registrado", formatCurrency(v) + " em " + FORMAS.find(f => f.key === forma)?.label);
-        router.back();
-      }
+      Alert.alert("Pagamento registrado", formatCurrency(v) + " em " + FORMAS.find(f => f.key === forma)?.label);
+      router.back();
     } catch (err: any) {
       console.log("[PagamentoScreen] Error registering payment:", err);
       Alert.alert("Erro", err?.message || "Erro ao registrar pagamento");
@@ -70,31 +65,6 @@ export default function PagamentoScreen() {
   };
 
   const inputStyle = { backgroundColor: COLORS.surface, borderRadius: 10, borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, padding: 12, fontSize: 16, color: COLORS.text };
-
-  if (pixData) {
-    return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable onPress={() => { console.log("[PagamentoScreen] Back pressed from Pix screen"); router.back(); }}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: COLORS.text }}>Pix QR Code</Text>
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 16, alignItems: "center" }}>
-          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 24, alignItems: "center", borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, width: "100%" }}>
-            <Image source={{ uri: "data:image/png;base64," + pixData.pixQrCodeBase64 }} style={{ width: 220, height: 220, borderRadius: 12 }} />
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 16, textAlign: "center" }}>Escaneie o QR Code ou copie o código abaixo</Text>
-            <View style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 8, padding: 12, marginTop: 12, width: "100%" }}>
-              <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: "center" }} numberOfLines={3}>{pixData.pixQrCode || "Código Pix"}</Text>
-            </View>
-            <Text style={{ fontSize: 28, fontWeight: "700", color: COLORS.primary, marginTop: 16 }}>{formatCurrency(parseFloat(pixData.valor))}</Text>
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Aguardando confirmação...</Text>
-          </View>
-          <Pressable onPress={() => { console.log("[PagamentoScreen] Back to comanda pressed from Pix screen"); router.back(); }} style={{ marginTop: 20, backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, width: "100%", alignItems: "center" }}>
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Voltar para comanda</Text>
-          </Pressable>
-        </ScrollView>
-      </View>
-    );
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -140,7 +110,7 @@ export default function PagamentoScreen() {
         )}
 
         <Pressable onPress={submit} disabled={saving} style={{ backgroundColor: saving ? COLORS.textTertiary : COLORS.primary, borderRadius: 12, padding: 16, alignItems: "center", marginTop: 8 }}>
-          {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{forma === "pix" ? "Gerar QR Code Pix" : "Registrar pagamento"}</Text>}
+          {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Registrar pagamento</Text>}
         </Pressable>
       </ScrollView>
     </View>
