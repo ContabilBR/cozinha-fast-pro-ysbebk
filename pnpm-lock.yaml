@@ -1209,8 +1209,8 @@ packages:
   '@expo/plist@0.8.1':
     resolution: {integrity: sha512-3gTReGIUm0oRaMClsAJYxBnVPCl6fVpsl8HS+DTVxDhW4GyVyxg9E/Znm3BvcHtUJ51RJJI14pC1wvrNilCRHw==}
 
-  '@expo/prebuild-config@57.0.14':
-    resolution: {integrity: sha512-Lopsj0O/gqjVf94ZL8OH8Q7OV7YsREzxC+ScUQjgmYP5DTLlB193C6WO4hq/Mtia52NBLVAjRVMbW6TUJQtiWA==}
+  '@expo/prebuild-config@57.0.15':
+    resolution: {integrity: sha512-xTbWHroj0PDmlbqvmU+zF9ZZxveJkiuyiPoeRJYRGruFHebRAWnoTdw5S7d/UCzDBI8ropGGu9g2eb2nMxtvAw==}
 
   '@expo/require-utils@55.0.5':
     resolution: {integrity: sha512-U4K/CQ2VpXuwfNGsN+daKmYOt15hCP8v/pXaYH6eut7kdYZo6SfJ1yr67BIcJ+1Gzzs+QzTxswAZChKpXmceyw==}
@@ -1707,8 +1707,8 @@ packages:
   '@react-native/normalize-colors@0.81.5':
     resolution: {integrity: sha512-0HuJ8YtqlTVRXGZuGeBejLE04wSQsibpTI+RGOyVqxZvgtlLLC/Ssw0UmbHhT4lYMp2fhdtvKZSs5emWB1zR/g==}
 
-  '@react-native/normalize-colors@0.86.2':
-    resolution: {integrity: sha512-EzPFc9Y6lzYOWeso2almwXI7f8+qReHxWvT+algsOczb2UhWXIWXDoSvkdwoSfiwwmGt/ijJgKJoeHlzPkLwRg==}
+  '@react-native/normalize-colors@0.86.3':
+    resolution: {integrity: sha512-Cv3CDkprb67GrzuaS9BGbBJC/6G4lIw3nyKOHRKTqTTum4bn37y5+R0Z04L8mcbQN85eEohNrRwb7IOM4j6uvg==}
 
   '@react-native/virtualized-lists@0.81.4':
     resolution: {integrity: sha512-hBM+rMyL6Wm1Q4f/WpqGsaCojKSNUBqAXLABNGoWm1vabZ7cSnARMxBvA/2vo3hLcoR4v7zDK8tkKm9+O0LjVA==}
@@ -3540,8 +3540,8 @@ packages:
     resolution: {integrity: sha512-WOaud6UKg16ciCOj8raKcMOoKFMHLXKI29U29yhgu1lf+Y7VxJyCktUcYo6AM+ccZ7zLD1uWZdMtgnpf+95OXA==}
     hasBin: true
 
-  expo-modules-autolinking@57.0.11:
-    resolution: {integrity: sha512-cvbEwYDKGhvMWoStZVceCdFRvrizm82uNMIDKIeo6NO4X/QC7PN4Eqm7Vn57DmgBdZNBJIk/647/NpNowPqAxQ==}
+  expo-modules-autolinking@57.0.12:
+    resolution: {integrity: sha512-Q8KAlq37nLKsQ+HsS9NpQVpd5jCgqtu694TDUNHBUBpV9ViD82mRBh8Uug/h68RG9xnLS+kuL4nYaCuFRghHjg==}
     hasBin: true
 
   expo-modules-core@3.0.30:
@@ -7579,7 +7579,7 @@ snapshots:
       '@expo/osascript': 2.7.0
       '@expo/package-manager': 1.13.0
       '@expo/plist': 0.4.9
-      '@expo/prebuild-config': 57.0.14(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.15(typescript@5.9.3)
       '@expo/schema-utils': 0.1.8
       '@expo/spawn-async': 1.8.0
       '@expo/ws-tunnel': 1.0.6
@@ -7900,16 +7900,16 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
-  '@expo/prebuild-config@57.0.14(typescript@5.9.3)':
+  '@expo/prebuild-config@57.0.15(typescript@5.9.3)':
     dependencies:
       '@expo/config': 57.0.9(typescript@5.9.3)
       '@expo/config-plugins': 57.0.9(typescript@5.9.3)
       '@expo/config-types': 57.0.2
       '@expo/image-utils': 0.11.5(typescript@5.9.3)
       '@expo/json-file': 11.0.1
-      '@react-native/normalize-colors': 0.86.2
+      '@react-native/normalize-colors': 0.86.3
       debug: 4.4.3
-      expo-modules-autolinking: 57.0.11(typescript@5.9.3)
+      expo-modules-autolinking: 57.0.12(typescript@5.9.3)
       resolve-from: 5.0.0
       semver: 7.8.5
     transitivePeerDependencies:
@@ -8468,7 +8468,7 @@ snapshots:
 
   '@react-native/normalize-colors@0.81.5': {}
 
-  '@react-native/normalize-colors@0.86.2': {}
+  '@react-native/normalize-colors@0.86.3': {}
 
   '@react-native/virtualized-lists@0.81.4(@types/react@19.1.17)(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
     dependencies:
@@ -10500,7 +10500,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
 
-  expo-modules-autolinking@57.0.11(typescript@5.9.3):
+  expo-modules-autolinking@57.0.12(typescript@5.9.3):
     dependencies:
       '@expo/require-utils': 57.0.5(typescript@5.9.3)
       '@expo/spawn-async': 1.8.0
@@ -10577,7 +10577,7 @@ snapshots:
 
   expo-splash-screen@31.0.13(expo@54.0.35)(typescript@5.9.3):
     dependencies:
-      '@expo/prebuild-config': 57.0.14(typescript@5.9.3)
+      '@expo/prebuild-config': 57.0.15(typescript@5.9.3)
       expo: 54.0.35(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native-webview@13.17.0(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
