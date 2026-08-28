@@ -57,7 +57,7 @@ export function registerRelatoriosRoutes(app: App) {
       if (!authUser) return;
       // Revenue and business metrics are management-level information —
       // garcom/cozinheiro should not see the restaurant's financials.
-      if (!requireRole(authUser, ["administrador", "gerente", "admin", "manager", "superadmin", "super_admin"], reply)) return;
+      if (!requireRole(authUser, ["administrador", "gerente"], reply)) return;
 
       try {
         const tenantId = requireTenant(authUser);

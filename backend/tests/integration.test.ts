@@ -2069,7 +2069,7 @@ describe("API Integration Tests", () => {
 
   // ==================== Reports & Dashboard ====================
   test("Get dashboard summary returns 200 or 500", async () => {
-    const res = await authenticatedApi("/api/relatorios/resumo", authToken);
+    const res = await authenticatedApi("/api/relatorios/resumo", adminToken);
     await expectStatus(res, 200, 500);
   });
 
@@ -2101,7 +2101,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Update or create restaurant information returns 200", async () => {
-    const res = await authenticatedApi("/api/restaurante", authToken, {
+    const res = await authenticatedApi("/api/restaurante", adminToken, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

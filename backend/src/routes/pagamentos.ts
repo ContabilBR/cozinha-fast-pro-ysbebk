@@ -48,20 +48,16 @@ export function registerPagamentoRoutes(app: App) {
         const pagamentosExistentes = await db.select({ valor: schema.pagamentos.valor }).from(schema.pagamentos).where(and(eq(schema.pagamentos.comandaId, request.params.id), eq(schema.pagamentos.status, "confirmado")));
         const totalPago = pagamentosExistentes.reduce((sum: number, p: any) => sum + parseFloat(p.valor), 0);
         const totalComanda = parseFloat(comanda[0].total || "0");
-        const restante = totalComanda - totalPago;
 
-        // Se veio gorjeta no body, atualizar total da comanda
+        // Factor in gorjeta for calculating amount due, but do NOT persist gorjeta to comanda total
+        // The /fechar endpoint handles that once (as per task spec)
         const gorjetaBody = (request.body as any).gorjeta || 0;
-        let totalComandaFinal = totalComanda;
-        if (gorjetaBody > 0 && totalComanda > 0) {
-          totalComandaFinal = totalComanda + gorjetaBody;
-          await db.update(schema.comandas).set({ total: totalComandaFinal.toString() }).where(eq(schema.comandas.id, request.params.id));
-        }
+        const totalDue = totalComanda + gorjetaBody;
+        const restante = totalDue - totalPago;
 
         // Only validate overpayment if comanda has a total
-        const restanteFinal = totalComandaFinal - totalPago;
-        if (totalComandaFinal > 0 && valor > restanteFinal + 0.01) {
-          return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restanteFinal.toFixed(2)}` });
+        if (totalComanda > 0 && valor > restante + 0.01) {
+          return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restante.toFixed(2)}` });
         }
 
         // Todas as formas de pagamento (dinheiro, cartão, Pix) são reconciliação manual
@@ -80,9 +76,12 @@ export function registerPagamentoRoutes(app: App) {
           restauranteId,
         }).returning();
 
+        const newTotalPago = totalPago + valor;
+        const newRestante = restante - valor;
+
         return reply.code(201).send({
           pagamento,
-          resumo: { total_comanda: totalComandaFinal, total_pago: totalPago + (statusPagamento === "confirmado" ? valor : 0), restante: restanteFinal - (statusPagamento === "confirmado" ? valor : 0) },
+          resumo: { total_comanda: totalComanda.toFixed(2), total_pago: newTotalPago.toFixed(2), restante: Math.max(0, newRestante).toFixed(2) },
         });
       } catch (err) {
         app.logger.error({ error: (err as any).message }, "Erro ao registrar pagamento");
