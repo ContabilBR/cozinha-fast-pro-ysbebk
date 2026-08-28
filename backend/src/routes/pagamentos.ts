@@ -3,43 +3,12 @@ import { eq, and, inArray } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import { requireAuth as customRequireAuth, requireTenant } from "../utils/auth.js";
-import { verifyAsaasWebhook } from "../utils/webhook-auth.js";
 import * as schema from "../db/schema/schema.js";
 
-// === Asaas Service ===
-const ASAAS_BASE_URL = process.env.ASAAS_ENV === "production" ? "https://api.asaas.com/api/v3" : "https://sandbox.asaas.com/api/v3";
-
-function getAsaasApiKey(): string {
-  const key = process.env.ASAAS_API_KEY || process.env.SPECULAR_SECRET_ASAAS_API_KEY || process.env.SECRET_ASAAS_API_KEY;
-  if (!key) throw new Error("ASAAS_API_KEY não configurada - nenhuma variável encontrada");
-  return key;
-}
-
-async function asaasRequest(method: string, path: string, body?: any): Promise<any> {
-  const res = await fetch(ASAAS_BASE_URL + path, { method, headers: { "Content-Type": "application/json", "access_token": getAsaasApiKey() }, body: body ? JSON.stringify(body) : undefined });
-  if (!res.ok) { const errorText = await res.text(); throw new Error("Asaas API error " + res.status + ": " + errorText); }
-  return res.json();
-}
-
-async function getOrCreateCustomer(restauranteId: string, restauranteNome: string): Promise<string> {
-  const ref = "cozinha_" + restauranteId.slice(0, 8);
-  const search = await asaasRequest("GET", "/customers?externalReference=" + ref);
-  if (search.data && search.data.length > 0) return search.data[0].id;
-  const customer = await asaasRequest("POST", "/customers", { name: "Consumidor - " + restauranteNome, cpfCnpj: "07615312701", externalReference: ref });
-  return customer.id;
-}
-
-async function criarCobrancaPix(params: { customerId: string; valor: number; descricao: string; externalReference: string }): Promise<{ paymentId: string; status: string }> {
-  const hoje = new Date().toISOString().split("T")[0];
-  const payment = await asaasRequest("POST", "/payments", { customer: params.customerId, billingType: "PIX", value: params.valor, dueDate: hoje, description: params.descricao, externalReference: params.externalReference });
-  return { paymentId: payment.id, status: payment.status };
-}
-
-async function buscarQrCodePix(paymentId: string): Promise<{ encodedImage: string; payload: string; expirationDate: string }> {
-  const qr = await asaasRequest("GET", "/payments/" + paymentId + "/pixQrCode");
-  return { encodedImage: qr.encodedImage, payload: qr.payload, expirationDate: qr.expirationDate };
-}
-// === Fim Asaas Service ===
+// Pagamento de comanda (dinheiro, cartão, Pix) é sempre reconciliado manualmente pelo
+// garçom — o restaurante usa a própria maquininha/chave Pix e o app só registra qual
+// forma foi usada. Não há integração de pagamento nativa nesta rota; o Asaas só é
+// usado para a cobrança da assinatura da plataforma (ver backend/src/routes/assinatura.ts).
 
 export function registerPagamentoRoutes(app: App) {
   const db = app.db as any;
@@ -95,30 +64,10 @@ export function registerPagamentoRoutes(app: App) {
           return reply.code(400).send({ error: `Valor excede o restante da comanda. Restante: R$ ${restanteFinal.toFixed(2)}` });
         }
 
-        // Dinheiro e cartão são confirmados imediatamente. Pix vai para Asaas.
-        let statusPagamento: string = "confirmado";
-        let confirmadoEm: Date | null = new Date();
-        let pixTxId: string | null = null;
-        let pixQrCode: string | null = null;
-        let pixQrCodeBase64: string | null = null;
-
-        if (forma_pagamento === "pix") {
-          statusPagamento = "pendente";
-          confirmadoEm = null;
-          try {
-            const rest = await db.select({ nome: schema.restaurante.nome }).from(schema.restaurante).where(eq(schema.restaurante.id, restauranteId));
-            const nomeRestaurante = rest[0]?.nome || "Restaurante";
-            const customerId = await getOrCreateCustomer(restauranteId, nomeRestaurante);
-            const cobranca = await criarCobrancaPix({ customerId, valor, descricao: "Comanda " + request.params.id.slice(0, 8), externalReference: request.params.id });
-            pixTxId = cobranca.paymentId;
-            const qr = await buscarQrCodePix(cobranca.paymentId);
-            pixQrCode = qr.payload;
-            pixQrCodeBase64 = qr.encodedImage;
-          } catch (err) {
-            app.logger.error({ error: (err as any).message }, "Erro ao criar cobrança Pix no Asaas");
-            return reply.code(502).send({ error: "Erro Pix: " + (err as any).message });
-          }
-        }
+        // Todas as formas de pagamento (dinheiro, cartão, Pix) são reconciliação manual
+        // do garçom e confirmam imediatamente — não há integração de gateway aqui.
+        const statusPagamento = "confirmado";
+        const confirmadoEm = new Date();
 
         const [pagamento] = await db.insert(schema.pagamentos).values({
           comandaId: request.params.id,
@@ -126,9 +75,6 @@ export function registerPagamentoRoutes(app: App) {
           status: statusPagamento,
           valor: valor.toString(),
           troco: (troco || 0).toString(),
-          pixTxId,
-          pixQrCode,
-          pixQrCodeBase64,
           referencia: referencia || null,
           confirmadoEm,
           restauranteId,
@@ -338,30 +284,4 @@ export function registerPagamentoRoutes(app: App) {
       }
     }
   );
-
-  // POST /api/webhooks/asaas — recebe notificações do Asaas
-  app.fastify.post("/api/webhooks/asaas", async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      if (!verifyAsaasWebhook(request, reply, app.logger)) return;
-      const body = request.body as any;
-      const event = body?.event;
-      const payment = body?.payment;
-      if (!event || !payment) return reply.code(400).send({ error: "Payload inválido" });
-      app.logger.info({ event, paymentId: payment.id }, "Webhook Asaas recebido");
-      if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
-        const paymentId = payment.id;
-        const pagamentos = await db.select().from(schema.pagamentos).where(eq(schema.pagamentos.pixTxId, paymentId));
-        if (pagamentos.length > 0) {
-          await db.update(schema.pagamentos).set({ status: "confirmado", confirmadoEm: new Date() }).where(eq(schema.pagamentos.pixTxId, paymentId));
-          app.logger.info({ paymentId, comandaId: pagamentos[0].comandaId }, "Pagamento Pix confirmado via webhook");
-        } else {
-          app.logger.warn({ paymentId }, "Webhook recebido mas pagamento não encontrado");
-        }
-      }
-      return reply.code(200).send({ received: true });
-    } catch (err) {
-      app.logger.error({ error: (err as any).message }, "Erro ao processar webhook Asaas");
-      return reply.code(200).send({ received: true });
-    }
-  });
 }
