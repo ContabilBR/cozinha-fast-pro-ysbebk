@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "./schema/schema.js";
 import { user as userTable, account as accountTable, session as sessionTable, verification as verificationTable } from "./schema/auth-schema.js";
 import type { App } from "../index.js";
@@ -438,86 +438,14 @@ export async function seedDatabase(app: App) {
       app.logger.error({ err }, 'Failed to upsert seed usuarios');
     }
 
-    // Check if mesas table needs seeding
-    const existingMesas = await app.db.select().from(schema.mesas);
-    const mesaCount = existingMesas.length;
-
-    app.logger.info({ count: mesaCount }, "Checking mesas table");
-
-    // Only seed/reset if count is outside the valid range (1-25)
-    let shouldSeedMesas = false;
-
-    if (mesaCount > 25) {
-      app.logger.info("Mesas table bloated (> 25 rows), truncating and re-seeding");
-      // Use raw SQL to delete in correct FK dependency order
-      try {
-        if (typeof (app.db as any).execute === 'function') {
-          await (app.db as any).execute(sql`DELETE FROM pedidos`);
-          await (app.db as any).execute(sql`DELETE FROM comandas`);
-          await (app.db as any).execute(sql`DELETE FROM mesas`);
-        } else {
-          // Fallback to Drizzle ORM if raw execute not available (less safe but functional)
-          const comandasToDelete = await app.db.select({ id: schema.comandas.id }).from(schema.comandas);
-          const comandaIds = comandasToDelete.map(c => c.id);
-          if (comandaIds.length > 0) {
-            await app.db.delete(schema.pedidos).where(inArray(schema.pedidos.comandaId, comandaIds));
-          }
-          await app.db.delete(schema.comandas);
-          await app.db.delete(schema.mesas);
-        }
-      } catch (err) {
-        app.logger.error({ err }, "Failed to delete mesas and dependencies");
-      }
-      shouldSeedMesas = true;
-    } else if (mesaCount === 0) {
-      app.logger.info("Mesas table empty, seeding");
-      shouldSeedMesas = true;
-    } else {
-      // Count is between 1-25, already seeded correctly
-      app.logger.info({ count: mesaCount }, "Mesas table already seeded correctly, skipping");
-      // Skip to remaining seed steps (categorias, pratos)
-    }
-
-    if (shouldSeedMesas) {
-      // Seed exactly 20 mesas with specified statuses and capacidades
-      app.logger.info("Seeding mesas");
-      const mesasToSeed = [
-        { numero: 1, capacidade: 4, status: "disponivel" as const },
-        { numero: 2, capacidade: 4, status: "disponivel" as const },
-        { numero: 3, capacidade: 4, status: "disponivel" as const },
-        { numero: 4, capacidade: 4, status: "disponivel" as const },
-        { numero: 5, capacidade: 4, status: "disponivel" as const },
-        { numero: 6, capacidade: 4, status: "disponivel" as const },
-        { numero: 7, capacidade: 4, status: "disponivel" as const },
-        { numero: 8, capacidade: 4, status: "disponivel" as const },
-        { numero: 9, capacidade: 4, status: "disponivel" as const },
-        { numero: 10, capacidade: 4, status: "disponivel" as const },
-        { numero: 11, capacidade: 6, status: "ocupada" as const },
-        { numero: 12, capacidade: 6, status: "ocupada" as const },
-        { numero: 13, capacidade: 6, status: "ocupada" as const },
-        { numero: 14, capacidade: 6, status: "ocupada" as const },
-        { numero: 15, capacidade: 6, status: "ocupada" as const },
-        { numero: 16, capacidade: 2, status: "reservada" as const },
-        { numero: 17, capacidade: 2, status: "reservada" as const },
-        { numero: 18, capacidade: 2, status: "reservada" as const },
-        { numero: 19, capacidade: 8, status: "disponivel" as const },
-        { numero: 20, capacidade: 8, status: "disponivel" as const },
-      ];
-
-      for (const mesa of mesasToSeed) {
-        try {
-          await app.db.insert(schema.mesas).values({
-            numero: mesa.numero,
-            capacidade: mesa.capacidade,
-            status: mesa.status,
-            restauranteId: seedRestauranteId,
-          });
-        } catch (err) {
-          app.logger.debug({ numero: mesa.numero, err }, "Mesa insert error");
-        }
-      }
-      app.logger.info("Mesas seeded successfully");
-    }
+    // Mesas não são semeadas automaticamente: a quantidade de mesas é definida pelo
+    // próprio restaurante através da tela de Gestão (POST/PUT/DELETE /api/mesas já
+    // cobrem isso). Um conjunto fixo de 20 mesas aqui não reflete a realidade de
+    // nenhum restaurante real, e a versão anterior desse bloco também tinha um bug
+    // sério: contava mesas da tabela inteira (sem filtrar por tenant) e, acima de um
+    // limite, apagava pedidos/comandas/mesas globalmente e reinseria 20 mesas mesmo
+    // quando essa limpeza falhava — o que criava mesas "fantasma" 1-20 por cima dos
+    // dados reais a cada reinício do backend.
 
     // Seed categorias with upsert
     app.logger.info("Seeding categorias");
