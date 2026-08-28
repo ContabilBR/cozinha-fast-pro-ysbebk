@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput, Image, Share } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, TextInput, Share } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,7 +35,6 @@ export default function FecharContaScreen() {
   const [forma, setForma] = useState("dinheiro");
   const [trocoInput, setTrocoInput] = useState("0");
   const [saving, setSaving] = useState(false);
-  const [pixData, setPixData] = useState<any>(null);
   const [pagamentos, setPagamentos] = useState<any[]>([]);
   const [totalPago, setTotalPago] = useState(0);
   const [pessoaAtual, setPessoaAtual] = useState(0);
@@ -86,19 +85,15 @@ export default function FecharContaScreen() {
   const registrarPagamento = async (valor: number) => {
     setSaving(true);
     try {
-      const res = await apiPost("/api/comandas/" + id + "/pagamentos", {
+      await apiPost("/api/comandas/" + id + "/pagamentos", {
         forma_pagamento: forma, valor, troco: forma === "dinheiro" ? parseFloat(trocoInput.replace(",", ".")) || 0 : 0, gorjeta: gorjetaValue,
       });
-      if (forma === "pix" && res.pagamento?.pixQrCodeBase64) {
-        setPixData(res.pagamento);
-      } else {
-        await refreshPagamentos();
-        if (dividir && pessoaAtual < numPessoas - 1) {
-          setPessoaAtual(pessoaAtual + 1);
-          setForma("dinheiro");
-          Alert.alert("OK", "Pessoa " + (pessoaAtual + 1) + " pagou " + formatCurrency(valor));
-        } else { await fecharComanda(); }
-      }
+      await refreshPagamentos();
+      if (dividir && pessoaAtual < numPessoas - 1) {
+        setPessoaAtual(pessoaAtual + 1);
+        setForma("dinheiro");
+        Alert.alert("OK", "Pessoa " + (pessoaAtual + 1) + " pagou " + formatCurrency(valor));
+      } else { await fecharComanda(); }
     } catch (err: any) { Alert.alert("Erro", err?.message || "Erro"); }
     finally { setSaving(false); }
   };
@@ -108,15 +103,10 @@ export default function FecharContaScreen() {
       await apiPost("/api/comandas/" + id + "/fechar", { gorjeta: gorjetaValue });
       Alert.alert("Conta fechada!", "Comanda encerrada.", [{ text: "OK", onPress: () => router.back() }]);
     } catch (err: any) {
-      if (err?.message?.includes("pendente")) {
-        Alert.alert("Aguardando Pix", "Confirme o Pix pendente antes de fechar.");
-      } else {
-        Alert.alert("Registrado!", "Volte para fechar quando pronto.", [{ text: "OK", onPress: () => router.back() }]);
-      }
+      Alert.alert("Registrado!", "Volte para fechar quando pronto.", [{ text: "OK", onPress: () => router.back() }]);
     }
   };
 
-  const voltarDoPix = async () => { setPixData(null); await refreshPagamentos(); if (dividir && pessoaAtual < numPessoas - 1) setPessoaAtual(pessoaAtual + 1); };
   const etapaAnterior = () => { const idx = ETAPAS.indexOf(etapa); if (idx > 0) setEtapa(ETAPAS[idx - 1]); else router.back(); };
 
   const cardStyle = { backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, marginBottom: 12 };
@@ -124,32 +114,6 @@ export default function FecharContaScreen() {
   const btnPrimary = { backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: "center" as const };
 
   if (loading) return <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: "center", alignItems: "center" }}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
-
-  if (pixData) {
-    return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background }}>
-        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable onPress={voltarDoPix}><Ionicons name="arrow-back" size={24} color={COLORS.text} /></Pressable>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: COLORS.text }}>Pix QR Code</Text>
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 16, alignItems: "center" }}>
-          <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, padding: 24, alignItems: "center", borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, width: "100%" }}>
-            {pixData.pixQrCodeBase64 ? <Image source={{ uri: "data:image/png;base64," + pixData.pixQrCodeBase64 }} style={{ width: 220, height: 220, borderRadius: 12 }} /> : <Ionicons name="qr-code" size={120} color={COLORS.primary} />}
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 16, textAlign: "center" }}>Escaneie o QR Code ou copie o código</Text>
-            <View style={{ backgroundColor: COLORS.surfaceSecondary, borderRadius: 8, padding: 12, marginTop: 12, width: "100%" }}>
-              <Text style={{ fontSize: 11, color: COLORS.textSecondary, textAlign: "center" }} numberOfLines={3}>{pixData.pixQrCode || "Código Pix"}</Text>
-            </View>
-            <Text style={{ fontSize: 28, fontWeight: "700", color: COLORS.primary, marginTop: 16 }}>{formatCurrency(parseFloat(pixData.valor))}</Text>
-            {dividir && <Text style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 4 }}>Pessoa {pessoaAtual + 1} de {numPessoas}</Text>}
-            <Text style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Aguardando confirmação...</Text>
-          </View>
-          <Pressable onPress={voltarDoPix} style={{ ...btnPrimary, width: "100%", marginTop: 12 }}>
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{dividir && pessoaAtual < numPessoas - 1 ? "Próxima pessoa" : "Continuar"}</Text>
-          </Pressable>
-        </ScrollView>
-      </View>
-    );
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
@@ -282,8 +246,8 @@ export default function FecharContaScreen() {
           </View>
           {forma === "dinheiro" && (<><Text style={labelStyle}>Troco para (R$)</Text><TextInput value={trocoInput} onChangeText={setTrocoInput} keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={COLORS.textTertiary} style={{ backgroundColor: COLORS.surface, borderRadius: 10, borderWidth: 0.5, borderColor: COLORS.surfaceSecondary, padding: 12, fontSize: 16, color: COLORS.text, marginBottom: 16 }} /></>)}
           {pagamentos.length > 0 && <View style={{ ...cardStyle, marginBottom: 16 }}><Text style={labelStyle}>Pagamentos registrados</Text>{pagamentos.map((p: any, i: number) => (<View key={p.id || i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}><Text style={{ fontSize: 13, color: COLORS.textSecondary }}>{p.formaPagamento || p.forma_pagamento}</Text><Text style={{ fontSize: 13, color: p.status === "confirmado" ? "#22C55E" : "#F59E0B", fontWeight: "500" }}>{formatCurrency(parseFloat(p.valor))} {p.status === "pendente" ? "(pendente)" : "✓"}</Text></View>))}</View>}
-          <Pressable onPress={() => registrarPagamento(dividir ? valorPessoaAtual : restante)} disabled={saving || restante <= 0} style={{ ...btnPrimary, backgroundColor: saving || restante <= 0 ? COLORS.textTertiary : forma === "pix" ? "#3B82F6" : COLORS.primary }}>
-            {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{restante <= 0 ? "Tudo pago" : (forma === "pix" ? "Gerar QR Pix" : "Pagar") + " " + formatCurrency(dividir ? valorPessoaAtual : restante)}</Text>}
+          <Pressable onPress={() => registrarPagamento(dividir ? valorPessoaAtual : restante)} disabled={saving || restante <= 0} style={{ ...btnPrimary, backgroundColor: saving || restante <= 0 ? COLORS.textTertiary : COLORS.primary }}>
+            {saving ? <ActivityIndicator color="white" /> : <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{restante <= 0 ? "Tudo pago" : "Pagar " + formatCurrency(dividir ? valorPessoaAtual : restante)}</Text>}
           </Pressable>
           {restante <= 0 && <Pressable onPress={fecharComanda} style={{ ...btnPrimary, marginTop: 10, backgroundColor: "#22C55E" }}><Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>Fechar comanda</Text></Pressable>}
         </>)}
