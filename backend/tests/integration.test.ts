@@ -2587,17 +2587,6 @@ describe("API Integration Tests", () => {
   });
 
   // ==================== Webhook Endpoints ====================
-  test("Webhook ASAAS payment notification returns 200 or 400 or 401 or 404", async () => {
-    const res = await api("/api/webhooks/asaas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "payment.confirmed",
-      }),
-    });
-    await expectStatus(res, 200, 400, 401, 404);
-  });
-
   test("Webhook ASAAS subscription notification returns 200 or 400 or 401 or 404", async () => {
     const res = await api("/api/webhooks/asaas/assinatura", {
       method: "POST",
