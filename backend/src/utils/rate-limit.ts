@@ -1,181 +1,60 @@
-import type { FastifyRequest, FastifyReply } from "fastify";
+// Rate limit simples em memória, por chave (normalmente IP) e por rota.
+// Não usa nenhuma dependência externa — só Map em memória do processo.
+//
+// Limitação conhecida: não é distribuído. Se o backend rodar em múltiplas
+// instâncias, cada uma conta separadamente (ou seja, o limite efetivo vira
+// max * número de instâncias). Suficiente para o volume atual de uma única
+// instância; se isso mudar, migrar para um contador compartilhado (Redis, etc).
 
-/**
- * Configuration for rate limiting on a specific route
- */
-export interface RateLimitConfig {
-  maxRequests: number;
-  windowMs: number; // Time window in milliseconds
-}
+type RateLimitEntry = { count: number; resetAt: number };
 
-/**
- * Internal tracking data for a specific client IP
- */
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+const buckets = new Map<string, RateLimitEntry>();
 
-/**
- * In-memory storage: route path -> client IP -> rate limit entry
- */
-type RateLimitStore = Map<string, Map<string, RateLimitEntry>>;
-
-const store: RateLimitStore = new Map();
-
-/**
- * Default cleanup interval: run every 5 minutes to remove expired entries
- */
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
-/**
- * Start the periodic cleanup task to prevent memory leaks
- */
-export function initRateLimitCleanup(): NodeJS.Timer {
-  return setInterval(() => {
-    cleanupExpiredEntries();
-  }, CLEANUP_INTERVAL_MS);
-}
-
-/**
- * Remove expired entries from the store
- */
-function cleanupExpiredEntries(): void {
+// Limpa entradas expiradas periodicamente para não vazar memória aos poucos.
+setInterval(() => {
   const now = Date.now();
-  const routePaths = Array.from(store.keys());
-
-  for (const routePath of routePaths) {
-    const clients = store.get(routePath);
-    if (!clients) continue;
-
-    const expiredIPs = Array.from(clients.entries())
-      .filter(([_, entry]) => entry.resetAt < now)
-      .map(([ip]) => ip);
-
-    for (const ip of expiredIPs) {
-      clients.delete(ip);
-    }
-
-    // Remove the route from store if no clients left
-    if (clients.size === 0) {
-      store.delete(routePath);
-    }
+  for (const [key, entry] of buckets) {
+    if (entry.resetAt <= now) buckets.delete(key);
   }
+}, 5 * 60 * 1000).unref();
+
+export function getClientKey(request: any): string {
+  // O tráfego passa por um proxy reverso da plataforma antes de chegar aqui,
+  // então priorizamos X-Forwarded-For; se não vier preenchido, caímos para
+  // request.ip (que nesse caso provavelmente é o IP do proxy, não do cliente
+  // real — ainda assim melhor que nenhum limite).
+  const forwarded = request.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    return forwarded.split(",")[0].trim();
+  }
+  return request.ip;
 }
 
 /**
- * Extract the client's real IP address from the request
- * Checks X-Forwarded-For header first (for reverse proxy setups), then falls back to request IP
+ * Retorna true se a requisição pode prosseguir. Se retornar false, já
+ * respondeu 429 — o handler deve apenas dar `return` (mesmo padrão do
+ * requireAuth em utils/auth.ts).
  */
-export function getClientKey(request: FastifyRequest): string {
-  const xForwardedFor = request.headers["x-forwarded-for"];
-
-  if (xForwardedFor) {
-    // X-Forwarded-For can contain multiple IPs (client, proxy1, proxy2...)
-    // The first one is the client's original IP
-    const ips = Array.isArray(xForwardedFor) ? xForwardedFor : xForwardedFor.split(",");
-    const clientIp = ips[0]?.trim();
-    if (clientIp) {
-      return clientIp;
-    }
-  }
-
-  // Fallback to request socket IP
-  return request.socket?.remoteAddress || "unknown";
-}
-
-/**
- * Check if a request is within the rate limit for the given route
- * Returns true if the request can proceed, false if rate limit is exceeded
- * If rate limit is exceeded, responds with 429 and returns false
- */
-export async function checkRateLimit(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  routePath: string,
-  config: RateLimitConfig
-): Promise<boolean> {
+export function checkRateLimit(
+  request: any,
+  reply: any,
+  options: { routeKey: string; max: number; windowMs: number }
+): boolean {
   const clientKey = getClientKey(request);
+  const bucketKey = `${options.routeKey}:${clientKey}`;
   const now = Date.now();
 
-  // Get or create the route's client tracking map
-  if (!store.has(routePath)) {
-    store.set(routePath, new Map());
-  }
-  const clients = store.get(routePath)!;
-
-  // Get or create the entry for this client
-  let entry = clients.get(clientKey);
-
-  if (!entry) {
-    // First request from this client in this time window
-    entry = {
-      count: 1,
-      resetAt: now + config.windowMs,
-    };
-    clients.set(clientKey, entry);
+  const entry = buckets.get(bucketKey);
+  if (!entry || entry.resetAt <= now) {
+    buckets.set(bucketKey, { count: 1, resetAt: now + options.windowMs });
     return true;
   }
 
-  if (now >= entry.resetAt) {
-    // Time window has expired, reset the counter
-    entry.count = 1;
-    entry.resetAt = now + config.windowMs;
-    return true;
-  }
-
-  // Check if we've exceeded the limit
-  if (entry.count >= config.maxRequests) {
-    // Rate limit exceeded
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000); // Seconds until reset
-    reply.header("Retry-After", retryAfter);
-    reply.status(429).send({
-      error: "Too many requests",
-      message: `Rate limit exceeded. Maximum ${config.maxRequests} requests per ${Math.round(config.windowMs / 1000)} seconds.`,
-      retryAfter,
-    });
+  if (entry.count >= options.max) {
+    reply.code(429).send({ error: "Muitas requisições. Tente novamente em instantes." });
     return false;
   }
 
-  // Within limit, increment counter
-  entry.count++;
+  entry.count += 1;
   return true;
-}
-
-/**
- * Get current rate limit stats (useful for debugging)
- */
-export function getRateLimitStats(routePath?: string): Record<string, Record<string, RateLimitEntry>> {
-  const stats: Record<string, Record<string, RateLimitEntry>> = {};
-
-  if (routePath) {
-    const clients = store.get(routePath);
-    if (clients) {
-      stats[routePath] = Object.fromEntries(clients);
-    }
-  } else {
-    for (const [path, clients] of store.entries()) {
-      stats[path] = Object.fromEntries(clients);
-    }
-  }
-
-  return stats;
-}
-
-/**
- * Clear all rate limit data (useful for testing)
- */
-export function clearRateLimitStore(): void {
-  store.clear();
-}
-
-/**
- * Create a Fastify route option for rate limiting
- * Can be attached to route schema to apply rate limiting
- */
-export function createRateLimitMiddleware(config: RateLimitConfig) {
-  return async (request: FastifyRequest, reply: FastifyReply, routePath: string) => {
-    const canProceed = await checkRateLimit(request, reply, routePath, config);
-    return canProceed;
-  };
 }
