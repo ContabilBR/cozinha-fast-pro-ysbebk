@@ -67,6 +67,7 @@ export default function GestaoScreen() {
     { icon: <Ionicons name="card-outline" size={26} color="#8B5CF6" />, title: "Assinatura", subtitle: "Plano e cobrança", route: "/(tabs)/(gestao)/assinatura", color: "#8B5CF6" },
     { icon: <Ionicons name="shield-checkmark-outline" size={26} color="#6B7280" />, title: "Privacidade", subtitle: "LGPD e dados", route: "/(tabs)/(gestao)/lgpd", color: "#6B7280" },
     { icon: <Ionicons name="qr-code-outline" size={26} color="#0EA5E9" />, title: "QR Code", subtitle: "Cardápio digital", route: "/(tabs)/(gestao)/qrcode", color: "#0EA5E9" },
+    { icon: <Ionicons name="tablet-landscape-outline" size={26} color="#7C3AED" />, title: "Modo mesa", subtitle: "Tablets fixos por mesa", route: "/mesa-cliente-setup", color: "#7C3AED" },
   ];
 
   if (!canAccess) {
