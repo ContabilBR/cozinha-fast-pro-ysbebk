@@ -167,13 +167,18 @@ export function registerPagamentoRoutes(app: App) {
     },
     async (request: FastifyRequest<{ Params: { id: string }; Body: { tipo: string; num_pessoas?: number; gorjeta?: number; pessoas?: Array<{ nome: string; pedido_ids: string[] }> } }>, reply: FastifyReply) => {
       try {
+        app.logger.info({ comandaId: request.params.id, body: request.body }, "Calculate bill division");
+
         const authUser = await customRequireAuth(app, request, reply);
         if (!authUser) return;
         const restauranteId = requireTenant(authUser);
 
         // Verificar comanda
         const comanda = await db.select({ id: schema.comandas.id, status: schema.comandas.status, total: schema.comandas.total }).from(schema.comandas).where(and(eq(schema.comandas.id, request.params.id), eq(schema.comandas.restauranteId, restauranteId)));
-        if (!comanda.length) return reply.code(404).send({ error: "Comanda não encontrada" });
+        if (!comanda.length) {
+          app.logger.warn({ comandaId: request.params.id }, "Comanda not found");
+          return reply.code(404).send({ error: "Comanda não encontrada" });
+        }
 
         const totalComanda = parseFloat(comanda[0].total || "0");
         const gorjeta = request.body.gorjeta || 0;
@@ -208,6 +213,7 @@ export function registerPagamentoRoutes(app: App) {
             valor: i === numPessoas - 1 ? Math.round((valorPorPessoa - ajuste) * 100) / 100 : valorPorPessoa,
           }));
 
+          app.logger.info({ comandaId: request.params.id, tipo: "igual", numPessoas: numPessoas }, "Bill division calculated");
           return reply.code(200).send({
             tipo: "igual",
             total_comanda: totalComanda,
@@ -222,22 +228,28 @@ export function registerPagamentoRoutes(app: App) {
         } else if (tipo === "por_itens") {
           // Divisão por itens
           const pessoas = request.body.pessoas;
-          if (!pessoas || pessoas.length < 2) return reply.code(400).send({ error: "Informe pelo menos 2 pessoas com seus pedido_ids" });
-
-          // Mapear pedidos por ID
-          const pedidoMap = new Map(pedidos.map((p: any) => [p.id, p]));
+          if (!pessoas || pessoas.length < 2) return reply.code(400).send({ error: "Informe pelo menos 2 pessoas com seus itens" });
 
           // Calcular valor de cada pessoa
           const divisao = pessoas.map((pessoa: any) => {
             let subtotal = 0;
             const itens: any[] = [];
 
-            for (const pedidoId of pessoa.pedido_ids) {
-              const pedido = pedidoMap.get(pedidoId) as any;
+            // Support both array indices and pedido IDs
+            const itemsToProcess = pessoa.itens || pessoa.pedido_ids || [];
+            for (const item of itemsToProcess) {
+              // If item is a number, treat as index; if string, treat as ID
+              let pedido: any = null;
+              if (typeof item === 'number' && item < pedidos.length) {
+                pedido = pedidos[item];
+              } else if (typeof item === 'string') {
+                pedido = pedidos.find((p: any) => p.id === item);
+              }
+
               if (pedido) {
                 const valor = parseFloat(pedido.precoUnitario) * pedido.quantidade;
                 subtotal += valor;
-                itens.push({ pedido_id: pedidoId, quantidade: pedido.quantidade, preco_unitario: parseFloat(pedido.precoUnitario), subtotal_item: valor });
+                itens.push({ pedido_id: pedido.id, quantidade: pedido.quantidade, preco_unitario: parseFloat(pedido.precoUnitario), subtotal_item: valor });
               }
             }
 
@@ -262,6 +274,7 @@ export function registerPagamentoRoutes(app: App) {
             };
           });
 
+          app.logger.info({ comandaId: request.params.id, tipo: "por_itens", numPessoas: pessoas.length }, "Bill division calculated");
           return reply.code(200).send({
             tipo: "por_itens",
             total_comanda: totalComanda,
@@ -275,10 +288,11 @@ export function registerPagamentoRoutes(app: App) {
           });
 
         } else {
+          app.logger.warn({ tipo: request.body.tipo }, "Invalid division type");
           return reply.code(400).send({ error: "Tipo de divisão inválido. Use 'igual' ou 'por_itens'." });
         }
       } catch (err) {
-        app.logger.error({ error: (err as any).message }, "Erro ao calcular divisão");
+        app.logger.error({ err, body: request.body, comandaId: request.params.id }, "Error calculating bill division");
         return reply.code(500).send({ error: "Erro interno do servidor" });
       }
     }

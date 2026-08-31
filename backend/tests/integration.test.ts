@@ -2414,6 +2414,80 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200, 201, 400, 404);
   });
 
+  test("Add PIX payment to comanda returns 200 or 201 or 400 or 404", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "pix",
+          valor: 75.50,
+          referencia: "pix-ref-123",
+        }),
+      }
+    );
+    await expectStatus(res, 200, 201, 400, 404);
+  });
+
+  test("Add card payment with installments returns 200 or 201 or 400 or 404", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/pagamentos`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          forma_pagamento: "cartao_credito",
+          valor: 120.00,
+          referencia: "card-ref-456",
+        }),
+      }
+    );
+    await expectStatus(res, 200, 201, 400, 404);
+  });
+
   test("Add payment without authentication returns 401", async () => {
     const res = await api("/api/comandas/00000000-0000-0000-0000-000000000000/pagamentos", {
       method: "POST",
@@ -2550,6 +2624,82 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 400);
+  });
+
+  test("Split bill equal division type returns 200 or 400 or 404", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/divisao`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "igual",
+          num_pessoas: 4,
+          gorjeta: 20.00,
+        }),
+      }
+    );
+    await expectStatus(res, 200, 400, 404);
+  });
+
+  test("Split bill by items division type returns 200 or 400 or 404", async () => {
+    const mesaRes = await authenticatedApi("/api/mesas", adminToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        numero: Math.floor(Math.random() * 900000) + 100000,
+      }),
+    });
+    await expectStatus(mesaRes, 201);
+    const mesaData = await mesaRes.json();
+
+    const comandaRes = await authenticatedApi("/api/comandas", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mesaId: mesaData.id,
+      }),
+    });
+    await expectStatus(comandaRes, 201);
+    const comandaData = await comandaRes.json();
+
+    const res = await authenticatedApi(
+      `/api/comandas/${comandaData.comanda.id}/divisao`,
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "por_itens",
+          pessoas: [
+            { nome: "Person 1", itens: [0, 1] },
+            { nome: "Person 2", itens: [2] },
+          ],
+        }),
+      }
+    );
+    await expectStatus(res, 200, 400, 404);
   });
 
   // ==================== Public Endpoints (No Auth) ====================

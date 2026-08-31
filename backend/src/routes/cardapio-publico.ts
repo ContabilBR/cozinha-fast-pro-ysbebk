@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { App } from "../index.js";
 import * as schema from "../db/schema/schema.js";
+import { checkRateLimit } from "../utils/rate-limit.js";
 
 export function registerCardapioPublicoRoutes(app: App) {
   const db = app.db as any;
@@ -9,7 +10,52 @@ export function registerCardapioPublicoRoutes(app: App) {
   // GET /api/public/restaurantes — lista restaurantes ativos (sem auth)
   app.fastify.get(
     "/api/public/restaurantes",
+    {
+      schema: {
+        description: "List all restaurants",
+        tags: ["public"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              restaurantes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    nome: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          429: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+              retryAfter: { type: "number" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      app.logger.info({}, "Listing restaurants");
+
+      const canProceed = await checkRateLimit(request, reply, "/api/public/restaurantes", {
+        maxRequests: 60,
+        windowMs: 60 * 1000,
+      });
+      if (!canProceed) return;
+
       try {
         const restaurantes = await db
           .select({
@@ -18,27 +64,66 @@ export function registerCardapioPublicoRoutes(app: App) {
           })
           .from(schema.restaurante);
 
+        app.logger.info({ count: restaurantes.length }, "Restaurants listed");
         return reply.code(200).send({ restaurantes });
       } catch (err) {
+        app.logger.error({ err }, "Error listing restaurants");
         return reply.code(500).send({ error: "Erro interno" });
       }
     }
   );
 
   // GET /cardapio — página web do cardápio digital
-  app.fastify.get("/cardapio", async (request: FastifyRequest, reply: FastifyReply) => {
-    const q = request.query as any;
-    const r = q.r || "";
-    const m = q.m || "0";
-    let restNome = "Restaurante";
-    if (r) {
-      try {
-        const [rest] = await db.select({ nome: schema.restaurante.nome }).from(schema.restaurante).where(eq(schema.restaurante.id, r));
-        if (rest) restNome = rest.nome;
-      } catch (_) { /* invalid uuid, keep default name */ }
-    }
-    const mesaLabel = m !== "0" ? `Mesa ${m}` : "Cardápio Digital";
-    const html = `<!DOCTYPE html>
+  app.fastify.get(
+    "/cardapio",
+    {
+      schema: {
+        description: "Digital menu (cardápio) HTML page with embedded cart functionality",
+        tags: ["public"],
+        querystring: {
+          type: "object",
+          properties: {
+            r: { type: "string", format: "uuid", description: "Restaurant ID" },
+            m: { type: "string", description: "Table number (defaults to 0 for takeout)" },
+          },
+        },
+        response: {
+          200: {
+            type: "string",
+            description: "HTML page with embedded CSS and JavaScript for digital menu and ordering",
+          },
+          429: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+              retryAfter: { type: "number" },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      app.logger.info({ query: request.query }, "Accessing cardapio page");
+
+      const canProceed = await checkRateLimit(request, reply, "/cardapio", {
+        maxRequests: 60,
+        windowMs: 60 * 1000,
+      });
+      if (!canProceed) return;
+
+      const q = request.query as any;
+      const r = q.r || "";
+      const m = q.m || "0";
+      let restNome = "Restaurante";
+      if (r) {
+        try {
+          const [rest] = await db.select({ nome: schema.restaurante.nome }).from(schema.restaurante).where(eq(schema.restaurante.id, r));
+          if (rest) restNome = rest.nome;
+        } catch (_) { /* invalid uuid, keep default name */ }
+      }
+      const mesaLabel = m !== "0" ? `Mesa ${m}` : "Cardápio Digital";
+      const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -149,17 +234,105 @@ init()
 </script>
 </body>
 </html>`;
-    reply.header("Content-Type", "text/html; charset=utf-8").send(html);
-  });
+      app.logger.info({ restauranteId: r || "none", mesa: m }, "Cardapio page rendered");
+      reply.header("Content-Type", "text/html; charset=utf-8").send(html);
+    }
+  );
 
   // GET /api/public/cardapio/:restauranteId — cardápio público (sem auth)
   app.fastify.get<{ Params: { restauranteId: string } }>(
     "/api/public/cardapio/:restauranteId",
+    {
+      schema: {
+        description: "Get full menu (cardápio) for a restaurant, grouped by category",
+        tags: ["public"],
+        params: {
+          type: "object",
+          required: ["restauranteId"],
+          properties: {
+            restauranteId: { type: "string", format: "uuid", description: "Restaurant ID" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              restaurante: {
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  nome: { type: "string" },
+                },
+              },
+              cardapio: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    categoria: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        nome: { type: "string" },
+                      },
+                    },
+                    pratos: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "string", format: "uuid" },
+                          nome: { type: "string" },
+                          descricao: { type: "string", nullable: true },
+                          preco: { type: "number" },
+                          imagemUrl: { type: "string", nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          429: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+              retryAfter: { type: "number" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Params: { restauranteId: string } }>, reply: FastifyReply) => {
+      app.logger.info({ restauranteId: request.params.restauranteId }, "Fetching menu");
+
+      const canProceed = await checkRateLimit(request, reply, "/api/public/cardapio/:restauranteId", {
+        maxRequests: 60,
+        windowMs: 60 * 1000,
+      });
+      if (!canProceed) return;
+
       try {
         const { restauranteId } = request.params;
         const [rest] = await db.select({ id: schema.restaurante.id, nome: schema.restaurante.nome }).from(schema.restaurante).where(eq(schema.restaurante.id, restauranteId));
-        if (!rest) return reply.code(404).send({ error: "Restaurante não encontrado" });
+        if (!rest) {
+          app.logger.warn({ restauranteId }, "Restaurant not found");
+          return reply.code(404).send({ error: "Restaurante não encontrado" });
+        }
 
         const categorias = await db.select().from(schema.categorias).where(eq(schema.categorias.restauranteId, restauranteId));
         const pratos = await db.select().from(schema.pratos).where(and(eq(schema.pratos.restauranteId, restauranteId), eq(schema.pratos.disponivel, true)));
@@ -176,8 +349,10 @@ init()
           cardapio.push({ categoria: { id: "outros", nome: "Outros" }, pratos: pratosSeemCategoria.map((p: any) => ({ id: p.id, nome: p.nome, descricao: p.descricao, preco: parseFloat(p.preco), imagemUrl: p.imagemUrl })) });
         }
 
+        app.logger.info({ restauranteId, categoryCount: cardapio.length, dishCount: pratos.length }, "Menu fetched");
         return reply.code(200).send({ restaurante: rest, cardapio });
       } catch (err) {
+        app.logger.error({ err }, "Error fetching menu");
         return reply.code(500).send({ error: "Erro interno" });
       }
     }
@@ -186,18 +361,100 @@ init()
   // POST /api/public/pedido — cliente faz pedido pelo QR Code (sem auth)
   app.fastify.post<{ Body: { restaurante_id: string; mesa_numero: number; cliente_nome?: string; itens: Array<{ prato_id: string; quantidade: number; observacao?: string }> } }>(
     "/api/public/pedido",
+    {
+      schema: {
+        description: "Create an order from the QR code digital menu",
+        tags: ["public"],
+        body: {
+          type: "object",
+          required: ["restaurante_id", "mesa_numero", "itens"],
+          properties: {
+            restaurante_id: { type: "string", format: "uuid", description: "Restaurant ID" },
+            mesa_numero: { type: "number", description: "Table number" },
+            cliente_nome: { type: "string", description: "Customer name (optional)" },
+            itens: {
+              type: "array",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["prato_id", "quantidade"],
+                properties: {
+                  prato_id: { type: "string", format: "uuid", description: "Dish ID" },
+                  quantidade: { type: "number", minimum: 1, description: "Quantity" },
+                  observacao: { type: "string", description: "Special notes (optional)" },
+                },
+              },
+            },
+          },
+        },
+        response: {
+          201: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              comanda_id: { type: "string", format: "uuid" },
+              mesa: { type: "number" },
+              itens_adicionados: { type: "number" },
+              subtotal_adicionado: { type: "number" },
+              mensagem: { type: "string" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          429: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+              retryAfter: { type: "number" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Body: { restaurante_id: string; mesa_numero: number; cliente_nome?: string; itens: Array<{ prato_id: string; quantidade: number; observacao?: string }> } }>, reply: FastifyReply) => {
+      app.logger.info({ restaurante_id: request.body.restaurante_id, mesa_numero: request.body.mesa_numero, itemCount: request.body.itens.length }, "Creating order from QR code");
+
+      const canProceed = await checkRateLimit(request, reply, "/api/public/pedido", {
+        maxRequests: 10,
+        windowMs: 60 * 1000,
+      });
+      if (!canProceed) return;
+
       try {
         const { restaurante_id, mesa_numero, cliente_nome, itens } = request.body;
         if (!restaurante_id || !mesa_numero || !itens || itens.length === 0) {
+          app.logger.warn({ body: request.body }, "Invalid order request");
           return reply.code(400).send({ error: "restaurante_id, mesa_numero e itens são obrigatórios" });
         }
 
         const [rest] = await db.select({ id: schema.restaurante.id }).from(schema.restaurante).where(eq(schema.restaurante.id, restaurante_id));
-        if (!rest) return reply.code(404).send({ error: "Restaurante não encontrado" });
+        if (!rest) {
+          app.logger.warn({ restaurante_id }, "Restaurant not found");
+          return reply.code(404).send({ error: "Restaurante não encontrado" });
+        }
 
         const [mesa] = await db.select().from(schema.mesas).where(and(eq(schema.mesas.numero, mesa_numero), eq(schema.mesas.restauranteId, restaurante_id)));
-        if (!mesa) return reply.code(404).send({ error: "Mesa não encontrada" });
+        if (!mesa) {
+          app.logger.warn({ restaurante_id, mesa_numero }, "Table not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
 
         const result = await (db as any).transaction(async (tx: any) => {
           let subtotal = 0;
@@ -235,10 +492,15 @@ init()
           return { comanda_id: comanda.id, mesa: mesa_numero, itens_adicionados: itensPedido.length, subtotal_adicionado: subtotal };
         });
 
-        if (result.error) return reply.code(400).send({ error: result.error });
+        if (result.error) {
+          app.logger.warn({ error: result.error }, "Order creation failed");
+          return reply.code(400).send({ error: result.error });
+        }
+
+        app.logger.info({ comanda_id: result.comanda_id, mesa: result.mesa, items: result.itens_adicionados }, "Order created successfully");
         return reply.code(201).send({ success: true, ...result, mensagem: "Pedido recebido! A cozinha já está preparando." });
       } catch (err) {
-        app.logger.error({ error: (err as any).message }, "Erro no pedido público");
+        app.logger.error({ err }, "Error creating order");
         return reply.code(500).send({ error: "Erro interno" });
       }
     }
@@ -247,11 +509,94 @@ init()
   // GET /api/public/mesa/:restauranteId/:mesaNumero — status da mesa (sem auth)
   app.fastify.get<{ Params: { restauranteId: string; mesaNumero: string } }>(
     "/api/public/mesa/:restauranteId/:mesaNumero",
+    {
+      schema: {
+        description: "Get current status of a table and its open comanda/orders",
+        tags: ["public"],
+        params: {
+          type: "object",
+          required: ["restauranteId", "mesaNumero"],
+          properties: {
+            restauranteId: { type: "string", format: "uuid", description: "Restaurant ID" },
+            mesaNumero: { type: "string", description: "Table number" },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              mesa: {
+                type: "object",
+                properties: {
+                  numero: { type: "number" },
+                  status: { type: "string" },
+                },
+              },
+              comanda: {
+                nullable: true,
+                type: "object",
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  status: { type: "string" },
+                  clienteNome: { type: "string", nullable: true },
+                  subtotal: { type: "string" },
+                  total: { type: "string" },
+                },
+              },
+              pedidos: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    quantidade: { type: "number" },
+                    precoUnitario: { type: "string" },
+                    status: { type: "string" },
+                    pratoNome: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+          429: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+              retryAfter: { type: "number" },
+            },
+          },
+          500: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     async (request: FastifyRequest<{ Params: { restauranteId: string; mesaNumero: string } }>, reply: FastifyReply) => {
+      app.logger.info({ restauranteId: request.params.restauranteId, mesaNumero: request.params.mesaNumero }, "Fetching table status");
+
+      const canProceed = await checkRateLimit(request, reply, "/api/public/mesa/:restauranteId/:mesaNumero", {
+        maxRequests: 30,
+        windowMs: 60 * 1000,
+      });
+      if (!canProceed) return;
+
       try {
         const { restauranteId, mesaNumero } = request.params;
         const [mesa] = await db.select().from(schema.mesas).where(and(eq(schema.mesas.numero, parseInt(mesaNumero)), eq(schema.mesas.restauranteId, restauranteId)));
-        if (!mesa) return reply.code(404).send({ error: "Mesa não encontrada" });
+        if (!mesa) {
+          app.logger.warn({ restauranteId, mesaNumero }, "Table not found");
+          return reply.code(404).send({ error: "Mesa não encontrada" });
+        }
 
         let comanda = null;
         let pedidos: any[] = [];
@@ -261,8 +606,10 @@ init()
           pedidos = await db.select({ id: schema.pedidos.id, quantidade: schema.pedidos.quantidade, precoUnitario: schema.pedidos.precoUnitario, status: schema.pedidos.status, pratoNome: schema.pratos.nome }).from(schema.pedidos).leftJoin(schema.pratos, eq(schema.pedidos.pratoId, schema.pratos.id)).where(eq(schema.pedidos.comandaId, comandaAberta.id));
         }
 
+        app.logger.info({ mesa: mesa.numero, hasComanda: !!comanda, ordersCount: pedidos.length }, "Table status retrieved");
         return reply.code(200).send({ mesa: { numero: mesa.numero, status: mesa.status }, comanda, pedidos });
       } catch (err) {
+        app.logger.error({ err }, "Error fetching table status");
         return reply.code(500).send({ error: "Erro interno" });
       }
     }
