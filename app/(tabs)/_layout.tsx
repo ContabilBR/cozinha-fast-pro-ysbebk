@@ -1,6 +1,6 @@
 import React from "react";
 import { View, useWindowDimensions } from "react-native";
-import { Slot, Redirect } from "expo-router";
+import { Slot } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { useColors } from "@/hooks/useColors";
@@ -64,7 +64,12 @@ export default function TabLayout() {
   const pratoProntoCount = usePratoProntoCount(role === "garcom");
 
   if (isLoading) return null;
-  if (!user) return <Redirect href="/auth-screen" />;
+  // Não redireciona por conta própria — o _layout.tsx raiz decide pra onde ir
+  // quando não há usuário (auth-screen no fluxo normal, ou /(mesa-cliente) se
+  // o tablet estiver configurado em modo mesa). Um <Redirect> aqui competia
+  // com essa decisão e sempre ganhava a corrida, mandando qualquer tablet sem
+  // sessão pra tela de login mesmo já configurado como mesa fixa.
+  if (!user) return null;
 
   const tabs = getTabsForRole(role, pratoProntoCount);
   const tabCount = tabs.length;
