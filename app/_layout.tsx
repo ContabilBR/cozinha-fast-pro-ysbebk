@@ -1,5 +1,5 @@
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PratoProntoNotifier } from "@/components/PratoProntoNotifier";
+import { getMesaClienteConfig } from "@/utils/mesaCliente";
 import {
   useFonts,
   Outfit_400Regular,
@@ -30,20 +31,40 @@ function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [mesaClienteConfigured, setMesaClienteConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (isLoading) return;
-    const inAuthScreen = segments[0] === "auth-screen";
-    if (!user && !inAuthScreen) {
-      console.log("[Layout] No user — redirecting to /auth-screen");
-      router.replace("/auth-screen");
-    } else if (user && inAuthScreen) {
-      console.log("[Layout] User authenticated — redirecting to /(tabs)/");
-      router.replace("/(tabs)/");
-    }
-  }, [user, isLoading, segments, router]);
+    getMesaClienteConfig().then((cfg) => setMesaClienteConfigured(!!cfg));
+  }, []);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isLoading || mesaClienteConfigured === null) return;
+
+    const inMesaCliente = segments[0] === "(mesa-cliente)";
+    const inAuthScreen = segments[0] === "auth-screen";
+    const inMesaClienteSetup = segments[0] === "mesa-cliente-setup";
+
+    // Tablets configurados em "modo mesa" pulam o login e ficam presos na tela do
+    // cliente, exceto quando estão explicitamente na tela de configuração (que
+    // pede login de gerente por dentro dela mesma).
+    if (mesaClienteConfigured && !inMesaCliente && !inMesaClienteSetup) {
+      console.log("[Layout] Tablet em modo mesa — redirecionando para (mesa-cliente)");
+      router.replace("/(mesa-cliente)");
+      return;
+    }
+
+    if (!mesaClienteConfigured) {
+      if (!user && !inAuthScreen) {
+        console.log("[Layout] No user — redirecionando para /auth-screen");
+        router.replace("/auth-screen");
+      } else if (user && inAuthScreen) {
+        console.log("[Layout] User authenticated — redirecionando para /(tabs)/");
+        router.replace("/(tabs)/");
+      }
+    }
+  }, [user, isLoading, mesaClienteConfigured, segments, router]);
+
+  if (isLoading || mesaClienteConfigured === null) {
     return (
       <View style={{ flex: 1, backgroundColor: "#1a1a2e", alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color="#e94560" />
@@ -55,6 +76,8 @@ function RootLayoutNav() {
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(mesa-cliente)" options={{ headerShown: false }} />
+        <Stack.Screen name="mesa-cliente-setup" options={{ headerShown: false }} />
         <Stack.Screen name="auth-screen" options={{ headerShown: false }} />
         <Stack.Screen name="auth-popup" options={{ headerShown: false }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
@@ -79,7 +102,7 @@ function RootLayoutNav() {
         <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="user/new" options={{ headerShown: false }} />
       </Stack>
-      <PratoProntoNotifier />
+      {!mesaClienteConfigured && <PratoProntoNotifier />}
     </View>
   );
 }
