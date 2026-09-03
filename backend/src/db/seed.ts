@@ -4,7 +4,6 @@ import { user as userTable, account as accountTable, session as sessionTable, ve
 import type { App } from "../index.js";
 import { randomUUID } from "crypto";
 import * as bcryptjs from "bcryptjs";
-import { cleanupTables } from "./cleanup.js";
 
 const seedAuthUsers = [
   {
@@ -126,16 +125,6 @@ const seedUsuarios = [
   { nome: "Admin Sistema", email: "admin@cozinhafast.com", password: "123456", role: "admin" },
 ];
 
-export async function cleanupMesasAndComandas(app: App) {
-  try {
-    app.logger.info("Cleaning up mesas and comandas tables");
-    await cleanupTables(app);
-  } catch (error) {
-    app.logger.error({ err: error }, "Failed to cleanup mesas and comandas");
-    throw error;
-  }
-}
-
 // Seed 4 core users that must always exist - using raw database inserts only
 const seedUsers = [
   { email: "admin@cozinhafast.com", name: "Administrador", role: "admin", password: process.env.SEED_ADMIN_PASSWORD ?? 'change-me-on-first-login' },
@@ -146,14 +135,6 @@ const seedUsers = [
 
 export async function seedDatabase(app: App) {
   try {
-    // Check if cleanup-only mode is enabled
-    if (process.env.CLEANUP_ONLY === "true") {
-      app.logger.info("Running cleanup-only mode - deleting data from mesas and comandas");
-      await cleanupTables(app);
-      app.logger.info("Cleanup completed - no new data was seeded");
-      return;
-    }
-
     app.logger.info("Starting database seed");
 
     // Ensure seed restaurante exists with specific ID and CNPJ
