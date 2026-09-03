@@ -39,19 +39,6 @@ export default function MesaClienteScreen() {
   const [loadingPedidos, setLoadingPedidos] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Toque 5x no nome do restaurante em até 2s abre a tela de configuração (login de gerente).
-  const tapCountRef = useRef(0);
-  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleHeaderTap = () => {
-    tapCountRef.current += 1;
-    if (tapTimerRef.current) clearTimeout(tapTimerRef.current);
-    tapTimerRef.current = setTimeout(() => { tapCountRef.current = 0; }, 2000);
-    if (tapCountRef.current >= 5) {
-      tapCountRef.current = 0;
-      router.push("/mesa-cliente-setup");
-    }
-  };
-
   useEffect(() => {
     (async () => {
       const cfg = await getMesaClienteConfig();
@@ -159,10 +146,22 @@ export default function MesaClienteScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: COLORS.primary }}>
-        <Pressable onPress={handleHeaderTap}>
-          <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: "white" }}>{config.restauranteNome || "Cardápio"}</Text>
-          <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: "white", opacity: 0.85, marginTop: 2 }}>Mesa {config.mesaNumero}</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 20, color: "white" }}>{config.restauranteNome || "Cardápio"}</Text>
+            <Text style={{ fontFamily: "Outfit_400Regular", fontSize: 14, color: "white", opacity: 0.85, marginTop: 2 }}>Mesa {config.mesaNumero}</Text>
+          </View>
+          {/* Botão discreto pra equipe sair do modo mesa. Não é escondido, mas também não
+              chama atenção — quem toca sem ser gerente/admin só vê uma tela de login e
+              pode voltar (a mesma trava de permissão que a tela de configuração já tinha). */}
+          <Pressable
+            onPress={() => router.push("/mesa-cliente-setup")}
+            hitSlop={12}
+            style={{ padding: 6, marginLeft: 8, opacity: 0.6 }}
+          >
+            <Ionicons name="log-out-outline" size={22} color="white" />
+          </Pressable>
+        </View>
         <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
           <Pressable onPress={() => setAba("cardapio")} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: aba === "cardapio" ? "white" : "rgba(255,255,255,0.15)", alignItems: "center" }}>
             <Text style={{ fontFamily: "Outfit_700Bold", fontSize: 13, color: aba === "cardapio" ? COLORS.primary : "white" }}>Cardápio</Text>
